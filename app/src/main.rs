@@ -11,7 +11,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .saves_dir("saves")
         .window("commits", 1100, 720)
         .web()
-        .module(commits_git::GitModule)
+        .module(commits_git::GitModule::default())
         .module(commits_watcher::WatcherModule)
         .module(commits_os::OsModule)
         .run()?;
