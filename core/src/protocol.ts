@@ -35,8 +35,25 @@ export interface OsCapabilityResponse {
   readonly error: string;
 }
 
-export type RequestMessage = EchoRequest | PageReadyRequest | OsCapabilityRequest;
-export type ResponseMessage = CoreReadyResponse | EchoResponse | OsCapabilityResponse;
+export interface LoadRepositoryRequest {
+  readonly command: "loadRepository";
+  readonly path: string;
+}
+
+export interface RefreshRepositoryRequest {
+  readonly command: "refreshRepository";
+}
+
+export interface RepositorySnapshotResponse {
+  readonly command: "repositorySnapshot";
+  readonly repository: string;
+  readonly commits: readonly import("./read/models").Commit[];
+  readonly refs: import("./read/models").RefSnapshot;
+  readonly errors: readonly string[];
+}
+
+export type RequestMessage = EchoRequest | PageReadyRequest | OsCapabilityRequest | LoadRepositoryRequest | RefreshRepositoryRequest;
+export type ResponseMessage = CoreReadyResponse | EchoResponse | OsCapabilityResponse | RepositorySnapshotResponse;
 
 export function isRequestMessage(value: unknown): value is RequestMessage {
   if (!isRecord(value) || typeof value.command !== "string") {
@@ -51,6 +68,8 @@ export function isRequestMessage(value: unknown): value is RequestMessage {
         .includes(String(value.action))
       && (value.value === undefined || typeof value.value === "string");
   }
+  if (value.command === "loadRepository") return typeof value.path === "string" && value.path.trim().length > 0;
+  if (value.command === "refreshRepository") return true;
   return (
     value.command === "echo" &&
     Number.isSafeInteger(value.requestId) &&

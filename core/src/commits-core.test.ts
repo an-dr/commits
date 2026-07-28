@@ -9,6 +9,7 @@ class StubHost implements HostPort {
   readonly sent: Array<[string, unknown]> = [];
   readonly topics: string[] = [];
   readonly osRequests: unknown[] = [];
+  readonly gitRequests: import("../../proto/ts/native").GitRun[] = [];
   savedState: Uint8Array<ArrayBufferLike> = new Uint8Array();
 
   closePanel(panel: string): void {
@@ -23,6 +24,7 @@ class StubHost implements HostPort {
   repositoryPaths(): readonly string[] { return []; }
   loadSavedState(): Uint8Array<ArrayBufferLike> { return this.savedState; }
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void { this.savedState = value; }
+  runGit(request: import("../../proto/ts/native").GitRun): void { this.gitRequests.push(request); }
 
   requestOs(requestId: number, action: import("../../proto/ts/native").OsAction, value?: string): void {
     this.osRequests.push({ requestId, action, value });
@@ -50,7 +52,7 @@ describe("CommitsCore", () => {
     );
 
     expect(host.opened).toEqual([["main", "<main>walking skeleton</main>"]]);
-    expect(host.topics).toEqual(["web/*", "os/result"]);
+    expect(host.topics).toEqual(["web/*", "os/result", "git/completed"]);
     expect(host.sent).toEqual([
       [
         "main",
@@ -100,6 +102,25 @@ describe("CommitsCore", () => {
     core.receivePageJson("{not json");
 
     expect(host.logs).toContainEqual(["warn", "ignored malformed page JSON"]);
+  });
+
+  it("orchestrates real repository reads through correlated Git requests", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host, "");
+
+    core.receivePageJson(JSON.stringify({ command: "loadRepository", path: "C:/repo" }));
+    expect(host.gitRequests).toHaveLength(3);
+    const encoder = new TextEncoder();
+    for (const request of host.gitRequests) {
+      const stdout = request.args[0] === "log"
+        ? "abc1234\u001f\u001fAda\u001fada@example.test\u001f1\u001fInitial\n"
+        : request.args[0] === "for-each-ref" ? "abc1234\u001frefs/heads/main\u001f\n" : "main\n";
+      core.receiveGitResult({ requestId: request.requestId, status: "completed", exitCode: 0, stdout: encoder.encode(stdout), stderr: new Uint8Array() });
+    }
+
+    expect(host.sent).toContainEqual(["main", expect.objectContaining({
+      command: "repositorySnapshot", repository: "C:/repo", commits: [expect.objectContaining({ hash: "abc1234" })],
+    })]);
   });
 });
 

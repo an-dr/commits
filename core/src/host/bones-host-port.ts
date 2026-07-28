@@ -10,7 +10,7 @@ import {
   encodeSendJson,
 } from "../../../proto/ts/web";
 import type { HostPort, LogLevel } from "./host-port";
-import { encodeOsRequest, type OsAction } from "../../../proto/ts/native";
+import { encodeGitRun, encodeOsRequest, type GitRun, type OsAction } from "../../../proto/ts/native";
 
 export class BonesHostPort implements HostPort {
   closePanel(panel: string): void {
@@ -42,6 +42,10 @@ export class BonesHostPort implements HostPort {
 
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void {
     publish("persistence/save", value);
+  }
+
+  runGit(request: GitRun): void {
+    publish("git/request", encodeGitRun(request));
   }
 
   requestOs(requestId: number, action: OsAction, value = ""): void {

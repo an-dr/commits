@@ -7,7 +7,7 @@ import {
   decodePanelFailed,
   decodePanelOpened,
 } from "../../proto/ts/web";
-import { decodeNativeResult } from "../../proto/ts/native";
+import { decodeGitResult, decodeNativeResult } from "../../proto/ts/native";
 
 const OWNER = "commits";
 const PANEL = "main";
@@ -51,6 +51,8 @@ export function onMessage(
       }
     } else if (topic === "os/result") {
       core.receiveOsResult(decodeNativeResult(payload));
+    } else if (topic === "git/completed") {
+      core.receiveGitResult(decodeGitResult(payload));
     }
   } catch (error) {
     new BonesHostPort().log("warn", `ignored invalid ${topic}: ${String(error)}`);
