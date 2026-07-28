@@ -7,6 +7,14 @@ edition = "2021"
 name = "commits"
 path = "src/main.rs"
 
+[[bin]]
+name = "commits-askpass"
+path = "src/bin/commits-askpass.rs"
+
+[[bin]]
+name = "commits-editor"
+path = "src/bin/commits-editor.rs"
+
 [dependencies]
 bones-messages = { path = "../vendor/bones/shared/bones-messages" }
 bus = { path = "../vendor/bones/core/bus" }

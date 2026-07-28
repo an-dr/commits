@@ -78,7 +78,10 @@ fn publishes_results_for_every_capability() {
     }
     let results = results.lock().unwrap();
     assert_eq!(results.len(), 6);
-    assert!(results.iter().any(|result| result.value == "copied"));
+    assert!(results
+        .iter()
+        .any(|result| result.request_id == 1 && result.accepted));
+    assert!(results.iter().any(|result| result.request_id == 2));
     assert!(results.iter().any(|result| result.value == "C:/chosen.txt"));
     assert!(results
         .iter()

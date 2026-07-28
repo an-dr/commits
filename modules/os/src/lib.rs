@@ -4,6 +4,8 @@ use std::thread;
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_proto::native::{NativeResult, OsRequest};
 
+pub mod rendezvous;
+
 pub const REQUEST_TOPIC: &str = "os/request";
 pub const RESULT_TOPIC: &str = "os/result";
 
@@ -138,5 +140,7 @@ fn execute(backend: &dyn OsBackend, request: &OsRequest) -> NativeResult {
     }
 }
 
+#[cfg(test)]
+mod rendezvous_tests;
 #[cfg(test)]
 mod tests;

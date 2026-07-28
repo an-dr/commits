@@ -51,6 +51,11 @@ impl ProcessRunner {
         for (name, value) in &request.env {
             command.env(name, value);
         }
+        for (name, value) in helper_environment() {
+            if !request.env.iter().any(|(existing, _)| existing == &name) {
+                command.env(name, value);
+            }
+        }
         let mut child = command
             .spawn()
             .map_err(|error| format!("spawning {}: {error}", self.executable))?;
@@ -83,6 +88,32 @@ impl ProcessRunner {
             stderr: stderr.join().map_err(|_| "stderr reader panicked")?,
         })
     }
+}
+
+fn helper_environment() -> Vec<(String, String)> {
+    let Ok(executable) = std::env::current_exe() else {
+        return Vec::new();
+    };
+    let Some(directory) = executable.parent() else {
+        return Vec::new();
+    };
+    let extension = if cfg!(windows) { ".exe" } else { "" };
+    let askpass = directory.join(format!("commits-askpass{extension}"));
+    let editor = directory.join(format!("commits-editor{extension}"));
+    if !askpass.is_file() || !editor.is_file() {
+        return Vec::new();
+    }
+    vec![
+        ("GIT_ASKPASS".into(), askpass.to_string_lossy().into_owned()),
+        ("GIT_EDITOR".into(), editor.to_string_lossy().into_owned()),
+        (
+            "COMMITS_PROMPT_DIR".into(),
+            directory
+                .join("saves/prompts")
+                .to_string_lossy()
+                .into_owned(),
+        ),
+    ]
 }
 
 fn read_pipe(mut pipe: impl Read + Send + 'static) -> thread::JoinHandle<Vec<u8>> {
