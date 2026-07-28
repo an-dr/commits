@@ -19,6 +19,7 @@ class StubHost implements HostPort {
   openPanel(panel: string, html: string): void {
     this.opened.push([panel, html]);
   }
+  repositoryPaths(): readonly string[] { return []; }
 
   requestOs(requestId: number, action: import("../../proto/ts/native").OsAction, value?: string): void {
     this.osRequests.push({ requestId, action, value });

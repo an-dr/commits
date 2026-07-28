@@ -25,6 +25,12 @@ export class BonesHostPort implements HostPort {
     this.sendWeb(encodeOpenPanel(panel, { kind: "html", value: html }));
   }
 
+  repositoryPaths(): readonly string[] {
+    // A path becomes available through the folder picker or a future bones
+    // launcher capability. The core owns remembered external paths.
+    return [];
+  }
+
   requestOs(requestId: number, action: OsAction, value = ""): void {
     publish("os/request", encodeOsRequest(requestId, action, value));
   }
