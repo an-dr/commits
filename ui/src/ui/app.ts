@@ -1,44 +1,52 @@
 import type { RequestMessage, ResponseMessage } from "../../../core/src/protocol";
 import { installVsCodeApiShim } from "../vscode-api";
+import { RepositoryView } from "./repository-view";
 
-interface PageState { readonly nextRequestId: number; }
+interface PageState { readonly nextRequestId: number; readonly repository?: string; }
 
 /** Starts the host-neutral page shell; feature panels live in ui/ modules. */
 export function startPage(): void {
   installVsCodeApiShim();
   const api = window.acquireVsCodeApi<RequestMessage, PageState>();
   let nextRequestId = api.getState()?.nextRequestId ?? 1;
-  const form = requiredElement<HTMLFormElement>("echo-form");
-  const input = requiredElement<HTMLInputElement>("echo-value");
-  const history = requiredElement<HTMLOListElement>("history");
+  const form = requiredElement<HTMLFormElement>("repository-form");
+  const input = requiredElement<HTMLInputElement>("repository-path");
   const status = requiredElement<HTMLParagraphElement>("status");
-  const nativeResult = requiredElement<HTMLParagraphElement>("native-result");
+  const view = new RepositoryView(requiredElement("branches"), requiredElement("commit-table"), requiredElement("commit-count"), requiredElement("errors"));
+  input.value = api.getState()?.repository ?? "";
 
   window.addEventListener("message", (event: MessageEvent<ResponseMessage>) => {
-    if (event.data.command === "coreReady") status.textContent = "Connected · bones host · TypeScript WASM core";
-    else if (event.data.command === "echo") {
-      const item = document.createElement("li");
-      const time = document.createElement("time");
-      time.textContent = `#${event.data.requestId}`;
-      item.append(time, event.data.value);
-      history.prepend(item);
+    if (event.data.command === "coreReady") status.textContent = "Ready · choose a repository folder to read its local history";
+    else if (event.data.command === "repositorySnapshot") {
+      status.textContent = event.data.errors.length ? `Loaded ${event.data.repository} with warnings` : `Loaded ${event.data.repository}`;
+      input.value = event.data.repository;
+      view.render(event.data);
+      save();
     } else if (event.data.command === "osCapability") {
-      nativeResult.textContent = event.data.error || event.data.value || (event.data.accepted ? "Completed" : "Cancelled");
+      if (event.data.accepted && event.data.value) load(event.data.value);
+      else if (event.data.error) status.textContent = event.data.error;
     }
   });
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    api.postMessage({ command: "echo", requestId: nextRequestId++, value: input.value });
-    api.setState({ nextRequestId });
+    load(input.value);
   });
-  document.querySelectorAll<HTMLButtonElement>("[data-os-action]").forEach((button) => {
-    button.addEventListener("click", () => {
-      api.postMessage({ command: "osCapability", requestId: nextRequestId++, action: button.dataset.osAction as "clipboard-read" | "pick-file" | "pick-folder" });
-      api.setState({ nextRequestId });
-    });
+  requiredElement<HTMLButtonElement>("choose-repository").addEventListener("click", () => {
+    api.postMessage({ command: "osCapability", requestId: nextRequestId++, action: "pick-folder" });
+    save();
   });
+  requiredElement<HTMLButtonElement>("refresh").addEventListener("click", () => api.postMessage({ command: "refreshRepository" }));
   api.postMessage({ command: "pageReady" });
+
+  function load(path: string): void {
+    const trimmed = path.trim();
+    if (!trimmed) return;
+    status.textContent = `Reading ${trimmed}…`;
+    api.postMessage({ command: "loadRepository", path: trimmed });
+    save();
+  }
+  function save(): void { api.setState({ nextRequestId, repository: input.value }); }
 }
 
 function requiredElement<T extends HTMLElement>(id: string): T {

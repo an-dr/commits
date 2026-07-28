@@ -10,8 +10,8 @@ body {
   background: radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 34rem), var(--canvas);
 }
 
-main {
-  width: min(760px, calc(100% - 48px));
+.app-shell {
+  width: min(1280px, calc(100% - 48px));
   margin: 0 auto;
   padding: 76px 0;
 }
@@ -23,21 +23,32 @@ main {
 }
 
 h1 {
-  margin: 8px 0 4px;
-  font-size: clamp(48px, 8vw, 82px);
+  margin: 6px 0 4px;
+  font-size: clamp(30px, 5vw, 52px);
   letter-spacing: -.07em;
 }
 
 .status { color: var(--muted); }
 
-form {
-  margin-top: 52px;
-  padding: 24px;
+.app-header { display: flex; gap: 24px; align-items: end; justify-content: space-between; }
+.repository-picker { display: flex; gap: 8px; min-width: min(100%, 520px); }
+.repository-picker input { min-width: 260px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin: 28px 0 12px; }
+.workspace { display: grid; grid-template-columns: minmax(180px, .28fr) minmax(0, 1fr); gap: 16px; }
+.branch-panel, .history-panel {
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   box-shadow: var(--shadow);
 }
+h2, h3 { margin: 0; }
+h2 { font-size: 15px; letter-spacing: .02em; }
+h3 { margin: 20px 0 5px; color: var(--muted); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; }
+.count { color: var(--muted); font: 12px ui-monospace, monospace; }
+.ref { overflow: hidden; margin: 4px 0; padding: 5px 8px; border-radius: 6px; color: var(--muted); font: 12px ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.ref.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
 
 label {
   display: block;
@@ -70,22 +81,30 @@ button {
   font-weight: 750;
   cursor: pointer;
 }
+button.secondary { border: 1px solid var(--line); background: var(--surface-raised); color: var(--text); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-ol {
-  margin-top: 24px;
+.commit-table {
+  margin: 10px 0 0;
   padding: 0;
   list-style: none;
 }
 
-li {
+.commit-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 8px;
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
   color: var(--text);
 }
 
-time {
-  margin-right: 10px;
-  color: var(--accent);
-  font: 12px ui-monospace, monospace;
-}
+.commit-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commit-meta { grid-column: 2; color: var(--muted); font: 12px ui-monospace, monospace; }
+.graph-node { grid-row: span 2; position: relative; width: 2px; margin-left: 10px; background: var(--line); }
+.graph-node::before { content: ""; position: absolute; top: 4px; left: -4px; width: 10px; height: 10px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent); }
+.empty { color: var(--muted); list-style: none; }
+.errors { margin-top: 16px; padding: 12px; border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--line)); border-radius: 8px; color: var(--danger); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+@media (max-width: 760px) { .app-shell { width: min(100% - 28px, 1280px); padding-top: 32px; } .app-header, .repository-picker { align-items: stretch; flex-direction: column; } .repository-picker input { min-width: 0; } .workspace { grid-template-columns: 1fr; } }
 

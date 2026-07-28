@@ -7,29 +7,26 @@
     <style>/*__COMMITS_CSS__*/</style>
   </head>
   <body>
-    <main>
-      <div class="eyebrow">PHASE 1 · WALKING SKELETON</div>
-      <h1>commits</h1>
-      <p id="status" class="status">Connecting to the core…</p>
-      <form id="echo-form">
-        <label for="echo-value">Round-trip a message through TypeScript → WASM → bones</label>
-        <div class="row">
-          <input id="echo-value" value="Hello from the web panel" autocomplete="off">
-          <button type="submit">Send echo</button>
-        </div>
-      </form>
-      <section aria-labelledby="native-title">
-        <h2 id="native-title">Native capabilities</h2>
-        <div class="row">
-          <button type="button" data-os-action="clipboard-read">Read clipboard</button>
-          <button type="button" data-os-action="pick-file">Pick file</button>
-          <button type="button" data-os-action="pick-folder">Pick folder</button>
-        </div>
-        <p id="native-result" class="status">Ready for a native request.</p>
+    <main class="app-shell">
+      <header class="app-header">
+        <div><div class="eyebrow">COMMITS · STANDALONE</div><h1>Repository history</h1></div>
+        <form id="repository-form" class="repository-picker">
+          <label class="sr-only" for="repository-path">Repository path</label>
+          <input id="repository-path" placeholder="Choose or enter a repository folder" autocomplete="off">
+          <button id="choose-repository" type="button" class="secondary">Choose…</button>
+          <button type="submit">Open</button>
+        </form>
+      </header>
+      <section class="toolbar" aria-label="Repository actions">
+        <p id="status" class="status" role="status">Connecting to the core…</p>
+        <button id="refresh" type="button" class="secondary">Refresh</button>
       </section>
-      <ol id="history" aria-live="polite"></ol>
+      <section class="workspace" aria-label="Repository data">
+        <aside class="branch-panel"><h2>References</h2><div id="branches" class="ref-list"><p class="empty">Open a repository to see its branches.</p></div></aside>
+        <section class="history-panel"><div class="panel-heading"><h2>Commits</h2><span id="commit-count" class="count">0</span></div><ol id="commit-table" class="commit-table" aria-live="polite"></ol></section>
+      </section>
+      <section id="errors" class="errors" hidden aria-live="assertive"></section>
     </main>
     <script>/*__COMMITS_JS__*/</script>
   </body>
 </html>
-
