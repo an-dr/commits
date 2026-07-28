@@ -105,6 +105,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); out
 .graph-node::before { content: ""; position: absolute; top: 4px; left: -4px; width: 10px; height: 10px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent); }
 .empty { color: var(--muted); list-style: none; }
 .errors { margin-top: 16px; padding: 12px; border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--line)); border-radius: 8px; color: var(--danger); }
+.detail-panel { margin-top: 16px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.find input { min-height: 32px; width: min(320px, 50vw); }
+.parent-tree { margin: 12px 0 0; padding-left: 20px; color: var(--muted); font: 12px ui-monospace, monospace; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 @media (max-width: 760px) { .app-shell { width: min(100% - 28px, 1280px); padding-top: 32px; } .app-header, .repository-picker { align-items: stretch; flex-direction: column; } .repository-picker input { min-width: 0; } .workspace { grid-template-columns: 1fr; } }
 

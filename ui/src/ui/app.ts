@@ -12,7 +12,7 @@ export function startPage(): void {
   const form = requiredElement<HTMLFormElement>("repository-form");
   const input = requiredElement<HTMLInputElement>("repository-path");
   const status = requiredElement<HTMLParagraphElement>("status");
-  const view = new RepositoryView(requiredElement("branches"), requiredElement("commit-table"), requiredElement("commit-count"), requiredElement("errors"));
+  const view = new RepositoryView(requiredElement("branches"), requiredElement("commit-table"), requiredElement("commit-count"), requiredElement("errors"), requiredElement("commit-detail"), requiredElement("find"));
   input.value = api.getState()?.repository ?? "";
 
   window.addEventListener("message", (event: MessageEvent<ResponseMessage>) => {
@@ -37,6 +37,7 @@ export function startPage(): void {
     save();
   });
   requiredElement<HTMLButtonElement>("refresh").addEventListener("click", () => api.postMessage({ command: "refreshRepository" }));
+  window.addEventListener("keydown", (event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") { event.preventDefault(); requiredElement<HTMLInputElement>("find").focus(); } });
   api.postMessage({ command: "pageReady" });
 
   function load(path: string): void {
