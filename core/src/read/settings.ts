@@ -22,10 +22,9 @@ export class FileBackedSettings {
   constructor(private readonly storage: SettingsStorage) {}
 
   load(): Settings {
-    const bytes = this.storage.load();
-    if (bytes.byteLength === 0) return DEFAULT_SETTINGS;
     try {
-      return parseSettings(new TextDecoder().decode(bytes));
+      const document = decodeDocument(this.storage.load());
+      return validateSettings(document.settings ?? document);
     } catch {
       return DEFAULT_SETTINGS;
     }
@@ -33,13 +32,16 @@ export class FileBackedSettings {
 
   save(candidate: unknown): Settings {
     const settings = validateSettings(candidate);
-    this.storage.save(new TextEncoder().encode(JSON.stringify(settings)));
+    const existing = decodeDocumentSafely(this.storage.load());
+    const document = "state" in existing ? { settings, state: existing.state } : settings;
+    this.storage.save(new TextEncoder().encode(JSON.stringify(document)));
     return settings;
   }
 }
 
 export function parseSettings(json: string): Settings {
-  return validateSettings(JSON.parse(json));
+  const document = decodeDocument(new TextEncoder().encode(json));
+  return validateSettings(document.settings ?? document);
 }
 
 export function validateSettings(candidate: unknown): Settings {
@@ -57,4 +59,14 @@ export function validateSettings(candidate: unknown): Settings {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function decodeDocument(bytes: Uint8Array<ArrayBufferLike>): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+  if (!isRecord(parsed)) throw new Error("settings document must be an object");
+  return parsed;
+}
+
+function decodeDocumentSafely(bytes: Uint8Array<ArrayBufferLike>): Record<string, unknown> {
+  try { return decodeDocument(bytes); } catch { return {}; }
 }
