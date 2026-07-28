@@ -20,8 +20,23 @@ export interface CoreReadyResponse {
   readonly runtime: "bones";
 }
 
-export type RequestMessage = EchoRequest | PageReadyRequest;
-export type ResponseMessage = CoreReadyResponse | EchoResponse;
+export interface OsCapabilityRequest {
+  readonly command: "osCapability";
+  readonly requestId: number;
+  readonly action: import("../../proto/ts/native").OsAction;
+  readonly value?: string;
+}
+
+export interface OsCapabilityResponse {
+  readonly command: "osCapability";
+  readonly requestId: number;
+  readonly accepted: boolean;
+  readonly value: string;
+  readonly error: string;
+}
+
+export type RequestMessage = EchoRequest | PageReadyRequest | OsCapabilityRequest;
+export type ResponseMessage = CoreReadyResponse | EchoResponse | OsCapabilityResponse;
 
 export function isRequestMessage(value: unknown): value is RequestMessage {
   if (!isRecord(value) || typeof value.command !== "string") {
@@ -29,6 +44,12 @@ export function isRequestMessage(value: unknown): value is RequestMessage {
   }
   if (value.command === "pageReady") {
     return true;
+  }
+  if (value.command === "osCapability") {
+    return Number.isSafeInteger(value.requestId)
+      && ["clipboard-read", "clipboard-write", "open-url", "pick-file", "pick-folder"]
+        .includes(String(value.action))
+      && (value.value === undefined || typeof value.value === "string");
   }
   return (
     value.command === "echo" &&

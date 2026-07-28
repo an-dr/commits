@@ -13,7 +13,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .web()
         .module(commits_git::GitModule::default())
         .module(commits_watcher::WatcherModule::default())
-        .module(commits_os::OsModule)
+        .module(commits_os::OsModule::default())
         .run()?;
     Ok(())
 }

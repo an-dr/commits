@@ -1,5 +1,6 @@
 import {
   log as hostLog,
+  publish,
   send,
   subscribe as hostSubscribe,
 } from "bones:core/host-api@0.1.0";
@@ -9,6 +10,7 @@ import {
   encodeSendJson,
 } from "../../../proto/ts/web";
 import type { HostPort, LogLevel } from "./host-port";
+import { encodeOsRequest, type OsAction } from "../../../proto/ts/native";
 
 export class BonesHostPort implements HostPort {
   closePanel(panel: string): void {
@@ -21,6 +23,10 @@ export class BonesHostPort implements HostPort {
 
   openPanel(panel: string, html: string): void {
     this.sendWeb(encodeOpenPanel(panel, { kind: "html", value: html }));
+  }
+
+  requestOs(requestId: number, action: OsAction, value = ""): void {
+    publish("os/request", encodeOsRequest(requestId, action, value));
   }
 
   sendPageMessage(panel: string, message: unknown): void {

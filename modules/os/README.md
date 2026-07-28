@@ -1,5 +1,5 @@
 # os module
 
-Native clipboard, URL, dialog, and askpass boundary. Implementations arrive
-in Phase 2.
+Native OS capability service. Clipboard, external URLs, and file/folder
+pickers run behind a testable backend and return correlated bus results.
 

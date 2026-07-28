@@ -4,5 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+arboard = "3.6"
 bus = { path = "../../vendor/bones/core/bus" }
+commits-proto = { path = "../../proto/rust" }
+open = "5.3"
+rfd = "0.15"
 

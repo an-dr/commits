@@ -13,6 +13,7 @@ const form = requiredElement<HTMLFormElement>("echo-form");
 const input = requiredElement<HTMLInputElement>("echo-value");
 const history = requiredElement<HTMLOListElement>("history");
 const status = requiredElement<HTMLParagraphElement>("status");
+const nativeResult = requiredElement<HTMLParagraphElement>("native-result");
 
 window.addEventListener("message", (event: MessageEvent<ResponseMessage>) => {
   if (event.data.command === "coreReady") {
@@ -25,6 +26,11 @@ window.addEventListener("message", (event: MessageEvent<ResponseMessage>) => {
     time.textContent = `#${event.data.requestId}`;
     item.append(time, event.data.value);
     history.prepend(item);
+    return;
+  }
+  if (event.data.command === "osCapability") {
+    nativeResult.textContent = event.data.error || event.data.value
+      || (event.data.accepted ? "Completed" : "Cancelled");
   }
 });
 
@@ -37,6 +43,17 @@ form.addEventListener("submit", (event) => {
   });
   nextRequestId += 1;
   api.setState({ nextRequestId });
+});
+
+document.querySelectorAll<HTMLButtonElement>("[data-os-action]").forEach((button) => {
+  button.addEventListener("click", () => {
+    api.postMessage({
+      command: "osCapability",
+      requestId: nextRequestId++,
+      action: button.dataset.osAction as "clipboard-read" | "pick-file" | "pick-folder",
+    });
+    api.setState({ nextRequestId });
+  });
 });
 
 api.postMessage({ command: "pageReady" });

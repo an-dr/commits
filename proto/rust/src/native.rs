@@ -214,6 +214,24 @@ impl NativeResult {
             .string(&self.error)?
             .finish())
     }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+        let mut reader = Reader::new(bytes);
+        let request_id = reader.u32()?;
+        let accepted = match reader.u8()? {
+            0 => false,
+            1 => true,
+            _ => return Err(WireError::from("invalid native result boolean")),
+        };
+        let result = Self {
+            request_id,
+            accepted,
+            value: reader.string()?,
+            error: reader.string()?,
+        };
+        reader.finish()?;
+        Ok(result)
+    }
 }
 
 fn read_strings(reader: &mut Reader<'_>) -> Result<Vec<String>, WireError> {

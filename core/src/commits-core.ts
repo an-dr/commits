@@ -1,5 +1,6 @@
 import type { HostPort } from "./host/host-port";
 import { isRequestMessage, type ResponseMessage } from "./protocol";
+import type { NativeResult } from "../../proto/ts/native";
 
 const PANEL = "main";
 
@@ -13,6 +14,7 @@ export class CommitsCore {
 
   start(): void {
     this.host.subscribe("web/*");
+    this.host.subscribe("os/result");
     this.host.openPanel(PANEL, this.pageHtml);
     this.host.log("info", "commits panel requested");
   }
@@ -47,8 +49,15 @@ export class CommitsCore {
           receivedAt: this.now().toISOString(),
         };
         break;
+      case "osCapability":
+        this.host.requestOs(value.requestId, value.action, value.value);
+        return;
     }
     this.host.sendPageMessage(PANEL, response);
+  }
+
+  receiveOsResult(result: NativeResult): void {
+    this.host.sendPageMessage(PANEL, { command: "osCapability", ...result });
   }
 
   panelOpened(): void {

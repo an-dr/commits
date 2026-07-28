@@ -5,6 +5,7 @@ export interface HostPort {
   closePanel(panel: string): void;
   log(level: LogLevel, message: string): void;
   openPanel(panel: string, html: string): void;
+  requestOs(requestId: number, action: import("../../../proto/ts/native").OsAction, value?: string): void;
   sendPageMessage(panel: string, message: unknown): void;
   subscribe(topic: string): void;
 }
