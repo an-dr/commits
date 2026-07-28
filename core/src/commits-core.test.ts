@@ -54,7 +54,7 @@ describe("CommitsCore", () => {
     );
 
     expect(host.opened).toEqual([["main", "<main>walking skeleton</main>"]]);
-    expect(host.topics).toEqual(["web/*", "os/result", "git/completed"]);
+    expect(host.topics).toEqual(["web/*", "os/result", "os/prompt", "git/completed"]);
     expect(host.sent).toEqual([
       [
         "main",
