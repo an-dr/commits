@@ -7,7 +7,7 @@
   "scripts": {
     "build": "npm run clean && npm run build:ui && npm run build:page && npm run check && npm run build:wasm",
     "build:page": "node scripts/generate-page.mjs",
-    "build:ui": "esbuild ui/src/main.ts --bundle --format=iife --target=es2022 --outfile=dist/ui/page.js",
+    "build:ui": "esbuild ui/src/main.ts --bundle --format=iife --target=es2022 --minify --outfile=dist/ui/page.js",
     "build:wasm": "node scripts/build-components.mjs",
     "check": "tsc --noEmit",
     "clean": "node scripts/clean.mjs",
