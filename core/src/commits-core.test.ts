@@ -9,6 +9,7 @@ class StubHost implements HostPort {
   readonly sent: Array<[string, unknown]> = [];
   readonly topics: string[] = [];
   readonly osRequests: unknown[] = [];
+  savedState: Uint8Array<ArrayBufferLike> = new Uint8Array();
 
   closePanel(panel: string): void {
     this.closed.push(panel);
@@ -20,6 +21,8 @@ class StubHost implements HostPort {
     this.opened.push([panel, html]);
   }
   repositoryPaths(): readonly string[] { return []; }
+  loadSavedState(): Uint8Array<ArrayBufferLike> { return this.savedState; }
+  saveSavedState(value: Uint8Array<ArrayBufferLike>): void { this.savedState = value; }
 
   requestOs(requestId: number, action: import("../../proto/ts/native").OsAction, value?: string): void {
     this.osRequests.push({ requestId, action, value });

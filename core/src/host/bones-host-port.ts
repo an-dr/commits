@@ -31,6 +31,19 @@ export class BonesHostPort implements HostPort {
     return [];
   }
 
+  loadSavedState(): Uint8Array<ArrayBufferLike> {
+    try {
+      return send("persistence", new Uint8Array());
+    } catch (error) {
+      hostLog("warn", `could not load persisted state: ${String(error)}`);
+      return new Uint8Array();
+    }
+  }
+
+  saveSavedState(value: Uint8Array<ArrayBufferLike>): void {
+    publish("persistence/save", value);
+  }
+
   requestOs(requestId: number, action: OsAction, value = ""): void {
     publish("os/request", encodeOsRequest(requestId, action, value));
   }

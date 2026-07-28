@@ -12,6 +12,9 @@ export interface HostPort {
    * so the read backend can run in any bones host.
    */
   repositoryPaths(): readonly string[];
+  /** Raw bytes persisted by bones in this component's file-backed save slot. */
+  loadSavedState(): Uint8Array<ArrayBufferLike>;
+  saveSavedState(value: Uint8Array<ArrayBufferLike>): void;
   requestOs(requestId: number, action: import("../../../proto/ts/native").OsAction, value?: string): void;
   sendPageMessage(panel: string, message: unknown): void;
   subscribe(topic: string): void;
