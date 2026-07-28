@@ -1,0 +1,5 @@
+<!-- Original minimal symbols created for the standalone commits interface. -->
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="display:none">
+  <symbol id="refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0 2 5.3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 4v7h-7" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="2"/></symbol>
+</svg>

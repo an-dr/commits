@@ -9,6 +9,10 @@ Phases 0–1. The walking skeleton is original code. Before later phases copy or
 adapt source or assets, their notices and licenses must be vendored beside the
 copied material.
 
+The standalone Phase 4 UI ships only original `ui/assets/icons.svg`; its local
+asset notice is in `ui/assets/LICENSE.md`. No theme stylesheet or icon artwork
+from the reference extension is included.
+
 Important: the upstream `vscode-git-graph` license is not the standard MIT
 license; it restricts publishing, distribution, sublicensing, and sale of
 derivative works. The roadmap's “MIT lineage” wording must not be used as a

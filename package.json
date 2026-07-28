@@ -5,11 +5,12 @@
   "description": "A standalone Git client on the bones engine",
   "type": "module",
   "scripts": {
-    "build": "npm run clean && npm run build:ui && npm run build:page && npm run check && npm run build:wasm",
+    "build": "npm run clean && npm run check:ui-theme && npm run build:ui && npm run build:page && npm run check && npm run build:wasm",
     "build:page": "node scripts/generate-page.mjs",
     "build:ui": "esbuild ui/src/main.ts --bundle --format=iife --target=es2022 --minify --outfile=dist/ui/page.js",
     "build:wasm": "node scripts/build-components.mjs",
     "check": "tsc --noEmit",
+    "check:ui-theme": "node scripts/check-ui-theme.mjs",
     "clean": "node scripts/clean.mjs",
     "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1",
     "postinstall": "node scripts/patch-wizer-package.mjs",
