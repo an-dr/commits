@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = [
+    "app",
+    "modules/git",
+    "modules/os",
+    "modules/watcher",
+    "proto/rust",
+]
+exclude = [
+    "vendor/bones",
+    "vendor/bones/shared/bones-messages",
+]
+
+# Wasmtime + WebView2 exhaust the Windows ARM64 linker PDB limit with full
+# dependency debug information. Keep local builds debuggable at line level
+# through Rust sources while avoiding multi-gigabyte PDBs.
+[profile.dev]
+debug = 0
+
+[profile.test]
+debug = 0

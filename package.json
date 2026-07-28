@@ -1,0 +1,28 @@
+{
+  "name": "commits",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A standalone Git client on the bones engine",
+  "type": "module",
+  "scripts": {
+    "build": "npm run clean && npm run build:ui && npm run build:page && npm run check && npm run build:wasm",
+    "build:page": "node scripts/generate-page.mjs",
+    "build:ui": "esbuild ui/src/main.ts --bundle --format=iife --target=es2022 --outfile=dist/ui/page.js",
+    "build:wasm": "node scripts/build-components.mjs",
+    "check": "tsc --noEmit",
+    "clean": "node scripts/clean.mjs",
+    "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1",
+    "postinstall": "node scripts/patch-wizer-package.mjs",
+    "test": "vitest run",
+    "verify": "npm run build && npm test && cargo test --workspace"
+  },
+  "devDependencies": {
+    "@bytecodealliance/componentize-js": "0.19.3",
+    "@bytecodealliance/jco": "1.17.9",
+    "@types/node": "24.1.0",
+    "@commits/wizer-win32-arm64": "file:tooling/wizer-win32-arm64",
+    "esbuild": "0.28.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}

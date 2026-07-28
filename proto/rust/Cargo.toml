@@ -1,0 +1,9 @@
+[package]
+name = "commits-proto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bones-messages = { path = "../../vendor/bones/shared/bones-messages" }
+serde_json = "1.0"
+
