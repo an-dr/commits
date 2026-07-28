@@ -22,6 +22,9 @@ export function startPage(): void {
       input.value = event.data.repository;
       view.render(event.data);
       save();
+    } else if (event.data.command === "credentialPrompt") {
+      const value = window.prompt(event.data.kind === "editor" ? "Edit commit message" : event.data.message, event.data.kind === "editor" ? event.data.message : "");
+      api.postMessage({ command: "credentialResponse", id: event.data.id, value: value ?? "" });
     } else if (event.data.command === "osCapability") {
       if (event.data.accepted && event.data.value) load(event.data.value);
       else if (event.data.error) status.textContent = event.data.error;

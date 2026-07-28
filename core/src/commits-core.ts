@@ -37,6 +37,7 @@ export class CommitsCore {
   start(): void {
     this.host.subscribe("web/*");
     this.host.subscribe("os/result");
+    this.host.subscribe("os/prompt");
     this.host.subscribe("git/completed");
     this.host.openPanel(PANEL, this.pageHtml);
     this.host.log("info", "commits panel requested");
@@ -83,6 +84,7 @@ export class CommitsCore {
       case "refreshRepository":
         if (this.state.lastActiveRepository !== null) this.loadRepository(this.state.lastActiveRepository);
         return;
+      case "credentialResponse": this.host.respondPrompt(value.id, value.value); return;
     }
     this.host.sendPageMessage(PANEL, response);
   }
@@ -93,6 +95,11 @@ export class CommitsCore {
 
   receiveGitResult(result: GitResult): void {
     this.backend.receive(result);
+  }
+
+  receivePrompt(payload: string): void {
+    const [id, kind, ...message] = payload.split("\n");
+    if (id && kind) this.host.sendPageMessage(PANEL, { command: "credentialPrompt", id, kind, message: message.join("\n") });
   }
 
   panelOpened(): void {

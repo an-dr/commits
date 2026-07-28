@@ -53,6 +53,8 @@ export function onMessage(
       core.receiveOsResult(decodeNativeResult(payload));
     } else if (topic === "git/completed") {
       core.receiveGitResult(decodeGitResult(payload));
+    } else if (topic === "os/prompt") {
+      core.receivePrompt(new TextDecoder().decode(payload));
     }
   } catch (error) {
     new BonesHostPort().log("warn", `ignored invalid ${topic}: ${String(error)}`);

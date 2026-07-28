@@ -10,6 +10,7 @@ class StubHost implements HostPort {
   readonly topics: string[] = [];
   readonly osRequests: unknown[] = [];
   readonly gitRequests: import("../../proto/ts/native").GitRun[] = [];
+  readonly promptReplies: string[] = [];
   savedState: Uint8Array<ArrayBufferLike> = new Uint8Array();
 
   closePanel(panel: string): void {
@@ -25,6 +26,7 @@ class StubHost implements HostPort {
   loadSavedState(): Uint8Array<ArrayBufferLike> { return this.savedState; }
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void { this.savedState = value; }
   runGit(request: import("../../proto/ts/native").GitRun): void { this.gitRequests.push(request); }
+  respondPrompt(id: string, value: string): void { this.promptReplies.push(`${id}:${value}`); }
 
   requestOs(requestId: number, action: import("../../proto/ts/native").OsAction, value?: string): void {
     this.osRequests.push({ requestId, action, value });

@@ -51,9 +51,11 @@ export interface RepositorySnapshotResponse {
   readonly refs: import("./read/models").RefSnapshot;
   readonly errors: readonly string[];
 }
+export interface CredentialResponseRequest { readonly command: "credentialResponse"; readonly id: string; readonly value: string; }
+export interface CredentialPromptResponse { readonly command: "credentialPrompt"; readonly id: string; readonly kind: string; readonly message: string; }
 
-export type RequestMessage = EchoRequest | PageReadyRequest | OsCapabilityRequest | LoadRepositoryRequest | RefreshRepositoryRequest;
-export type ResponseMessage = CoreReadyResponse | EchoResponse | OsCapabilityResponse | RepositorySnapshotResponse;
+export type RequestMessage = EchoRequest | PageReadyRequest | OsCapabilityRequest | LoadRepositoryRequest | RefreshRepositoryRequest | CredentialResponseRequest;
+export type ResponseMessage = CoreReadyResponse | EchoResponse | OsCapabilityResponse | RepositorySnapshotResponse | CredentialPromptResponse;
 
 export function isRequestMessage(value: unknown): value is RequestMessage {
   if (!isRecord(value) || typeof value.command !== "string") {
@@ -70,6 +72,7 @@ export function isRequestMessage(value: unknown): value is RequestMessage {
   }
   if (value.command === "loadRepository") return typeof value.path === "string" && value.path.trim().length > 0;
   if (value.command === "refreshRepository") return true;
+  if (value.command === "credentialResponse") return typeof value.id === "string" && typeof value.value === "string";
   return (
     value.command === "echo" &&
     Number.isSafeInteger(value.requestId) &&

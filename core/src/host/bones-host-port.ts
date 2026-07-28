@@ -48,6 +48,8 @@ export class BonesHostPort implements HostPort {
     publish("git/request", encodeGitRun(request));
   }
 
+  respondPrompt(id: string, value: string): void { publish("os/prompt-response", new TextEncoder().encode(`${id}\n${value}`)); }
+
   requestOs(requestId: number, action: OsAction, value = ""): void {
     publish("os/request", encodeOsRequest(requestId, action, value));
   }

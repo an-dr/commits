@@ -8,6 +8,8 @@ pub mod rendezvous;
 
 pub const REQUEST_TOPIC: &str = "os/request";
 pub const RESULT_TOPIC: &str = "os/result";
+pub const PROMPT_TOPIC: &str = "os/prompt";
+pub const PROMPT_RESPONSE_TOPIC: &str = "os/prompt-response";
 
 pub trait OsBackend: Send + Sync {
     fn read_clipboard(&self) -> Result<String, String>;
@@ -92,6 +94,12 @@ impl Handler for OsModule {
             if let Ok(request) = OsRequest::decode(&envelope.payload) {
                 self.start(request);
             }
+        } else if envelope.topic == PROMPT_RESPONSE_TOPIC {
+            if let Ok(text) = std::str::from_utf8(&envelope.payload) {
+                if let Some((id, value)) = text.split_once('\n') {
+                    let _ = rendezvous::reply(&prompt_directory(), id, value);
+                }
+            }
         }
     }
 }
@@ -103,12 +111,31 @@ impl Module for OsModule {
 
     fn init(&mut self, context: &mut ModuleContext) -> Result<(), String> {
         context.subscribe(REQUEST_TOPIC);
+        context.subscribe(PROMPT_RESPONSE_TOPIC);
         self.bus = context.get_service::<Bus>().cloned();
         self.bus
             .as_ref()
             .map(|_| ())
             .ok_or_else(|| "no Bus service available".into())
     }
+
+    fn render(&mut self) {
+        let Some(bus) = self.bus.as_ref() else { return };
+        let Ok(entries) = std::fs::read_dir(prompt_directory()) else { return };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|extension| extension == "request") {
+                if let (Some(id), Ok(body)) = (path.file_stem().and_then(|value| value.to_str()), std::fs::read_to_string(&path)) {
+                    let payload = format!("{id}\n{body}").into_bytes();
+                    bus.publish(Envelope { topic: PROMPT_TOPIC.into(), sender: "os".into(), correlation: None, payload });
+                }
+            }
+        }
+    }
+}
+
+fn prompt_directory() -> std::path::PathBuf {
+    std::env::current_exe().ok().and_then(|path| path.parent().map(|parent| parent.join("saves/prompts"))).unwrap_or_else(|| std::path::PathBuf::from("saves/prompts"))
 }
 
 fn execute(backend: &dyn OsBackend, request: &OsRequest) -> NativeResult {
