@@ -3,7 +3,7 @@ import { RepositoryManager } from "./repository-manager";
 
 describe("RepositoryManager", () => {
   it("reconciles host paths without a VS Code workspace dependency", () => {
-    const paths = { repositoryPaths: () => ["C:\\Code\\Outer", "c:/code/outer/"] };
+    const paths = { getRootPaths: () => ["C:\\Code\\Outer", "c:/code/outer/"] };
     const manager = new RepositoryManager(paths);
 
     manager.discover();
@@ -15,7 +15,7 @@ describe("RepositoryManager", () => {
 
   it("retains nested and externally chosen repositories across discovery", () => {
     let visible = ["C:/Code/app"];
-    const manager = new RepositoryManager({ repositoryPaths: () => visible });
+    const manager = new RepositoryManager({ getRootPaths: () => visible });
     manager.discover();
     manager.addExternal("C:/Code/app/tools/fixture");
     visible = [];
@@ -27,7 +27,7 @@ describe("RepositoryManager", () => {
   });
 
   it("ignores blank paths and allows removing a saved external repository", () => {
-    const manager = new RepositoryManager({ repositoryPaths: () => ["  "] });
+    const manager = new RepositoryManager({ getRootPaths: () => ["  "] });
     expect(manager.addExternal(" ")).toBeNull();
     const repository = manager.addExternal("C:/external");
     manager.removeExternal(repository!.id);

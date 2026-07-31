@@ -1,6 +1,13 @@
 $ErrorActionPreference = "Stop"
+$isWindowsPlatform = $env:OS -eq "Windows_NT"
 
-npm run build
+$node = (Get-Command node -ErrorAction Stop).Source
+$npmCli = Join-Path (Split-Path -Parent $node) "node_modules/npm/bin/npm-cli.js"
+if (Test-Path -LiteralPath $npmCli) {
+    & $node $npmCli run build
+} else {
+    npm run build
+}
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 cargo build --release -p commits-app
@@ -19,10 +26,10 @@ if (Test-Path -LiteralPath $outputFull) {
 }
 
 New-Item -ItemType Directory -Path (Join-Path $outputFull "extensions") -Force | Out-Null
-$exe = if ($IsWindows) { "commits.exe" } else { "commits" }
+$exe = if ($isWindowsPlatform) { "commits.exe" } else { "commits" }
 Copy-Item (Join-Path $root "target/release/$exe") (Join-Path $outputFull $exe)
 foreach ($helper in @("commits-askpass", "commits-editor")) {
-    $helperExe = if ($IsWindows) { "$helper.exe" } else { $helper }
+    $helperExe = if ($isWindowsPlatform) { "$helper.exe" } else { $helper }
     Copy-Item (Join-Path $root "target/release/$helperExe") (Join-Path $outputFull $helperExe)
 }
 Copy-Item (Join-Path $root "dist/extensions/commits.wasm") (Join-Path $outputFull "extensions/commits.wasm")

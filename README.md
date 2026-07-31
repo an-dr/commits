@@ -1,9 +1,12 @@
 # commits
 
 A standalone desktop Git client built on the
-[`bones`](vendor/bones) engine. The product core is TypeScript compiled to a
-WebAssembly component; the page UI is ordinary browser TypeScript hosted in a
-wry panel.
+[`bones`](vendor/bones) engine. The repository contains an unchanged MIT
+snapshot of `@an-dr/commits-core` in [`packages/core`](packages/core) and a
+reusable MIT webview shell in [`packages/webview-shell`](packages/webview-shell),
+while the GPL-licensed Bones host and its adapter remain in [`core`](core).
+The adapter is compiled to a WebAssembly component and runs the same Git Graph
+webview used by the extension in a wry panel.
 
 Phases 0 and 1 provide the walking skeleton: the native app, TypeScript guest
 toolchain, shared binary codec, `HostPort`, VS Code page API shim, and a typed
@@ -43,8 +46,8 @@ npm run dist
 .\dist\app\commits.exe
 ```
 
-The page reports its bones connection and offers an echo field. Submitting it
-proves the browser → WASM core → bones web module → browser round trip.
+The packaged app opens the Git Graph table and branch sidebar. If no repository
+was restored, its Bones-specific overlay lets you choose or enter one.
 
 Architecture and current verification evidence are indexed in
 [`docs/index.md`](docs/index.md).

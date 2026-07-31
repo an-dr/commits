@@ -1,0 +1,1245 @@
+/* Body */
+/*
+ * The tab fills the viewport and never scrolls itself: #view is the one
+ * scrolling box, so the top bar can stay pinned above the commit table while
+ * the sidebar and the docked panels sit outside the scroll entirely.
+ */
+body {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  /* Height of #topBar: a 26px icon button plus its 4px padding and the rule. */
+  --top-bar-height: 35px;
+  /* Defaults until the panels report their own widths. */
+  --branch-panel-width: 220px;
+  --files-panel-width: 0px;
+}
+#view {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: var(--files-panel-width, 0px);
+  bottom: var(--full-diff-height, 0px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--vscode-editor-background);
+}
+#view:focus {
+  outline: none;
+}
+/* Pinned inside the scroller, so it stays put while the table scrolls. */
+#topBar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  align-items: stretch;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.5);
+}
+body.unableToLoad {
+  margin: 0 20px;
+}
+
+/* Branch panel */
+#branchPanelSidebar {
+  position: fixed;
+  top: var(--top-bar-height);
+  bottom: var(--full-diff-height, 0px);
+  left: 0;
+  z-index: 10;
+  overflow: auto;
+  box-sizing: border-box;
+  width: var(--branch-panel-width, 220px);
+  border-right: 1px solid rgba(128, 128, 128, 0.5);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+}
+body.branchPanelHidden #branchPanelSidebar {
+  visibility: hidden;
+}
+#branchPanelResizeHandle {
+  position: fixed;
+  top: var(--top-bar-height);
+  bottom: var(--full-diff-height, 0px);
+  left: calc(var(--branch-panel-width, 220px) - 3px);
+  width: 6px;
+  cursor: col-resize;
+}
+.branchPanelSectionHeader {
+  padding: 8px 6px 3px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.branchPanelFilterInput {
+  width: calc(100% - 12px);
+  margin: 6px;
+  padding: 4px 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--vscode-input-border, rgba(128, 128, 128, 0.5));
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+.branchPanelItem,
+.branchPanelFolder {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding-right: 6px;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+.branchPanelItem:hover,
+.branchPanelFolder:hover {
+  background: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.12));
+}
+.branchPanelItem.selected {
+  background: var(--vscode-list-activeSelectionBackground, rgba(128, 128, 128, 0.2));
+}
+.branchPanelCheck {
+  width: 18px;
+  flex: 0 0 18px;
+}
+.branchPanelItemName,
+.branchPanelFolderName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.branchPanelFolderIcon {
+  width: 20px;
+  flex: 0 0 20px;
+}
+.branchPanelCurrentBadge {
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+.branchPanelEmpty {
+  padding: 10px;
+  opacity: 0.7;
+}
+
+/*
+ * Optional content density, applied as a body class from the uiDensity
+ * setting. Toolbar and dialog dimensions stay unchanged on purpose: only
+ * content that repeats per commit shrinks, so the controls stay clickable.
+ */
+body.compactUi #commitTable th,
+body.compactUi #commitTable td {
+  font-size: 12px;
+}
+body.compactUi #commitTable td {
+  line-height: 20px;
+}
+body.compactUi #commitTable th {
+  line-height: 16px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+body.compactUi #commitTable .avatar.normal {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+body.compactUi #commitTable .avatar.small {
+  width: 13px;
+  height: 13px;
+  margin-top: 3px;
+}
+body.compactUi .gitRef,
+body.compactUi .gitRefName {
+  height: 17px;
+  line-height: 17px;
+}
+body.compactUi .gitRef {
+  font-size: 11px;
+}
+body.compactUi #commitDetails {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+body.extraCompactUi #commitTable th,
+body.extraCompactUi #commitTable td {
+  font-size: 11px;
+}
+body.extraCompactUi #commitTable td {
+  line-height: 18px;
+}
+body.extraCompactUi #commitTable th {
+  line-height: 14px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+body.extraCompactUi #commitTable .avatar.normal {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+}
+body.extraCompactUi #commitTable .avatar.small {
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+}
+body.extraCompactUi .gitRef,
+body.extraCompactUi .gitRefName {
+  height: 15px;
+  line-height: 15px;
+}
+body.extraCompactUi .gitRef {
+  font-size: 10px;
+}
+body.extraCompactUi #commitDetails {
+  font-size: 10px;
+  line-height: 13px;
+}
+body.unableToLoad h2,
+body.unableToLoad p {
+  text-align: center;
+}
+#scrollShadow.active {
+  position: fixed;
+  top: 0px;
+  left: 0px;
+  width: 100%;
+  height: 0px;
+  box-shadow: 0 -6px 6px 6px var(--vscode-scrollbar-shadow);
+  z-index: 200;
+}
+
+/* Content */
+#content {
+  position: relative;
+  /* Only the sidebar overlaps the scroller; #view is already inset on the
+     right by the files panel. */
+  margin-left: var(--branch-panel-width);
+}
+
+/* Repository in-progress banner */
+#repoInProgressBanner {
+  display: none;
+  padding: 6px 10px;
+  margin-left: var(--branch-panel-width);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.5);
+  background: var(--vscode-editorWarning-background, rgba(255, 166, 0, 0.12));
+  font-size: 12px;
+}
+#repoInProgressBanner.active {
+  display: block;
+}
+/* A conflict is what blocks the operation, so it reads as an error. */
+#repoInProgressBanner.conflicted {
+  background: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.12));
+}
+#repoInProgressBannerSecondary {
+  opacity: 0.8;
+  margin-top: 2px;
+  word-break: break-word;
+}
+#repoInProgressBannerActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Full diff panel, docked to the bottom of the view.
+   Everything that reaches the bottom edge insets itself by the height the
+   panel reserves, so opening it never hides content behind it. */
+#fullDiffPanel {
+  position: fixed;
+  left: var(--branch-panel-width, 0px);
+  right: var(--files-panel-width, 0px);
+  bottom: 0;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgba(128, 128, 128, 0.5);
+  background: var(--vscode-editor-background);
+}
+body.fullDiffPanelHidden #fullDiffPanel {
+  display: none;
+}
+#fullDiffResizeHandle {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 2;
+}
+#fullDiffHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+  font-size: 12px;
+}
+#fullDiffFilename {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+#fullDiffControls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+#fullDiffChangeCounter {
+  min-width: 52px;
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+#fullDiffHeader button {
+  flex: 0 0 auto;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+}
+#fullDiffHeader button:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+#fullDiffHeader button.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+#fullDiffContent {
+  flex: 1 1 auto;
+  overflow: auto;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: var(--vscode-editor-font-size, 12px);
+}
+.fullDiffMessage {
+  padding: 10px;
+  opacity: 0.75;
+}
+.diffRow {
+  display: flex;
+  align-items: flex-start;
+  white-space: pre;
+}
+.diffLnOld,
+.diffLnNew {
+  flex: 0 0 auto;
+  width: 44px;
+  padding-right: 6px;
+  text-align: right;
+  opacity: 0.5;
+  user-select: none;
+}
+.diffLnSep {
+  flex: 0 0 auto;
+  padding-right: 6px;
+  opacity: 0.35;
+  user-select: none;
+}
+.diffRowContent {
+  flex: 1 1 auto;
+}
+.diffAdded {
+  background: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.12));
+}
+.diffRemoved {
+  background: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.12));
+}
+.diffSpacer {
+  opacity: 0.5;
+  font-style: italic;
+  padding-left: 8px;
+}
+.diffHunkHeader,
+.diffFileHeader {
+  opacity: 0.7;
+}
+
+/* Side-by-side mode: two independently scrolling panes kept in step. */
+.diffSbsContainer {
+  display: flex;
+  height: 100%;
+}
+.diffSbsPane {
+  flex: 1 1 50%;
+  min-width: 0;
+  overflow: auto;
+}
+.diffSbsPaneNew {
+  border-left: 1px solid rgba(128, 128, 128, 0.35);
+}
+.diffSbsRow {
+  display: flex;
+  align-items: flex-start;
+  white-space: pre;
+}
+/* Keeps both panes on the same row height where one side has no counterpart. */
+.diffSbsPlaceholder::after {
+  content: " ";
+}
+
+/* Changed-files panel */
+#filesPanel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: var(--full-diff-height, 0px);
+  width: var(--files-panel-inline-width, 280px);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  border-left: 1px solid rgba(128, 128, 128, 0.5);
+  z-index: 1;
+}
+/* Kept in the layout rather than display:none so its width survives a hide. */
+body.filesPanelHidden #filesPanel {
+  transform: translateX(100%);
+  visibility: hidden;
+}
+#filesPanelResizeHandle {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+}
+#filesPanelHeader,
+#filesPanelFooter {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 4px 8px;
+  font-size: 12px;
+  overflow: hidden;
+}
+#filesPanelHeader {
+  top: 0;
+}
+#filesPanelFooter {
+  bottom: 0;
+}
+/* Inset by the header and footer heights, which the panel sets inline. */
+#filesPanelContent {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  overflow: auto;
+  padding: 4px 8px;
+}
+#filesPanelPlaceholder,
+.filesPanelPlaceholder {
+  opacity: 0.7;
+  font-size: 12px;
+  padding: 8px 4px;
+}
+
+/* Commit Graph */
+#commitGraph {
+  display: block;
+  position: absolute;
+  left: 8px;
+  top: 0px;
+  /* Above the content, not behind it: #view paints an opaque background, and a
+     negative z-index put the graph underneath it. Clicks pass through. */
+  z-index: 2;
+  pointer-events: none;
+}
+#commitGraph circle.current {
+  fill: var(--vscode-editor-background);
+  stroke-width: 2;
+}
+#commitGraph circle:not(.current) {
+  stroke: var(--vscode-editor-background);
+  stroke-width: 1;
+  stroke-opacity: 0.75;
+}
+#commitGraph path.shaddow {
+  fill: none;
+  stroke: var(--vscode-editor-background);
+  stroke-opacity: 0.75;
+  stroke-width: 4;
+}
+#commitGraph path.line {
+  fill: none;
+  stroke-width: 2;
+}
+
+/* Commit Table */
+#commitTable table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+/* The merged graph/message cell takes every spare pixel; max-width:0 stops the
+   browser sizing it to its content and pushing the trailing columns off. */
+#commitTable td:first-child {
+  width: 100%;
+  max-width: 0;
+}
+#commitTable td.committedCol,
+#commitTable th.committedCol {
+  max-width: 190px;
+}
+#commitTable th.tableColHeader:nth-child(2) {
+  text-align: left;
+}
+#commitTable table,
+#commitTable tbody,
+#commitTable tr,
+#commitTable th,
+#commitTable td {
+  padding: 0;
+  margin: 0;
+}
+#commitTable th,
+#commitTable td {
+  white-space: nowrap;
+  font-size: 13px;
+  cursor: default;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+#commitTable tr.commit:hover td,
+#commitTable tr.commit.contextMenuActive td,
+#commitTable tr.commit.dialogActive td,
+#commitTable tr.commit.commitDetailsOpen td {
+  background-color: rgba(128, 128, 128, 0.15);
+}
+#commitTable tr.commit:hover td {
+  cursor: pointer;
+}
+#commitTable td {
+  line-height: 24px;
+  padding: 0 4px;
+}
+#commitTable th {
+  border-bottom: 1px solid rgba(128, 128, 128, 0.5);
+  line-height: 18px;
+  padding: 6px 12px;
+}
+
+#commitTable.fixedLayout table {
+  table-layout: fixed;
+}
+#commitTable.autoLayout td:first-child,
+#commitTable.autoLayout th:nth-child(2) {
+  width: 100%;
+  max-width: 0;
+}
+#commitTable.autoLayout td:nth-child(4),
+#commitTable.autoLayout th:nth-child(4) {
+  max-width: 124px;
+}
+#tableColHeaders.resizing th {
+  cursor: col-resize;
+}
+.tableColHeader {
+  position: relative;
+}
+.resizeCol {
+  position: absolute;
+  top: 0px;
+  height: 100%;
+  display: block;
+  width: 6px;
+  cursor: col-resize;
+}
+.resizeCol.left {
+  left: 0px;
+  border-left: 1px solid rgba(128, 128, 128, 0.25);
+}
+.resizeCol.right {
+  right: 0px;
+}
+
+/* Commit Details View */
+#commitDetails {
+  height: 250px;
+  vertical-align: top;
+}
+#commitDetails td {
+  background-color: rgba(128, 128, 128, 0.1);
+  position: relative;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: normal;
+}
+#commitDetails td:after {
+  content: "";
+  display: block;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background-color: rgba(128, 128, 128, 0.2);
+}
+#commitTable tr.commit.commitDetailsOpen td {
+  background-color: rgba(128, 128, 128, 0.25);
+}
+/* Picked out for comparison. Distinct from the open-details highlight, since
+   a commit can be selected without being open. */
+#commitTable tr.commit.selected td {
+  background-color: var(--vscode-list-inactiveSelectionBackground, rgba(128, 128, 128, 0.22));
+  box-shadow: inset 2px 0 0 var(--vscode-focusBorder);
+}
+#commitTable tr.commit.commitDetailsOpen:hover td {
+  background-color: rgba(128, 128, 128, 0.35);
+}
+/* Spans the row now that the changed files live only in the side panel;
+   the inset on the right leaves room for the close button. */
+#commitDetailsSummary {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 2px;
+  right: 32px;
+  padding: 10px;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  text-overflow: ellipsis;
+  border-left: 1px solid rgba(128, 128, 128, 0.2);
+  border-right: 1px solid rgba(128, 128, 128, 0.2);
+  user-select: text;
+}
+.commitDetailsSummaryTop {
+  display: inline-table;
+  width: 100%;
+}
+.commitDetailsSummaryTopRow {
+  display: table-row;
+}
+.commitDetailsSummaryKeyValues,
+.commitDetailsSummaryAvatar {
+  display: table-cell;
+  vertical-align: top;
+}
+.commitDetailsSummaryKeyValues {
+  max-width: 0px;
+  overflow-x: hidden;
+  text-overflow: ellipsis;
+}
+.commitDetailsSummaryTop.withAvatar .commitDetailsSummaryKeyValues {
+  padding-right: 10px;
+}
+.commitDetailsSummaryAvatar {
+  width: 54px;
+}
+.commitDetailsSummaryAvatar > img {
+  width: 54px;
+  border-radius: 4px;
+}
+#commitDetailsClose {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+#commitDetailsClose svg {
+  width: 24px;
+  height: 24px;
+  fill: var(--vscode-editor-foreground);
+  fill-opacity: 0.6;
+}
+#commitDetailsClose:hover svg {
+  stroke: var(--vscode-editor-foreground);
+  stroke-width: 1;
+  stroke-opacity: 0.2;
+}
+svg.openFolderIcon,
+svg.closedFolderIcon,
+svg.fileIcon {
+  width: 13px;
+  height: 13px;
+  margin-top: 2.5px;
+  fill: var(--vscode-editor-foreground);
+  fill-opacity: 0.6;
+  margin-right: 8px;
+  vertical-align: top;
+}
+.gitFolderContents.hidden {
+  display: none;
+}
+.gitFolder {
+  cursor: pointer;
+}
+.gitFile {
+  color: var(--vscode-gitDecoration-modifiedResourceForeground);
+}
+.gitFile.A {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+.gitFile.D {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+.gitFile.gitDiffPossible {
+  cursor: pointer;
+}
+.gitFileAddDel,
+.gitFileRename {
+  color: var(--vscode-editor-foreground);
+  margin-left: 8px;
+}
+.gitFileAdditions,
+.gitFileDeletions {
+  padding: 0 3px;
+  cursor: help;
+}
+.gitFileAdditions {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+.gitFileDeletions {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+.gitFileRename {
+  cursor: help;
+}
+
+#commitTable .avatar {
+  display: inline-flex;
+  overflow: hidden;
+  vertical-align: top;
+  margin-right: 4px;
+}
+#commitTable .avatar.normal {
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+}
+#commitTable .avatar.small {
+  width: 14px;
+  height: 14px;
+  margin-top: 5px;
+}
+/* A placeholder awaiting a fetched image occupies no space until it arrives. */
+#commitTable .avatar.empty {
+  display: none;
+}
+#commitTable .avatar > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+#commitTable .avatar.initials {
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--vscode-editor-foreground);
+}
+.commit .avatar.small.initials {
+  font-size: 9px;
+}
+.avatar.circle {
+  border-radius: 50%;
+}
+.avatar.square {
+  border-radius: 4px;
+}
+
+.commitHeadDot {
+  width: 6px;
+  height: 6px;
+  border: 2px solid var(--git-graph-color);
+  display: inline-block;
+  border-radius: 6px;
+  margin-right: 5px;
+  vertical-align: top;
+  margin-top: 7px;
+}
+
+#commitTable tr.commit.head td:not(:first-child) {
+  background-color: var(--vscode-list-inactiveSelectionBackground);
+}
+#commitTable td:first-child {
+  padding-left: 10px;
+}
+/* Marks the checked-out branch's commit down the message cell, which is the
+   first cell now that it spans the graph gutter too. */
+#commitTable tr.commit.head td:first-child {
+  box-shadow: inset 2px 0 0 var(--git-graph-color);
+}
+#commitTable tr.commit.head:hover td {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+/* Commit table: the graph gutter and the message share one cell, so a row's
+   text starts just past its own vertex rather than past the widest lane. */
+#commitTable tr.commit span.description {
+  display: flex;
+}
+#commitTable tr.commit td span.description .gitRef {
+  flex-shrink: 0;
+}
+#commitTable tr.commit span.description .text {
+  display: inline-block;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+#commitTable td.committedCol .committedMeta {
+  display: inline-block;
+  vertical-align: top;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+#commitTable td.committedCol .committedDate {
+  display: inline-block;
+  vertical-align: top;
+  margin-right: 2px;
+}
+#commitTable td.committedCol .avatar.normal + .committedMeta {
+  max-width: calc(100% - 22px);
+}
+#commitTable td.committedCol .avatar.small + .committedMeta {
+  max-width: calc(100% - 18px);
+}
+#commitTable td.committedCol,
+#commitTable th.committedCol {
+  text-align: center;
+}
+#commitTable td.idCol {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+/* Ref labels.
+   Tinted with the commit's own graph lane colour and set in the editor
+   background colour, so a label reads as belonging to its branch line. */
+.gitRef {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  line-height: 19px;
+  margin-top: 2px;
+  margin-right: 3px;
+  background-color: var(--git-graph-color);
+  border-radius: 3px;
+  border: 0;
+  color: var(--vscode-editor-background);
+  vertical-align: top;
+  font-size: 12px;
+  cursor: default;
+  overflow: hidden;
+}
+/* The palette is tuned for dark themes; on light ones the same colours need
+   darkening to keep the label text legible. */
+body.vscode-light .gitRef {
+  color: #fff;
+  background-image: linear-gradient(rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.14));
+  background-blend-mode: multiply;
+}
+.gitRef.active {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+.gitRef.active .gitRefName {
+  font-weight: bold;
+}
+.gitRefName {
+  display: inline-block;
+  height: 19px;
+  line-height: 19px;
+  padding: 0 4px 0 2px;
+  font-weight: 400;
+}
+.gitRef > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  margin: 0 1px 0 3px;
+  fill: currentColor;
+  display: block;
+}
+
+/* Loader */
+#loadingHeader {
+  text-align: center;
+  line-height: 32px;
+}
+#loadingHeader svg {
+  display: inline;
+  fill: rgb(128, 128, 128);
+  margin-right: 10px;
+  vertical-align: top;
+  animation: loadingIconAnimation 2s linear infinite;
+}
+@keyframes loadingIconAnimation {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Top bar: the repo dropdown sits over the sidebar, the controls over the
+   commit table, so the two columns line up down the whole view. */
+#sidebarTop {
+  flex: 0 0 var(--branch-panel-width, 0px);
+  box-sizing: border-box;
+  width: var(--branch-panel-width, 0px);
+  height: var(--top-bar-height);
+  border-right: 1px solid rgba(128, 128, 128, 0.5);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  padding: 4px 6px;
+  overflow: hidden;
+}
+body.branchPanelHidden #sidebarTop {
+  display: none;
+}
+#sidebarTop #repoSelect {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#controls {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: var(--top-bar-height);
+  padding: 4px 8px;
+  line-height: 32px;
+  font-weight: 700;
+  font-size: 13px;
+}
+#controlsLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Icon buttons: square, borderless, and dimmed until hovered, so a row of
+   them reads as one toolbar rather than six separate controls. */
+.iconBtn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0.7;
+  color: var(--vscode-foreground);
+}
+.iconBtn svg {
+  width: 16px;
+  height: 16px;
+}
+.iconBtn:hover {
+  opacity: 1;
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+.iconBtn.active {
+  opacity: 1;
+}
+/* Folded into the more menu; still in the DOM so it can come back. */
+.iconBtn.overflowHidden {
+  display: none;
+}
+#commitFilterControl {
+  flex: 1 1 120px;
+  min-width: 80px;
+  display: flex;
+}
+#commitFilter {
+  width: 100%;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(128, 128, 128, 0.5);
+  border-radius: 11px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+#commitFilter:focus {
+  border-color: var(--vscode-focusBorder);
+}
+/* Pushed to the trailing edge so the buttons stay grouped away from the
+   filter, and never allowed to shrink — they fold into the more menu instead. */
+#controlsBtns {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+#findWidget {
+  position: fixed;
+  z-index: 8;
+  top: var(--top-bar-height);
+  right: 10px;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--vscode-widget-border, rgba(128, 128, 128, 0.5));
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background);
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+}
+#findWidget.active {
+  display: flex;
+}
+#findInput {
+  width: 220px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+#findMatchCount {
+  min-width: 64px;
+  text-align: center;
+  white-space: nowrap;
+}
+#findWidget button {
+  width: 25px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+}
+#findWidget button:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+#commitTable tr.commit.findMatch td {
+  background: var(--vscode-editor-findMatchHighlightBackground);
+}
+#commitTable tr.commit.findCurrentMatch td {
+  background: var(--vscode-editor-findMatchBackground);
+  outline: 1px solid var(--vscode-editor-findMatchBorder, var(--vscode-focusBorder));
+  outline-offset: -1px;
+}
+/* Rows filtered out stay in the table so clearing the filter restores them. */
+tr.filterHidden {
+  display: none;
+}
+/* The graph is absolutely positioned against row offsets, so it would be
+   drawn against the wrong rows once any are hidden. Hide it while filtering
+   rather than redraw a graph whose parent commits are not on screen. */
+body.commitFilterActive #commitGraph {
+  display: none;
+}
+#loadMoreCommitsBtn {
+  width: 180px;
+  height: 28px;
+  margin: 10px auto;
+  border-radius: 14px;
+  line-height: 28px;
+}
+
+#controls select:focus,
+#controls input:focus {
+  outline: none;
+}
+#controls label {
+  cursor: pointer;
+}
+
+/* Context Menu */
+#contextMenu {
+  display: none;
+  position: absolute;
+  background-color: var(--vscode-menu-background);
+  box-shadow: 0 1px 4px 1px var(--vscode-widget-shadow);
+  color: var(--vscode-menu-foreground);
+  list-style-type: none;
+  margin: 0;
+  padding: 4px 0;
+}
+#contextMenu.active {
+  display: block;
+}
+#contextMenu li {
+  cursor: default;
+}
+#contextMenu li.contextMenuItem {
+  padding: 6px 20px;
+}
+#contextMenu li.contextMenuItem:hover {
+  background-color: var(--vscode-menu-selectionBackground);
+  color: var(--vscode-menu-selectionForeground);
+}
+#contextMenu li.contextMenuDivider {
+  margin: 4px 10px;
+  border-top: 1px solid var(--vscode-menu-separatorBackground);
+  opacity: 0.5;
+}
+
+/* Dialogs */
+#dialog,
+#dialogBacking {
+  display: none;
+}
+#dialog.active {
+  display: block;
+  position: fixed;
+  background-color: var(--vscode-menu-background);
+  color: var(--vscode-menu-foreground);
+  padding: 10px;
+  left: 50%;
+  top: 50%;
+  transform: translateX(-50%) translateY(-50%);
+  border: 1px solid rgba(128, 128, 128, 0.5);
+  border-radius: 5px;
+  text-align: center;
+  max-width: 360px;
+  max-height: 80%;
+  z-index: 10;
+  box-shadow: 0 0 30px 5px var(--vscode-widget-shadow);
+  overflow-y: auto;
+}
+
+#dialog > table.dialogForm {
+  display: inline-table;
+  width: 360px;
+}
+#dialog > table.dialogForm td {
+  padding-top: 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+#dialog > table.dialogForm td:last-child {
+  width: 100%;
+}
+#dialog > table.dialogForm.multi td:nth-child(1) {
+  padding-right: 5px;
+}
+#dialog > table.dialogForm.single select {
+  width: 100%;
+}
+#dialog > table.dialogForm.single .dialogFormCheckbox {
+  display: inline-block;
+  text-align: center;
+  width: 100%;
+}
+#dialog > table.dialogForm input[type="text"] {
+  width: 100%;
+}
+#dialog > table.dialogForm input[type="checkbox"] {
+  vertical-align: text-top;
+  outline-style: none;
+}
+#dialog > table.dialogForm.multi input[type="checkbox"] {
+  margin-left: 0;
+}
+#dialog > table.dialogForm input[type="text"],
+#dialog > table.dialogForm select {
+  padding: 4px;
+  box-sizing: border-box;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  outline-style: none;
+}
+#dialog .roundedBtn {
+  display: inline-block;
+  line-height: 20px;
+  padding: 0 15px;
+  margin: 10px 6px 0 6px;
+  height: 22px;
+  border-radius: 11px;
+}
+#dialog .errorReason {
+  display: inline-block;
+  font-style: italic;
+  margin-top: 10px;
+  text-align: left;
+}
+#dialogBacking.active {
+  display: block;
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 9;
+}
+#dialog.noInput #dialogAction,
+#dialog.inputInvalid #dialogAction {
+  background-color: rgba(128, 128, 128, 0.2);
+  opacity: 0.5;
+}
+#dialog.noInput #dialogAction {
+  cursor: default;
+}
+#dialog.inputInvalid #dialogAction {
+  cursor: help;
+}
+#dialog svg {
+  display: inline;
+  fill: rgb(128, 128, 128);
+  margin-right: 3px;
+  line-height: 20px;
+  vertical-align: sub;
+}
+#actionRunning {
+  margin: 0 16px;
+  line-height: 24px;
+}
+
+#actionRunning svg {
+  display: inline-block;
+  fill: rgb(128, 128, 128);
+  margin-right: 10px;
+  vertical-align: top;
+  animation: loadingIconAnimation 2s linear infinite;
+  width: 18px !important;
+  height: 24px !important;
+}
+
+/* Buttons */
+.roundedBtn {
+  display: block;
+  background-color: rgba(128, 128, 128, 0.1);
+  border: 1px solid rgba(128, 128, 128, 0.5);
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+}
+.roundedBtn:hover {
+  background-color: rgba(128, 128, 128, 0.2);
+}
+
+/* General */
+#commitGraph,
+#commitTable th,
+#commitTable td,
+.gitRef,
+#loadingHeader,
+.unselectable,
+.roundedBtn,
+#controls label {
+  user-select: none;
+}

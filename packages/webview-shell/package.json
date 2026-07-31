@@ -1,0 +1,13 @@
+{
+  "name": "@an-dr/commits-webview-shell",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Host-independent HTML, localization and styles for the an-dr: Commits webview.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts",
+    "./assets/*": "./assets/*"
+  }
+}

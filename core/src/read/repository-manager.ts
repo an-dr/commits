@@ -1,13 +1,10 @@
+import type { WorkspacePort } from "../../../packages/core/src/host/port";
+
 /** A repository known to the host-agnostic read backend. */
 export interface ManagedRepository {
   readonly id: string;
   readonly path: string;
   readonly source: "host" | "external";
-}
-
-/** Only the host supplies paths; Git verification happens in the read backend. */
-export interface RepositoryPathSource {
-  repositoryPaths(): readonly string[];
 }
 
 /**
@@ -20,11 +17,11 @@ export class RepositoryManager {
   private readonly external = new Map<string, ManagedRepository>();
   private readonly host = new Map<string, ManagedRepository>();
 
-  constructor(private readonly paths: RepositoryPathSource) {}
+  constructor(private readonly workspace: Pick<WorkspacePort, "getRootPaths">) {}
 
   discover(): readonly ManagedRepository[] {
     const next = new Map<string, ManagedRepository>();
-    for (const path of this.paths.repositoryPaths()) {
+    for (const path of this.workspace.getRootPaths()) {
       const repository = toRepository(path, "host");
       if (repository !== null && !next.has(repository.id)) next.set(repository.id, repository);
     }

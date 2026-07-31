@@ -1,0 +1,57 @@
+# Shared MIT commits core
+
+## Source and license boundary
+
+`packages/core` is a byte-for-byte snapshot of the `packages/core` package in
+`an-dr-com-mit-s` at commit
+`69271fe1462d5532f0a56b2872770121f6a4dbfd`. The source package's SHA-256
+hashes were compared after copying with no mismatches. Its root MIT `LICENSE`
+and `NOTICE.md` were copied beside the package without changing their text.
+
+The imported package must not be edited as part of the initial integration.
+Changes to its source should be deliberate shared-core changes, kept separate
+from host adaptation. The repository root remains GPL-3.0; `packages/core`
+retains its explicit MIT grant and notice.
+
+## Working Bones slice
+
+The standalone integration runs the unchanged shared webview without trying to
+run the package's Node-only Git backend in WebAssembly:
+
+- `core/src/host/commits-core-workspace-port.ts` implements the imported
+  `WorkspacePort` contract over repository paths supplied by Bones.
+- `RepositoryManager` discovers host repositories through that shared
+  contract.
+- `packages/webview-shell` contains the host-independent DOM shell,
+  translator-injected localization factory, and exact upstream webview CSS.
+- Bones installs a `WebviewHost` adapter and calls the imported
+  `startCommitsView()` entry point directly.
+- `core/src/mit/graph-backend.ts` maps graph reads to bounded native Git
+  requests and returns the imported request/response models.
+- The existing correlated Rust Git service remains the standalone Git backend.
+
+The package's direct uses of `simple-git`, `node:fs`, `node:path`, and
+`node:child_process` are intentionally not pulled into the WASM component.
+Moving more behavior across requires a separate Git/filesystem port; it does
+not require changing this baseline import first.
+
+## Extension submodule layout
+
+After this repository is pushed, the extension can replace its tracked
+`packages/core` directory with this repository as a submodule:
+
+```text
+extensions/an-dr-com-mit-s/
+└── packages/
+    └── commits/          git submodule -> an-dr/commits
+        └── packages/
+            ├── core/             @an-dr/commits-core
+            └── webview-shell/    shared DOM, localization, and CSS
+```
+
+The extension's workspace, TypeScript path alias, test alias, and esbuild
+resolver should target both shared packages below `packages/commits`. The
+extension host should supply `vscode.l10n.t` to `createLocalizedStrings()` and
+use `buildGraphShell()` for its body. The switch must happen only after the
+`commits` revision containing this snapshot is available
+to the extension repository, so the submodule pointer is reproducible.

@@ -1,12 +1,24 @@
 {
   "compilerOptions": {
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2023", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@an-dr/commits-core/*": ["packages/core/src/*"],
+      "@an-dr/commits-webview-shell/assets/*": ["packages/webview-shell/assets/*"],
+      "@an-dr/commits-webview-shell/*": ["packages/webview-shell/src/*"]
+    },
     "noEmit": true,
     "strict": true,
     "target": "ES2022",
     "types": ["node", "vitest/globals"]
   },
-  "include": ["core/**/*.ts", "proto/**/*.ts", "ui/**/*.ts"]
+  "include": [
+    "core/**/*.ts",
+    "packages/core/src/webview/**/*.d.ts",
+    "packages/webview-shell/**/*.ts",
+    "proto/**/*.ts",
+    "ui/**/*.ts"
+  ]
 }

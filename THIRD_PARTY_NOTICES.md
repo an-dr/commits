@@ -1,20 +1,22 @@
 # Third-party notices
 
-`commits` is intended to carry forward the product behavior and web UI of
-`an-dr-commits`, which descends from Michael Hutchison's
-[`vscode-git-graph`](https://github.com/mhutchie/vscode-git-graph).
+The repository includes an unchanged snapshot of `@an-dr/commits-core` under
+`packages/core` and reusable webview assets under `packages/webview-shell`.
+They were copied or adapted from `an-dr-com-mit-s` at commit
+`69271fe1462d5532f0a56b2872770121f6a4dbfd`. Its MIT license and upstream
+notice are preserved in each package's `LICENSE` and `NOTICE.md`.
 
-No `vscode-git-graph` or `an-dr-commits` implementation code is copied in
-Phases 0–1. The walking skeleton is original code. Before later phases copy or
-adapt source or assets, their notices and licenses must be vendored beside the
-copied material.
+That MIT implementation is derived from `asispts/neo-git-graph` commit
+`437ee6c479bda3a0861c8e657bd99895907623f5`, retrieved on 2026-07-28. Its
+notice states that it does not incorporate code from post-MIT Git Graph
+releases.
 
-The standalone Phase 4 UI ships only original `ui/assets/icons.svg`; its local
-asset notice is in `ui/assets/LICENSE.md`. No theme stylesheet or icon artwork
-from the reference extension is included.
+The repository root remains GPL-3.0. The separate MIT grant applies to the
+files under `packages/core` and `packages/webview-shell`; redistributions must
+preserve both the root license and the imported packages' licenses and notices.
 
-Important: the upstream `vscode-git-graph` license is not the standard MIT
-license; it restricts publishing, distribution, sublicensing, and sale of
-derivative works. The roadmap's “MIT lineage” wording must not be used as a
-license grant. See `licenses/vscode-git-graph-LICENSE`.
+The separately archived `vscode-git-graph` license is not the standard MIT
+license and is not the source of the imported package. It remains in
+`licenses/vscode-git-graph-LICENSE` as a record of the abandoned migration
+path.
 

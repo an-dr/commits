@@ -1,5 +1,7 @@
+import { abbrevCommit } from "../../../packages/core/src/backend/utils/string";
+
 /** Small display helpers deliberately kept independent of the DOM. */
-export function shortHash(hash: string): string { return hash.slice(0, 8); }
+export function shortHash(hash: string): string { return abbrevCommit(hash); }
 
 export function relativeDate(epochSeconds: number, now = Date.now()): string {
   const seconds = Math.max(0, Math.floor(now / 1000) - epochSeconds);

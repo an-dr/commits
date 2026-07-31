@@ -1,0 +1,101 @@
+:root {
+  color-scheme: light dark;
+  --vscode-badge-background: #4f6bed;
+  --vscode-badge-foreground: #ffffff;
+  --vscode-button-background: #0e639c;
+  --vscode-button-foreground: #ffffff;
+  --vscode-diffEditor-insertedTextBackground: rgba(35, 134, 54, 0.22);
+  --vscode-diffEditor-removedTextBackground: rgba(248, 81, 73, 0.22);
+  --vscode-editor-background: #f3f3f3;
+  --vscode-editor-findMatchBackground: #f6b94b;
+  --vscode-editor-findMatchBorder: #c17d00;
+  --vscode-editor-findMatchHighlightBackground: rgba(246, 185, 75, 0.45);
+  --vscode-editor-font-family: "Cascadia Code", Consolas, monospace;
+  --vscode-editor-font-size: 13px;
+  --vscode-editor-foreground: #1f2328;
+  --vscode-editorWarning-background: #cca700;
+  --vscode-editorWidget-background: #f8f8f8;
+  --vscode-focusBorder: #007fd4;
+  --vscode-foreground: #24292f;
+  --vscode-gitDecoration-addedResourceForeground: #1a7f37;
+  --vscode-gitDecoration-deletedResourceForeground: #cf222e;
+  --vscode-gitDecoration-modifiedResourceForeground: #9a6700;
+  --vscode-input-background: #ffffff;
+  --vscode-input-border: #c8c8c8;
+  --vscode-input-foreground: #24292f;
+  --vscode-inputValidation-errorBackground: #f2dede;
+  --vscode-list-activeSelectionBackground: #d7e7ff;
+  --vscode-list-hoverBackground: #e8e8e8;
+  --vscode-list-inactiveSelectionBackground: #e1e1e1;
+  --vscode-menu-background: #ffffff;
+  --vscode-menu-foreground: #24292f;
+  --vscode-menu-selectionBackground: #d7e7ff;
+  --vscode-menu-selectionForeground: #111111;
+  --vscode-menu-separatorBackground: #d4d4d4;
+  --vscode-scrollbar-shadow: rgba(0, 0, 0, 0.2);
+  --vscode-sideBar-background: #eeeeee;
+  --vscode-toolbar-hoverBackground: rgba(90, 93, 94, 0.18);
+  --vscode-widget-border: #c8c8c8;
+  --vscode-widget-shadow: rgba(0, 0, 0, 0.25);
+  --git-graph-color0: #0066ff;
+  --git-graph-color1: #e51400;
+  --git-graph-color2: #16a34a;
+  --git-graph-color3: #9333ea;
+  --git-graph-color4: #ea580c;
+  --git-graph-color5: #0891b2;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+#standaloneRepoOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--vscode-editor-background) 94%, transparent);
+}
+
+#standaloneRepoOverlay[hidden] {
+  display: none;
+}
+
+#standaloneRepoForm {
+  width: min(680px, calc(100vw - 48px));
+  padding: 24px;
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 8px;
+  background: var(--vscode-editorWidget-background);
+  box-shadow: 0 12px 40px var(--vscode-widget-shadow);
+}
+
+#standaloneRepoForm h1 {
+  margin: 0 0 16px;
+  font: 600 20px system-ui, sans-serif;
+}
+
+#standaloneRepoControls {
+  display: flex;
+  gap: 8px;
+}
+
+#standaloneRepoPath {
+  min-width: 0;
+  flex: 1;
+  padding: 7px 9px;
+  border: 1px solid var(--vscode-input-border);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+}
+
+#standaloneRepoControls button {
+  padding: 7px 14px;
+}

@@ -1,17 +1,10 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { basename } from "node:path";
 import { arch, platform } from "node:process";
 
 const root = new URL("../", import.meta.url);
 const localWizer = new URL(".tools/wizer/bin/wizer.exe", root);
-const jcoPackage = new URL(
-  "node_modules/@bytecodealliance/jco/package.json",
-  root,
-);
-const jcoManifest = JSON.parse(await readFile(jcoPackage, "utf8"));
-const jco = new URL(jcoManifest.bin.jco, jcoPackage);
-
 await mkdir(new URL("dist/extensions/", root), { recursive: true });
 const wizerPath = await resolveWizerPath();
 await buildComponent("core/src/component.ts", "dist/extensions/commits.wasm", wizerPath);
@@ -40,26 +33,6 @@ async function resolveWizerPath() {
 }
 
 async function buildComponent(source, output, wizerPath) {
-  if (wizerPath !== undefined) {
-    await buildWithLocalWizer(source, output, wizerPath);
-    return;
-  }
-  run(process.execPath, [
-    filePath(jco),
-    "componentize",
-    source,
-    "--wit",
-    "vendor/bones/wit/core.wit",
-    "-n",
-    "extension",
-    "--disable",
-    "all",
-    "-o",
-    output,
-  ]);
-}
-
-async function buildWithLocalWizer(source, output, wizerPath) {
   const { build } = await import("esbuild");
   const { componentize } = await import("@bytecodealliance/componentize-js");
   const bundled = await build({
@@ -72,13 +45,14 @@ async function buildWithLocalWizer(source, output, wizerPath) {
     target: "es2022",
     write: false,
   });
-  const result = await componentize(bundled.outputFiles[0].text, {
+  const options = {
     disableFeatures: ["stdio", "random", "clocks", "http", "fetch-event"],
     sourceName: `${basename(source, ".ts")}.js`,
     witPath: filePath(new URL("vendor/bones/wit/core.wit", root)),
-    wizerBin: wizerPath,
     worldName: "extension",
-  });
+  };
+  if (wizerPath !== undefined) options.wizerBin = wizerPath;
+  const result = await componentize(bundled.outputFiles[0].text, options);
   await writeFile(new URL(output, root), result.component);
   console.log(`OK Successfully written ${output}.`);
 }
