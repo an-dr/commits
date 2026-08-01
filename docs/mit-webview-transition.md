@@ -14,7 +14,7 @@ theme, persistence, and Git-runtime adaptation live outside both shared trees.
 
 ## Current mismatch
 
-The standalone bundle currently starts `ui/src/ui/app.ts`. It renders an
+The standalone bundle currently starts `apps/commits/web/src/ui/app.ts`. It renders an
 original card-based history list and consumes the old standalone
 `repositorySnapshot` protocol. Only the shared `abbrevCommit` helper and
 `WorkspacePort` type are used; the imported `startCommitsView()` function is

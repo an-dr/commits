@@ -70,15 +70,18 @@ patch.
 ### Repository layout (target)
 
 ```
-app/                 Rust composition root — bones library + our modules
-modules/git/         native git module (endpoint "git")
-modules/watcher/     native repo watcher module (endpoint "watcher")
-modules/os/          native OS-surface module (endpoint "os")
-proto/               wire contract: bones-codec messages, shared by Rust + TS
-core/                TypeScript product logic → commits.wasm
-  host/                host port (bones impl; VS Code impl lives in the
-                       extension repo and implements the same interface)
-ui/                  TypeScript web panel (ported from an-dr-commits/web)
+apps/commits/        the standalone application
+  host/                Rust composition root — bones library + our modules
+  bones-adapter/       TypeScript guest → commits.wasm
+    host/                host port (bones impl; the VS Code impl lives in the
+                         extension repo and implements the same interface)
+  web/                 TypeScript web panel (ported from an-dr-commits/web)
+  scripts/             page, bundle and component builds
+crates/git/          native git module (endpoint "git")
+crates/watcher/      native repo watcher module (endpoint "watcher")
+crates/os/           native OS-surface module (endpoint "os")
+ipc/                 wire contract: bones-codec messages, shared by Rust + TS
+packages/            MIT code shared with the VS Code extension
 vendor/bones/        upstream submodule, read-only
 docs/adr/            our decisions
 ```
@@ -113,7 +116,7 @@ One vertical slice through every layer, with no Git in it yet.
 
 | # | Increment | Completion artifact |
 | --- | --- | --- |
-| 1.1 | TS extension opens a web panel and serves a page bundle | App shows a page rendered from `ui/`, panel lifecycle events logged |
+| 1.1 | TS extension opens a web panel and serves a page bundle | App shows a page rendered from `apps/commits/web/`, panel lifecycle events logged |
 | 1.2 | `VSCODE_API` shim: `postMessage`/`onmessage`/`getState`/`setState` implemented over the bones page IPC | Existing `web/` code compiles unmodified against the shim |
 | 1.3 | Typed request/response protocol between page and core, reusing the extension's `message-protocol` shape | Round-trip echo request visible in the panel |
 | 1.4 | Host port interface (`HostPort`) defined; bones implementation behind it | Core module imports no bones symbol directly |
@@ -132,7 +135,7 @@ The native side of everything the VS Code host used to provide.
 
 ### Phase 3 — Core backend port (read path)
 
-Port `src/` product logic to `core/`, VS Code API calls replaced by `HostPort`.
+Port `src/` product logic to `packages/core/`, VS Code API calls replaced by `HostPort`.
 
 | # | Increment | Completion artifact |
 | --- | --- | --- |
@@ -147,7 +150,7 @@ Port `src/` product logic to `core/`, VS Code API calls replaced by `HostPort`.
 
 | # | Increment | Completion artifact |
 | --- | --- | --- |
-| 4.1 | Build pipeline for `ui/` mirroring `package-web.js` (concatenated global-scope bundles, CSS concat) | `out.min.js` / `out.min.css` produced and loaded by the panel |
+| 4.1 | Build pipeline for `apps/commits/web/` mirroring `package-web.js` (concatenated global-scope bundles, CSS concat) | `out.min.js` / `out.min.css` produced and loaded by the panel |
 | 4.2 | Theming layer: VS Code CSS variables replaced by our own token set, light + dark | Both themes render correctly; no `--vscode-*` references remain |
 | 4.3 | Codicon assets vendored with their licence | Icons render offline |
 | 4.4 | Graph + commit table + branch panel live against real data | The app displays this repository's graph |
@@ -211,10 +214,10 @@ extension, not the other way round.
 
 | # | Increment | Completion artifact |
 | --- | --- | --- |
-| 9.1 | Publish `core/` as a consumable package (npm workspace or git dependency) | Version pinned and consumed by a scratch project |
+| 9.1 | Publish `packages/core/` as a consumable package (npm workspace or git dependency) | Version pinned and consumed by a scratch project |
 | 9.2 | VS Code `HostPort` implementation in the extension repo | Extension boots against the shared core |
 | 9.3 | `an-dr-commits` cut over to the shared core, its duplicated logic deleted | Extension test suites pass against the shared core |
-| 9.4 | Shared `ui/` bundle consumed by both hosts | One frontend codebase, two hosts |
+| 9.4 | Shared web bundle consumed by both hosts | One frontend codebase, two hosts |
 | 9.5 | Release process covering both products from one version stream | Both released from a single tag |
 
 ---
@@ -231,7 +234,7 @@ none should be settled implicitly in code.
 3. **Long Git calls do not use synchronous `send`** — how request/reply and
    cancellation actually work (bones ADR-010 allows sync `send`; it stalls a
    frame phase, so it is for cheap calls only).
-4. **Wire contract lives in `proto/`**, generated or hand-ported into both
+4. **Wire contract lives in `ipc/`**, generated or hand-ported into both
    Rust and TS, never duplicated by hand in two places.
 5. **`vendor/bones` is read-only** — upstream contributions instead of local
    patches; the submodule pin is bumped deliberately.

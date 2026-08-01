@@ -18,7 +18,7 @@ retains its explicit MIT grant and notice.
 The standalone integration runs the unchanged shared webview without trying to
 run the package's Node-only Git backend in WebAssembly:
 
-- `core/src/host/commits-core-workspace-port.ts` implements the imported
+- `apps/commits/bones-adapter/src/host/commits-core-workspace-port.ts` implements the imported
   `WorkspacePort` contract over repository paths supplied by Bones.
 - `RepositoryManager` discovers host repositories through that shared
   contract.
@@ -26,7 +26,7 @@ run the package's Node-only Git backend in WebAssembly:
   translator-injected localization factory, and exact upstream webview CSS.
 - Bones installs a `WebviewHost` adapter and calls the imported
   `startCommitsView()` entry point directly.
-- `core/src/mit/graph-backend.ts` maps graph reads to bounded native Git
+- `apps/commits/bones-adapter/src/mit/graph-backend.ts` maps graph reads to bounded native Git
   requests and returns the imported request/response models.
 - The existing correlated Rust Git service remains the standalone Git backend.
 

@@ -7,7 +7,8 @@
 - [`settings.md`](settings.md) — standalone persisted settings schema
 - [`shared-core.md`](shared-core.md) — immutable MIT core snapshot, Bones integration, and submodule plan
 - [`mit-webview-transition.md`](mit-webview-transition.md) — executable plan for replacing the old page with the shared Git Graph interface
-- [`adr/`](adr/) — settled architectural decisions
+- [`adr/`](adr/) — settled architectural decisions, including the repository
+  layout (ADR-007) and run-time page delivery (ADR-006)
 - [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) — upstream lineage and licensing
 
 The `vendor/bones` documentation remains the authority for engine protocols

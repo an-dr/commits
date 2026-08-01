@@ -24,7 +24,7 @@
 
 ## Evidence
 
-`core/src/read/read-backend.integration.test.ts` invokes the repository's real
+`apps/commits/bones-adapter/src/read/read-backend.integration.test.ts` invokes the repository's real
 Git executable after the component has already scheduled the three independent
 requests. Its snapshot is JSON-smoke-tested against the current checkout.
 This is paired with native cancellation, process-failure, watcher-touch,
