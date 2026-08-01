@@ -1,6 +1,9 @@
-# commits protocol fixtures
+# Rust binding
 
-Rust compatibility oracle for the fixed-layout bones web messages. The
-`generate-fixtures` binary emits `ipc/fixtures/web.json`; Rust and
-TypeScript tests both verify it.
+The Rust side of the wire contract, and the generator that makes the shared
+fixtures.
 
+This binding is the oracle: `generate-fixtures` writes the byte fixtures, and
+both languages' tests assert against them. When a message layout changes, change
+it here first and regenerate, so the TypeScript tests fail until that side
+follows.

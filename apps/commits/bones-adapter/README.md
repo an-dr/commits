@@ -1,8 +1,13 @@
-# commits Bones component
+# Bones adapter
 
-GPL-licensed Bones host adapter and orchestration compiled to a WebAssembly
-component. The unchanged shared MIT product package lives in `packages/core`.
-Only `host/bones-host-port.ts` imports the Bones ABI; the adjacent
-`commits-core-workspace-port.ts` adapts native repository paths to the shared
-core's host contract.
+The WebAssembly guest: the glue that lets the shared product core run on Bones.
+It translates between the Bones ABI and the host-independent contracts the
+shared packages define.
 
+This directory is adaptation, not product logic. Behavior that the VS Code
+extension would also want belongs in `packages/`, reached here through the
+`@an-dr/commits-core` alias. Only `host/bones-host-port.ts` imports the Bones
+ABI, so everything else stays testable without a running engine.
+
+The page is requested from the host at run time rather than compiled in, so
+rebuilding the page does not rebuild this component.
