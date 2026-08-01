@@ -1,6 +1,6 @@
 fn main() {
-    write_fixture("web.json", commits_proto::web_fixtures());
-    write_fixture("native.json", commits_proto::native_fixtures());
+    write_fixture("web.json", commits_ipc::web_fixtures());
+    write_fixture("native.json", commits_ipc::native_fixtures());
 }
 
 fn write_fixture(name: &str, fixtures: std::collections::BTreeMap<&str, String>) {

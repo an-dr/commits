@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 bus = { path = "../../vendor/bones/core/bus" }
-commits-proto = { path = "../../proto/rust" }
+commits-ipc = { path = "../../ipc/rust" }
 

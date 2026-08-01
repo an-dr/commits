@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
-use commits_proto::native::WatchRequest;
+use commits_ipc::native::WatchRequest;
 use tempfile::tempdir;
 
 use crate::{resolve_metadata_paths, WatcherModule, FULL_TOPIC, LIGHTWEIGHT_TOPIC, REQUEST_TOPIC};

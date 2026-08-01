@@ -3,7 +3,7 @@ import type {
   GitRef,
   QueryResponse,
 } from "../../../packages/core/src/backend/types";
-import type { GitResult, GitRun } from "../../../proto/ts/native";
+import type { GitResult, GitRun } from "../../../ipc/ts/native";
 
 interface GitHost {
   runGit(request: GitRun): void;

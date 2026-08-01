@@ -1,4 +1,4 @@
-use crate::wire::{Reader, WireError, Writer};
+use crate::web::{Reader, WireError, Writer};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitRequest {

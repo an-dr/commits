@@ -8,9 +8,9 @@ import {
   encodeClosePanel,
   encodeOpenPanel,
   encodeSendJson,
-} from "../../../proto/ts/web";
+} from "../../../ipc/ts/web";
 import type { HostPort, LogLevel } from "./host-port";
-import { encodeGitRun, encodeOsRequest, type GitRun, type OsAction } from "../../../proto/ts/native";
+import { encodeGitRun, encodeOsRequest, type GitRun, type OsAction } from "../../../ipc/ts/native";
 
 export class BonesHostPort implements HostPort {
   closePanel(panel: string): void {

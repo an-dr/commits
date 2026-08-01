@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
-use commits_proto::native::GitRun;
+use commits_ipc::native::GitRun;
 
 use crate::process_runner::ProcessRunner;
 

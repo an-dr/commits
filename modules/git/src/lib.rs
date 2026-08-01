@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
-use commits_proto::native::{GitRequest, GitRun};
+use commits_ipc::native::{GitRequest, GitRun};
 
 mod limiter;
 pub mod process_runner;

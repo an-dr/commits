@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
-use commits_proto::native::{GitResult, GitRun};
+use commits_ipc::native::{GitResult, GitRun};
 
 use crate::{GitModule, COMPLETED_TOPIC, REQUEST_TOPIC};
 

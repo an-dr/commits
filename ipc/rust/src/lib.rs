@@ -7,7 +7,7 @@ use bones_messages::EncodeMessage;
 use native::{GitResult, GitRun, OsRequest, WatchRequest};
 
 pub mod native;
-pub mod wire;
+pub mod web;
 
 pub fn web_fixtures() -> BTreeMap<&'static str, String> {
     let mut fixtures = BTreeMap::new();
@@ -60,7 +60,7 @@ pub fn web_fixtures() -> BTreeMap<&'static str, String> {
     fixtures
 }
 
-use wire::hex;
+use web::hex;
 
 pub fn native_fixtures() -> BTreeMap<&'static str, String> {
     let mut fixtures = BTreeMap::new();

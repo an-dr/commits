@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use commits_proto::native::{GitResult, GitRun};
+use commits_ipc::native::{GitResult, GitRun};
 
 use crate::limiter::Limiter;
 

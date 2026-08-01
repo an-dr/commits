@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
-use commits_proto::native::{WatchEvent, WatchRequest};
+use commits_ipc::native::{WatchEvent, WatchRequest};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 pub const REQUEST_TOPIC: &str = "watcher/request";

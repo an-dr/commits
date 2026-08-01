@@ -569,7 +569,15 @@ name = "commits-git"
 version = "0.1.0"
 dependencies = [
  "bus",
- "commits-proto",
+ "commits-ipc",
+]
+
+[[package]]
+name = "commits-ipc"
+version = "0.1.0"
+dependencies = [
+ "bones-messages",
+ "serde_json",
 ]
 
 [[package]]
@@ -578,18 +586,10 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "bus",
- "commits-proto",
+ "commits-ipc",
  "open",
  "rfd",
  "tempfile",
-]
-
-[[package]]
-name = "commits-proto"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "serde_json",
 ]
 
 [[package]]
@@ -597,7 +597,7 @@ name = "commits-watcher"
 version = "0.1.0"
 dependencies = [
  "bus",
- "commits-proto",
+ "commits-ipc",
  "notify",
  "tempfile",
 ]

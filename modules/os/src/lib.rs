@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::thread;
 
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
-use commits_proto::native::{NativeResult, OsRequest};
+use commits_ipc::native::{NativeResult, OsRequest};
 
 pub mod rendezvous;
 

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
-use commits_proto::native::{NativeResult, OsRequest};
+use commits_ipc::native::{NativeResult, OsRequest};
 
 use crate::{OsBackend, OsModule, REQUEST_TOPIC, RESULT_TOPIC};
 

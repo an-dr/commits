@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GitResult, GitRun, NativeResult, OsAction } from "../../proto/ts/native";
+import type { GitResult, GitRun, NativeResult, OsAction } from "../../ipc/ts/native";
 import { CommitsCore } from "./commits-core";
 import type { HostPort, LogLevel } from "./host/host-port";
 
