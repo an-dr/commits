@@ -105,11 +105,7 @@ class GitGraphView {
     this.findWidget = new FindWidget(this.tableElem);
     this.footerElem = document.getElementById("footer")!;
     this.repoDropdown = new Dropdown("repoSelect", true, l10n.repo, (value) => {
-      this.currentRepo = value;
-      this.maxCommits = this.config.initialLoadCommits;
-      this.expandedCommit = null;
-      this.setSelectedBranches([]);
-      this.saveState();
+      this.changeRepo(value);
       sendMessage({ command: "selectRepo", repo: value });
       this.refresh(true);
     });
@@ -192,11 +188,11 @@ class GitGraphView {
     let repoPaths = Object.keys(repos),
       changedRepo = false;
     if (typeof repos[this.currentRepo] === "undefined") {
-      this.currentRepo =
+      this.changeRepo(
         lastActiveRepo !== null && typeof repos[lastActiveRepo] !== "undefined"
           ? lastActiveRepo
-          : repoPaths[0];
-      this.saveState();
+          : repoPaths[0]
+      );
       changedRepo = true;
     } else if (
       lastActiveRepo !== null &&
@@ -206,8 +202,7 @@ class GitGraphView {
       // The host asks for a different repository than the one on screen, which
       // happens when one is opened outside the view. Adding it to the set is
       // not enough: without this the view keeps showing the previous one.
-      this.currentRepo = lastActiveRepo;
-      this.saveState();
+      this.changeRepo(lastActiveRepo);
       changedRepo = true;
     }
 
@@ -724,6 +719,23 @@ class GitGraphView {
       hard: hard
     });
   }
+  /**
+   * Moves the view to another repository.
+   *
+   * Selections describe the repository they came from, so they are cleared
+   * here. Carrying a branch over would ask the new repository to log a ref it
+   * does not have, which returns nothing and leaves the graph empty.
+   */
+  private changeRepo(path: string) {
+    this.currentRepo = path;
+    this.maxCommits = this.config.initialLoadCommits;
+    this.expandedCommit = null;
+    this.setSelectedBranches([]);
+    this.gitBranches = [];
+    this.gitBranchHead = null;
+    this.saveState();
+  }
+
   /** Keeps the multi-branch list and its single-branch view in step. */
   private setSelectedBranches(branches: readonly string[]) {
     this.currentBranches = [...branches];
