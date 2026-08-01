@@ -21,6 +21,6 @@
     "packages/core/src/webview/**/*.d.ts",
     "packages/webview-shell/**/*.ts",
     "ipc/**/*.ts",
-    "ui/**/*.ts"
+    "apps/commits/web/**/*.ts"
   ]
 }
