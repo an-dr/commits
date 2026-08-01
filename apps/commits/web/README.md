@@ -11,3 +11,7 @@ extension.
 
 The VS Code API shim exists so shared code can call one interface regardless of
 which host it runs under.
+
+Readiness is announced before the shared view mounts. The view queries
+immediately on mount, and announcing afterwards would put those queries ahead of
+the core's startup.
