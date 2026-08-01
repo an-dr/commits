@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "flow": "DetailedAuto",
+  "phase": "COMMIT",
+  "baseBranch": "main",
+  "baseCommit": "f6eb71a90010095259421977f9c3b3b07668edd1",
+  "featureBranch": "fix/read-surface-gaps",
+  "requirements": {
+    "goal": "Fix the standalone read surface: show the commit file tree, expand a commit on double click, allow selecting multiple branches at once, and add a menu bar whose Open repo item opens the repository selector.",
+    "constraints": "The file tree and expansion are one root cause: the core drops the shared views commitDetails request. Multi-branch selection requires editing packages/core/src/webview, which the user explicitly authorized after being told it ends the byte-for-byte snapshot; record that divergence in docs and an ADR. vendor/bones stays read-only. Keep the apps/crates/ipc/packages layout and run-time page delivery.",
+    "done": "Double clicking a commit expands it and shows the file tree; multiple branches can be selected and the graph reflects the selection; a menu bar exposes Open repo which opens the selector; regression tests cover the commitDetails round trip and multi-branch request shape; docs record the packages/core divergence; npm run verify and cargo test --workspace pass.",
+    "outOfScope": "No mutating Git actions, no diff viewing or file opening beyond listing the tree, no changes to vendor/bones, no packaging or CI work."
+  },
+  "currentIncrementId": "46d2acd4481c44d6a38ab22328708909",
+  "commitBaseline": "f6eb71a90010095259421977f9c3b3b07668edd1",
+  "increments": [
+    {
+      "id": "46d2acd4481c44d6a38ab22328708909",
+      "number": 1,
+      "status": "verified",
+      "scope": "Commit details and file tree (~280 lines)",
+      "description": "Handle the commitDetails request in the core by running the native Git reads it needs, build the file tree the shared view expects, and reply so double click expands a commit."
+    },
+    {
+      "id": "94ec9ff55ceb4da4b9099a1364cac552",
+      "number": 2,
+      "status": "planned",
+      "scope": "Menu bar with Open repo (~200 lines)",
+      "description": "Add a standalone menu bar to the page with an Open repo item that shows the repository selector, styled with the existing theme tokens."
+    },
+    {
+      "id": "b2086eb5d2184612952db10cedea3e98",
+      "number": 3,
+      "status": "planned",
+      "scope": "Multi-branch selection (~260 lines)",
+      "description": "Extend the shared webview branch panel and view state to hold several selected branches, send them together, and load commits across the selection."
+    },
+    {
+      "id": "f208ba638ec74ddd99085bab5b45a960",
+      "number": 4,
+      "status": "planned",
+      "scope": "Record the shared core divergence (~120 lines)",
+      "description": "Update shared-core.md and THIRD_PARTY_NOTICES to state that packages/core now carries local modifications, and add an ADR superseding the unmodified-snapshot decision."
+    }
+  ],
+  "approvals": [],
+  "history": [
+    {
+      "at": "2026-08-01T13:22:31.9818939Z",
+      "action": "start",
+      "detail": "Started DetailedAuto workflow."
+    },
+    {
+      "at": "2026-08-01T13:22:32.7495766Z",
+      "action": "advance",
+      "detail": "Advanced from START to DESIGN."
+    },
+    {
+      "at": "2026-08-01T13:22:33.4461264Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 1: Commit details and file tree (~280 lines)"
+    },
+    {
+      "at": "2026-08-01T13:22:34.1846Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 2: Menu bar with Open repo (~200 lines)"
+    },
+    {
+      "at": "2026-08-01T13:22:34.8857719Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 3: Multi-branch selection (~260 lines)"
+    },
+    {
+      "at": "2026-08-01T13:22:35.5689891Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 4: Record the shared core divergence (~120 lines)"
+    },
+    {
+      "at": "2026-08-01T13:22:36.2448486Z",
+      "action": "advance",
+      "detail": "Advanced from DESIGN to SPLIT."
+    },
+    {
+      "at": "2026-08-01T13:22:37.121503Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-08-01T13:22:58.6489612Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-08-01T13:28:06.1854301Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-01T13:28:07.0020628Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    }
+  ],
+  "createdAt": "2026-08-01T13:22:31.9257107Z",
+  "updatedAt": "2026-08-01T13:28:07.0095781Z"
+}

@@ -170,6 +170,50 @@ describe("CommitsCore MIT webview host", () => {
     }]);
   });
 
+  it("answers commitDetails with metadata and changed files", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({ command: "commitDetails", repo: "C:/repo", commitHash: "abc1234" }));
+
+    completeGit(host, core, "show",
+      ["abc1234", "par1 par2", "Ada", "ada@example.com", "1700000000", "Grace", "Subject line", "", "Body text"]
+        .join("\u001f").replace("\u001fBody text", "\nBody text"));
+    completeGitAt(host, core, 1, "M\tsrc/a.ts\nR100\told.ts\tnew.ts\nA\tadded.ts");
+    completeGitAt(host, core, 2, "3\t1\tsrc/a.ts\n5\t0\tnew.ts\n2\t0\tadded.ts");
+
+    const reply = host.sent.map(([, message]) => message as { command: string; commitDetails?: unknown })
+      .find((message) => message.command === "commitDetails");
+    expect(reply?.commitDetails).toMatchObject({
+      hash: "abc1234",
+      parents: ["par1", "par2"],
+      author: "Ada",
+      email: "ada@example.com",
+      date: 1_700_000_000,
+      committer: "Grace",
+      fileChanges: [
+        { oldFilePath: "src/a.ts", newFilePath: "src/a.ts", type: "M", additions: 3, deletions: 1 },
+        { oldFilePath: "old.ts", newFilePath: "new.ts", type: "R", additions: 5, deletions: 0 },
+        { oldFilePath: "added.ts", newFilePath: "added.ts", type: "A", additions: 2, deletions: 0 },
+      ],
+    });
+  });
+
+  it("reports commitDetails as null when the commit cannot be read", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({ command: "commitDetails", repo: "C:/repo", commitHash: "nothex!" }));
+
+    const reply = host.sent.map(([, message]) => message as { command: string; commitDetails?: unknown })
+      .find((message) => message.command === "commitDetails");
+    expect(reply?.commitDetails).toBeNull();
+  });
+
   it("ignores malformed page JSON", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
@@ -189,4 +233,16 @@ function completeGit(host: StubHost, core: CommitsCore, command: string, stdout:
     stderr: new Uint8Array(),
   };
   core.receiveGitResult(result);
+}
+
+function completeGitAt(host: StubHost, core: CommitsCore, index: number, stdout: string): void {
+  const request = host.gitRequests[index];
+  if (request === undefined) throw new Error(`missing git request ${index}`);
+  core.receiveGitResult({
+    requestId: request.requestId,
+    status: "completed",
+    exitCode: 0,
+    stdout: new TextEncoder().encode(stdout),
+    stderr: new Uint8Array(),
+  });
 }
