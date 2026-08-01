@@ -36,7 +36,7 @@ export class BranchPanel {
   private readonly sidebar: HTMLElement;
   private readonly toggle: HTMLElement;
   private readonly onLayoutChange: (state: BranchPanelState) => void;
-  private readonly onSelect: (value: string) => void;
+  private readonly onSelect: (value: string, additive: boolean) => void;
   private readonly onAction: (
     value: string,
     kind: "doubleClick" | "contextMenu",
@@ -52,7 +52,7 @@ export class BranchPanel {
   constructor(
     state: Partial<BranchPanelState> | undefined,
     onLayoutChange: (state: BranchPanelState) => void,
-    onSelect: (value: string) => void,
+    onSelect: (value: string, additive: boolean) => void,
     onAction: (
       value: string,
       kind: "doubleClick" | "contextMenu",
@@ -76,10 +76,14 @@ export class BranchPanel {
     this.applyLayout(false);
   }
 
-  public setOptions(options: readonly { name: string; value: string }[], selected: string) {
+  public setOptions(
+    options: readonly { name: string; value: string }[],
+    selected: string | readonly string[]
+  ) {
+    const chosen = typeof selected === "string" ? [selected] : selected;
     this.options = options.map((option) => ({
       ...option,
-      selected: option.value === selected,
+      selected: chosen.indexOf(option.value) > -1,
       current: false
     }));
     this.render();
@@ -88,6 +92,14 @@ export class BranchPanel {
   public setCurrentBranch(branch: string | null) {
     for (const option of this.options) {
       option.current = option.value === branch;
+    }
+    this.render();
+  }
+
+  /** Marks exactly the given values as selected. */
+  public setSelectedValues(values: readonly string[]) {
+    for (const option of this.options) {
+      option.selected = values.indexOf(option.value) > -1;
     }
     this.render();
   }
@@ -170,8 +182,9 @@ export class BranchPanel {
       if (item?.dataset.value === undefined) {
         return;
       }
-      this.setSelected(item.dataset.value);
-      this.onSelect(item.dataset.value);
+      // Ctrl (or Cmd) adds to or removes from the selection; a plain click replaces it.
+      const additive = event.ctrlKey || event.metaKey;
+      this.onSelect(item.dataset.value, additive);
     });
     this.list.addEventListener("dblclick", (event) => this.dispatchAction(event, "doubleClick"));
     this.list.addEventListener("contextmenu", (event) => this.dispatchAction(event, "contextMenu"));

@@ -116,6 +116,9 @@ export class CommitsCore {
               command: "loadCommits",
               repo: this.currentRepository,
               branchName: typeof value.branchName === "string" ? value.branchName : "",
+              branches: Array.isArray(value.branches)
+                ? value.branches.filter((branch): branch is string => typeof branch === "string")
+                : undefined,
               maxCommits: typeof value.maxCommits === "number" ? value.maxCommits : 300,
               showRemoteBranches: value.showRemoteBranches !== false,
               hard: value.hard === true,

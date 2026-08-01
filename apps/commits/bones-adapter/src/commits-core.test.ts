@@ -214,6 +214,47 @@ describe("CommitsCore MIT webview host", () => {
     expect(reply?.commitDetails).toBeNull();
   });
 
+  it("logs across every selected branch", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "loadCommits",
+      repo: "C:/repo",
+      branchName: "main",
+      branches: ["main", "dev"],
+      maxCommits: 300,
+      showRemoteBranches: true,
+      hard: false,
+    }));
+
+    const log = host.gitRequests.find((request) => request.args[0] === "log");
+    expect(log?.args).toEqual(expect.arrayContaining(["main", "dev"]));
+    expect(log?.args).not.toContain("--branches");
+  });
+
+  it("logs across every ref when nothing is selected", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "loadCommits",
+      repo: "C:/repo",
+      branchName: "",
+      branches: [""],
+      maxCommits: 300,
+      showRemoteBranches: true,
+      hard: false,
+    }));
+
+    const log = host.gitRequests.find((request) => request.args[0] === "log");
+    expect(log?.args).toContain("--branches");
+  });
+
   it("ignores malformed page JSON", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
