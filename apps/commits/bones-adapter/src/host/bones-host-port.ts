@@ -31,6 +31,20 @@ export class BonesHostPort implements HostPort {
     return [];
   }
 
+  loadPageHtml(): string {
+    try {
+      const page = send("page", new Uint8Array());
+      if (page.length === 0) {
+        hostLog("error", "host served an empty page");
+        return "";
+      }
+      return new TextDecoder().decode(page);
+    } catch (error) {
+      hostLog("error", `could not load the page: ${String(error)}`);
+      return "";
+    }
+  }
+
   loadSavedState(): Uint8Array<ArrayBufferLike> {
     try {
       return send("persistence", new Uint8Array());

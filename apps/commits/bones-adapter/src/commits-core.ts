@@ -28,10 +28,7 @@ export class CommitsCore {
   private currentRepository: string | null = null;
   private nextOsRequestId = 50_000;
 
-  constructor(
-    private readonly host: HostPort,
-    private readonly pageHtml: string,
-  ) {
+  constructor(private readonly host: HostPort) {
     const storage = {
       load: () => host.loadSavedState(),
       save: (value: Uint8Array<ArrayBufferLike>) => host.saveSavedState(value),
@@ -46,7 +43,9 @@ export class CommitsCore {
     this.host.subscribe("os/result");
     this.host.subscribe("os/prompt");
     this.host.subscribe("git/completed");
-    this.host.openPanel(PANEL, this.pageHtml);
+    // Fetched here rather than at construction so the request reaches a running
+    // host instead of the build-time snapshot taken while componentizing.
+    this.host.openPanel(PANEL, this.host.loadPageHtml());
     this.host.log("info", "MIT commits graph panel requested");
   }
 

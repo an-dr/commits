@@ -12,6 +12,14 @@ export interface HostPort {
    * so the read backend can run in any bones host.
    */
   repositoryPaths(): readonly string[];
+  /**
+   * Webview page markup supplied by the host at run time.
+   *
+   * The page is fetched rather than compiled in so rebuilding it does not
+   * require rebuilding the component, matching how the VS Code extension host
+   * supplies webview HTML.
+   */
+  loadPageHtml(): string;
   /** Raw bytes persisted by bones in this component's file-backed save slot. */
   loadSavedState(): Uint8Array<ArrayBufferLike>;
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void;

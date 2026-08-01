@@ -34,5 +34,6 @@ foreach ($helper in @("commits-askpass", "commits-editor")) {
 }
 Copy-Item (Join-Path $root "dist/extensions/commits.wasm") (Join-Path $outputFull "extensions/commits.wasm")
 Copy-Item (Join-Path $root "dist/extensions/hello.wasm") (Join-Path $outputFull "extensions/hello.wasm")
+Copy-Item (Join-Path $root "dist/ui/page.html") (Join-Path $outputFull "page.html")
 
 Write-Host "Runnable app assembled at $outputFull"

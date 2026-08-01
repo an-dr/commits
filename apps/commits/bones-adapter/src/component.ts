@@ -1,6 +1,5 @@
 import { BonesHostPort } from "./host/bones-host-port";
 import { CommitsCore } from "./commits-core";
-import { pageHtml } from "./generated/page";
 import {
   decodePageMessage,
   decodePanelClosed,
@@ -11,7 +10,8 @@ import { decodeGitResult, decodeNativeResult } from "@commits/ipc/native";
 
 const OWNER = "commits";
 const PANEL = "main";
-const core = new CommitsCore(new BonesHostPort(), pageHtml);
+const host = new BonesHostPort();
+const core = new CommitsCore(host);
 
 export function init(): void {
   core.start();
@@ -57,7 +57,7 @@ export function onMessage(
       core.receivePrompt(new TextDecoder().decode(payload));
     }
   } catch (error) {
-    new BonesHostPort().log("warn", `ignored invalid ${topic}: ${String(error)}`);
+    host.log("warn", `ignored invalid ${topic}: ${String(error)}`);
   }
   return undefined;
 }

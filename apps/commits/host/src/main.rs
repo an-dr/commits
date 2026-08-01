@@ -1,3 +1,5 @@
+mod page;
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("fatal: {error}");
@@ -14,6 +16,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(commits_git::GitModule::default())
         .module(commits_watcher::WatcherModule::default())
         .module(commits_os::OsModule::default())
+        .module(page::PageModule::default())
         .run()?;
     Ok(())
 }

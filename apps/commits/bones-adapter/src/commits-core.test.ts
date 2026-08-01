@@ -14,11 +14,13 @@ class StubHost implements HostPort {
   readonly promptReplies: string[] = [];
   savedState: Uint8Array<ArrayBufferLike> = new Uint8Array();
   paths: string[] = [];
+  pageHtml = "<main>MIT graph</main>";
 
   closePanel(panel: string): void { this.closed.push(panel); }
   log(level: LogLevel, message: string): void { this.logs.push([level, message]); }
   openPanel(panel: string, html: string): void { this.opened.push([panel, html]); }
   repositoryPaths(): readonly string[] { return this.paths; }
+  loadPageHtml(): string { return this.pageHtml; }
   loadSavedState(): Uint8Array<ArrayBufferLike> { return this.savedState; }
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void { this.savedState = value; }
   runGit(request: GitRun): void { this.gitRequests.push(request); }
@@ -33,7 +35,7 @@ class StubHost implements HostPort {
 describe("CommitsCore MIT webview host", () => {
   it("opens the shared graph page and subscribes to native results", () => {
     const host = new StubHost();
-    const core = new CommitsCore(host, "<main>MIT graph</main>");
+    const core = new CommitsCore(host);
 
     core.start();
 
@@ -44,7 +46,7 @@ describe("CommitsCore MIT webview host", () => {
   it("boots the shared repository selector from host repositories", () => {
     const host = new StubHost();
     host.paths = ["C:\\repo"];
-    const core = new CommitsCore(host, "");
+    const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
@@ -57,7 +59,7 @@ describe("CommitsCore MIT webview host", () => {
 
   it("asks Bones for a folder when no repository is available", () => {
     const host = new StubHost();
-    const core = new CommitsCore(host, "");
+    const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     expect(host.sent).toContainEqual(["main", { command: "standaloneRepositoryRequired" }]);
@@ -69,7 +71,7 @@ describe("CommitsCore MIT webview host", () => {
   it("maps the MIT commit query to bounded correlated native Git reads", () => {
     const host = new StubHost();
     host.paths = ["C:/repo"];
-    const core = new CommitsCore(host, "");
+    const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
     core.receivePageJson(JSON.stringify({
@@ -96,7 +98,7 @@ describe("CommitsCore MIT webview host", () => {
 
   it("ignores malformed page JSON", () => {
     const host = new StubHost();
-    const core = new CommitsCore(host, "");
+    const core = new CommitsCore(host);
     core.receivePageJson("{not json");
     expect(host.logs).toContainEqual(["warn", "ignored malformed page JSON"]);
   });
