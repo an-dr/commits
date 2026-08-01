@@ -57,8 +57,10 @@ async function boot(): Promise<void> {
     setState: (state) => writeState(state),
     getStyleValue: (name) => getComputedStyle(document.documentElement).getPropertyValue(name),
   });
-  startCommitsView();
+  // Announce readiness before the shared view mounts, so the core has bootstrapped
+  // by the time the view issues its first repository query.
   post({ command: "standaloneReady" });
+  startCommitsView();
 }
 
 function repositoryOverlayHtml(): string {

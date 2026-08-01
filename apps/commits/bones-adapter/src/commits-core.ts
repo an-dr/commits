@@ -26,6 +26,7 @@ export class CommitsCore {
   private readonly pendingOs = new Map<number, PendingOs>();
   private state: PersistentState = DEFAULT_PERSISTENT_STATE;
   private currentRepository: string | null = null;
+  private bootstrapped = false;
   private nextOsRequestId = 50_000;
 
   constructor(private readonly host: HostPort) {
@@ -66,9 +67,14 @@ export class CommitsCore {
       return;
     }
 
+    // The shared view begins querying as soon as it mounts, which is before the
+    // standalone page reports readiness. Bootstrapping on the first message of
+    // any kind keeps those early queries answerable instead of dropped.
+    this.ensureBootstrapped();
+
     switch (value.command) {
       case "standaloneReady":
-        this.bootstrap();
+        this.sendCurrentRepositories();
         return;
       case "standaloneChooseRepository":
         this.chooseRepository();
@@ -177,6 +183,22 @@ export class CommitsCore {
 
   panelFailed(reason: string): void {
     this.host.log("error", `commits graph panel failed: ${reason}`);
+  }
+
+  /** Runs the one-time startup sequence, whatever message triggers it first. */
+  private ensureBootstrapped(): void {
+    if (this.bootstrapped) return;
+    this.bootstrapped = true;
+    this.bootstrap();
+  }
+
+  /** Re-announces repository availability without redoing discovery. */
+  private sendCurrentRepositories(): void {
+    if (this.repositories.all().length === 0) {
+      this.send({ command: "standaloneRepositoryRequired" });
+    } else {
+      this.sendRepos();
+    }
   }
 
   private bootstrap(): void {

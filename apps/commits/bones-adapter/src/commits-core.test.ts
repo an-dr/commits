@@ -96,6 +96,43 @@ describe("CommitsCore MIT webview host", () => {
     })]);
   });
 
+  it("serves a repository query that arrives before standaloneReady", () => {
+    // The shared view starts querying as soon as it mounts, which happens
+    // before the standalone page reports readiness. A dropped query is never
+    // retried, so the view would wait for a reply that never comes.
+    const host = new StubHost();
+    host.savedState = new TextEncoder().encode(
+      JSON.stringify({
+        settings: {},
+        state: { version: 1, lastActiveRepository: "C:/repo", selectedCommit: null, find: "", findIsCaseSensitive: false, findIsRegex: false },
+      }),
+    );
+    const core = new CommitsCore(host);
+    core.start();
+
+    core.receivePageJson(JSON.stringify({ command: "loadBranches", showRemoteBranches: true, hard: false }));
+
+    expect(host.gitRequests.length).toBeGreaterThan(0);
+  });
+
+  it("loads commits in the order the shared view actually emits", () => {
+    const host = new StubHost();
+    host.savedState = new TextEncoder().encode(
+      JSON.stringify({
+        settings: {},
+        state: { version: 1, lastActiveRepository: "C:/repo", selectedCommit: null, find: "", findIsCaseSensitive: false, findIsRegex: false },
+      }),
+    );
+    const core = new CommitsCore(host);
+    core.start();
+
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+    core.receivePageJson(JSON.stringify({ command: "loadCommits", repo: "C:/repo", branchName: "", maxCommits: 300, showRemoteBranches: true, hard: false }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    expect(host.gitRequests.some((request) => request.args[0] === "log")).toBe(true);
+  });
+
   it("ignores malformed page JSON", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
