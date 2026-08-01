@@ -4,6 +4,8 @@ import type { SettingsStorage } from "./settings";
 export interface PersistentState {
   readonly version: 1;
   readonly lastActiveRepository: string | null;
+  /** Most recently opened repositories, newest first. */
+  readonly recentRepositories: readonly string[];
   readonly selectedCommit: string | null;
   readonly find: string;
   readonly findIsCaseSensitive: boolean;
@@ -13,6 +15,7 @@ export interface PersistentState {
 export const DEFAULT_PERSISTENT_STATE: PersistentState = {
   version: 1,
   lastActiveRepository: null,
+  recentRepositories: [],
   selectedCommit: null,
   find: "",
   findIsCaseSensitive: false,
@@ -56,11 +59,27 @@ export function validateState(candidate: unknown): PersistentState {
   return {
     version: 1,
     lastActiveRepository,
+    // Absent in saves written before recent repositories existed.
+    recentRepositories: validateRecents(candidate.recentRepositories),
     selectedCommit,
     find: candidate.find,
     findIsCaseSensitive: candidate.findIsCaseSensitive,
     findIsRegex: candidate.findIsRegex,
   };
+}
+
+/** Longest recent-repository list kept, oldest entries dropped first. */
+export const MAX_RECENT_REPOSITORIES = 10;
+
+function validateRecents(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return [];
+  const paths: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string" || entry === "" || entry.length > 1_000) continue;
+    if (!paths.includes(entry)) paths.push(entry);
+    if (paths.length === MAX_RECENT_REPOSITORIES) break;
+  }
+  return paths;
 }
 
 function nullableString(value: unknown): string | null | undefined {

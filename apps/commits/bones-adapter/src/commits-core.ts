@@ -4,7 +4,12 @@ import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
 import { MitGraphBackend } from "./mit/graph-backend";
 import { RepositoryManager } from "./read/repository-manager";
-import { DEFAULT_PERSISTENT_STATE, PersistentExtensionState, type PersistentState } from "./read/persistent-state";
+import {
+  DEFAULT_PERSISTENT_STATE,
+  MAX_RECENT_REPOSITORIES,
+  PersistentExtensionState,
+  type PersistentState,
+} from "./read/persistent-state";
 
 const PANEL = "main";
 
@@ -195,7 +200,7 @@ export class CommitsCore {
   /** Re-announces repository availability without redoing discovery. */
   private sendCurrentRepositories(): void {
     if (this.repositories.all().length === 0) {
-      this.send({ command: "standaloneRepositoryRequired" });
+      this.send({ command: "standaloneRepositoryRequired", recent: this.state.recentRepositories });
     } else {
       this.sendRepos();
     }
@@ -209,7 +214,7 @@ export class CommitsCore {
       this.currentRepository = this.state.lastActiveRepository;
     }
     if (this.repositories.all().length === 0) {
-      this.send({ command: "standaloneRepositoryRequired" });
+      this.send({ command: "standaloneRepositoryRequired", recent: this.state.recentRepositories });
     } else {
       this.currentRepository ??= this.repositories.all()[0].path;
       this.sendRepos();
@@ -232,7 +237,11 @@ export class CommitsCore {
   private selectRepository(path: string, persist = true): void {
     this.currentRepository = path;
     if (persist) {
-      this.state = this.persistent.save({ ...this.state, lastActiveRepository: path });
+      this.state = this.persistent.save({
+        ...this.state,
+        lastActiveRepository: path,
+        recentRepositories: withMostRecent(this.state.recentRepositories, path),
+      });
     }
   }
 
@@ -245,6 +254,11 @@ export class CommitsCore {
   private send(message: ResponseMessage | Record<string, unknown>): void {
     this.host.sendPageMessage(PANEL, message);
   }
+}
+
+/** Puts a path at the head of the recent list, bounded and deduplicated. */
+function withMostRecent(recent: readonly string[], path: string): readonly string[] {
+  return [path, ...recent.filter((entry) => entry !== path)].slice(0, MAX_RECENT_REPOSITORIES);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

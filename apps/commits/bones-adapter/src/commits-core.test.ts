@@ -62,7 +62,7 @@ describe("CommitsCore MIT webview host", () => {
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
-    expect(host.sent).toContainEqual(["main", { command: "standaloneRepositoryRequired" }]);
+    expect(host.sent).toContainEqual(["main", { command: "standaloneRepositoryRequired", recent: [] }]);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneChooseRepository" }));
     expect(host.osRequests).toEqual([{ requestId: 50_000, action: "pick-folder", value: undefined }]);
@@ -131,6 +131,43 @@ describe("CommitsCore MIT webview host", () => {
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
     expect(host.gitRequests.some((request) => request.args[0] === "log")).toBe(true);
+  });
+
+  it("records opened repositories as recent, most recent first", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/one" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/two" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/one" }));
+
+    const saved = JSON.parse(new TextDecoder().decode(host.savedState));
+    expect(saved.state.recentRepositories).toEqual(["C:/one", "C:/two"]);
+  });
+
+  it("offers recent repositories when none can be opened", () => {
+    const host = new StubHost();
+    host.savedState = new TextEncoder().encode(JSON.stringify({
+      settings: {},
+      state: {
+        version: 1,
+        lastActiveRepository: null,
+        recentRepositories: ["C:/one", "C:/two"],
+        selectedCommit: null,
+        find: "",
+        findIsCaseSensitive: false,
+        findIsRegex: false,
+      },
+    }));
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneRepositoryRequired",
+      recent: ["C:/one", "C:/two"],
+    }]);
   });
 
   it("ignores malformed page JSON", () => {

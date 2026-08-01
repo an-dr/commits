@@ -99,3 +99,43 @@ body {
 #standaloneRepoControls button {
   padding: 7px 14px;
 }
+
+#standaloneRecentTitle {
+  margin: 18px 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+#standaloneRecentTitle[hidden],
+#standaloneRecentRepos[hidden] {
+  display: none;
+}
+
+#standaloneRecentRepos {
+  max-height: 180px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.standaloneRecentRepo {
+  display: block;
+  width: 100%;
+  padding: 6px 9px;
+  overflow: hidden;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.standaloneRecentRepo:hover {
+  background: var(--vscode-list-hoverBackground);
+}

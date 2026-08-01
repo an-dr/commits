@@ -15,6 +15,7 @@ interface StandaloneMessage {
 
 interface StandaloneResponse {
   command: "standaloneRepositoryRequired";
+  recent?: readonly string[];
 }
 
 declare global {
@@ -35,6 +36,7 @@ async function boot(): Promise<void> {
     try {
       const data = JSON.parse((event as CustomEvent<string>).detail) as ResponseMessage | StandaloneResponse;
       if (data.command === "standaloneRepositoryRequired") {
+        renderRecentRepositories(data.recent ?? []);
         showRepositoryOverlay();
       } else if (data.command === "loadRepos" && Object.keys(data.repos).length > 0) {
         hideRepositoryOverlay();
@@ -72,6 +74,8 @@ function repositoryOverlayHtml(): string {
         <button id="standaloneChooseRepo" type="button">Choose…</button>
         <button type="submit">Open</button>
       </div>
+      <h2 id="standaloneRecentTitle">Recent</h2>
+      <ul id="standaloneRecentRepos" hidden></ul>
     </form>
   </div>`;
 }
@@ -114,6 +118,30 @@ function wireRepositoryOverlay(): void {
   document.getElementById("standaloneChooseRepo")!.addEventListener("click", () => {
     post({ command: "standaloneChooseRepository" });
   });
+}
+
+/**
+ * Lists previously opened repositories as one-click entries.
+ *
+ * Paths are inserted as text rather than markup, since a repository path is
+ * arbitrary user input that reaches this list from persisted state.
+ */
+function renderRecentRepositories(recent: readonly string[]): void {
+  const list = document.getElementById("standaloneRecentRepos")!;
+  list.replaceChildren();
+  list.hidden = recent.length === 0;
+  document.getElementById("standaloneRecentTitle")!.hidden = recent.length === 0;
+  for (const path of recent) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "standaloneRecentRepo";
+    button.textContent = path;
+    button.title = path;
+    button.addEventListener("click", () => post({ command: "standaloneOpenRepository", path }));
+    item.append(button);
+    list.append(item);
+  }
 }
 
 function showRepositoryOverlay(): void {
