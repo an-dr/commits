@@ -5,17 +5,22 @@
   "description": "A standalone Git client on the bones engine",
   "type": "module",
   "scripts": {
-    "build": "npm run clean && npm run check:ui-theme && npm run build:ui && npm run build:page && npm run check && npm run build:wasm",
-    "build:page": "node scripts/generate-page.mjs",
-    "build:ui": "esbuild apps/commits/web/src/main.ts --bundle --format=iife --target=es2022 --minify --outfile=dist/ui/page.js",
-    "build:wasm": "node scripts/build-components.mjs",
+    "build": "npm run build:web && npm run build:wasm && npm run build:host",
+    "build:bundle": "esbuild apps/commits/web/src/main.ts --bundle --format=iife --target=es2022 --minify --outfile=dist/ui/page.js",
+    "build:host": "cargo build --release -p commits-app",
+    "build:page": "node apps/commits/scripts/generate-page.mjs",
+    "build:wasm": "node apps/commits/scripts/build-components.mjs",
+    "build:web": "npm run check:ui-theme && npm run build:bundle && npm run build:page",
     "check": "tsc --noEmit",
-    "check:ui-theme": "node scripts/check-ui-theme.mjs",
+    "check:ui-theme": "node apps/commits/scripts/check-ui-theme.mjs",
     "clean": "node scripts/clean.mjs",
     "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1",
+    "dist:host": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part host",
+    "dist:wasm": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part wasm",
+    "dist:web": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part web",
     "postinstall": "node scripts/patch-wizer-package.mjs",
     "test": "vitest run",
-    "verify": "npm run build && npm test && cargo test --workspace"
+    "verify": "npm run build && npm run check && npm test && cargo test --workspace"
   },
   "devDependencies": {
     "@bytecodealliance/componentize-js": "0.19.3",

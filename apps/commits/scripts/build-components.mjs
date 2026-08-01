@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { basename } from "node:path";
 import { arch, platform } from "node:process";
 
-const root = new URL("../", import.meta.url);
+const root = new URL("../../../", import.meta.url);
 const localWizer = new URL(".tools/wizer/bin/wizer.exe", root);
 await mkdir(new URL("dist/extensions/", root), { recursive: true });
 const wizerPath = await resolveWizerPath();
