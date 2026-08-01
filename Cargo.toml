@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "app",
+    "apps/commits/host",
     "crates/git",
     "crates/os",
     "crates/watcher",

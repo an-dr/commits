@@ -15,7 +15,7 @@ impl Respond for WebResponder {
 
 #[test]
 fn generated_components_load_and_initialize_in_bones() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let engine = new_engine().unwrap();
 
     for name in ["hello", "commits"] {
