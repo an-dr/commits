@@ -1,3 +1,7 @@
+// Release builds are a desktop app, so Windows must not open a console behind
+// the window. Debug builds keep the console, which is where their logs go.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod page;
 
 fn main() {
