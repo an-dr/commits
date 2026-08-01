@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "DetailedAuto",
-  "phase": "SUMMARY",
+  "phase": "FINAL_REVIEW",
   "baseBranch": "main",
   "baseCommit": "f6eb71a90010095259421977f9c3b3b07668edd1",
   "featureBranch": "fix/read-surface-gaps",
@@ -149,8 +149,13 @@
       "at": "2026-08-01T13:37:56.3184343Z",
       "action": "advance",
       "detail": "Advanced from COMMIT to SUMMARY."
+    },
+    {
+      "at": "2026-08-01T13:38:06.5372580Z",
+      "action": "advance",
+      "detail": "Advanced from SUMMARY to FINAL_REVIEW."
     }
   ],
   "createdAt": "2026-08-01T13:22:31.9257107Z",
-  "updatedAt": "2026-08-01T13:37:56.3264529Z"
+  "updatedAt": "2026-08-01T13:38:06.5480852Z"
 }
