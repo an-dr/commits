@@ -30,7 +30,8 @@ async function boot(): Promise<void> {
   const translate = (message: string) => message;
   globalThis.viewState = defaultViewState();
   globalThis.l10n = createLocalizedStrings(translate);
-  document.body.innerHTML = `${buildGraphShell(translate)}${repositoryOverlayHtml()}`;
+  document.body.innerHTML =
+    `${menuBarHtml()}${buildGraphShell(translate)}${repositoryOverlayHtml()}`;
 
   window.addEventListener("bones-message", (event) => {
     try {
@@ -47,6 +48,7 @@ async function boot(): Promise<void> {
     }
   });
 
+  wireMenuBar();
   wireRepositoryOverlay();
 
   const [{ setWebviewHost }, { startCommitsView }] = await Promise.all([
@@ -63,6 +65,45 @@ async function boot(): Promise<void> {
   // by the time the view issues its first repository query.
   post({ command: "standaloneReady" });
   startCommitsView();
+}
+
+function menuBarHtml(): string {
+  return `<nav id="standaloneMenuBar">
+    <div class="standaloneMenu">
+      <button type="button" class="standaloneMenuTitle" aria-haspopup="true" aria-expanded="false">File</button>
+      <ul class="standaloneMenuList" hidden>
+        <li><button type="button" id="standaloneMenuOpenRepo">Open repo&hellip;</button></li>
+      </ul>
+    </div>
+  </nav>`;
+}
+
+/**
+ * Drives the menu bar: one open menu at a time, closing on selection, on a
+ * click elsewhere, or on Escape.
+ */
+function wireMenuBar(): void {
+  const bar = document.getElementById("standaloneMenuBar")!;
+  const title = bar.querySelector<HTMLButtonElement>(".standaloneMenuTitle")!;
+  const list = bar.querySelector<HTMLUListElement>(".standaloneMenuList")!;
+
+  const setOpen = (open: boolean): void => {
+    list.hidden = !open;
+    title.setAttribute("aria-expanded", String(open));
+  };
+
+  title.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setOpen(list.hidden);
+  });
+  document.getElementById("standaloneMenuOpenRepo")!.addEventListener("click", () => {
+    setOpen(false);
+    showRepositoryOverlay();
+  });
+  document.addEventListener("click", () => setOpen(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setOpen(false);
+  });
 }
 
 function repositoryOverlayHtml(): string {
