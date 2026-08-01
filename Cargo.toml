@@ -2,9 +2,9 @@
 resolver = "2"
 members = [
     "app",
-    "modules/git",
-    "modules/os",
-    "modules/watcher",
+    "crates/git",
+    "crates/os",
+    "crates/watcher",
     "ipc/rust",
 ]
 exclude = [
