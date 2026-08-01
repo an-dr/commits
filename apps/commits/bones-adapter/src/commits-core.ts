@@ -124,6 +124,18 @@ export class CommitsCore {
           );
         }
         return;
+      case "commitDetails":
+        if (this.currentRepository !== null && typeof value.commitHash === "string") {
+          this.graph.loadCommitDetails(
+            {
+              command: "commitDetails",
+              repo: this.currentRepository,
+              commitHash: value.commitHash,
+            },
+            (response) => this.send(response),
+          );
+        }
+        return;
       case "repoInProgress":
         this.send({ command: "repoInProgress", state: null });
         return;

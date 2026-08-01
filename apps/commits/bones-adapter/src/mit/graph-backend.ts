@@ -1,5 +1,8 @@
 import type {
+  GitCommitDetails,
   GitCommitNode,
+  GitFileChange,
+  GitFileChangeType,
   GitRef,
   QueryResponse,
 } from "@an-dr/commits-core/backend/types";
@@ -16,6 +19,12 @@ interface LoadCommitsRequest {
   readonly maxCommits: number;
   readonly showRemoteBranches: boolean;
   readonly hard: boolean;
+}
+
+interface CommitDetailsRequest {
+  readonly command: "commitDetails";
+  readonly repo: string;
+  readonly commitHash: string;
 }
 
 interface LoadBranchesRequest {
@@ -134,6 +143,51 @@ export class MitGraphBackend {
     );
   }
 
+  /**
+   * Reads one commit's metadata and changed files.
+   *
+   * The shared view builds the file tree itself from `fileChanges`, so only the
+   * flat change list is produced here.
+   */
+  loadCommitDetails(
+    request: CommitDetailsRequest,
+    deliver: (response: QueryResponse) => void,
+  ): void {
+    const hash = request.commitHash;
+    if (!/^[0-9a-f]{4,64}$/i.test(hash)) {
+      deliver({ command: "commitDetails", commitDetails: null } as QueryResponse);
+      return;
+    }
+    const separator = "%x1f";
+    this.batch(
+      request.repo,
+      {
+        meta: [
+          "show",
+          "--quiet",
+          "--no-color",
+          `--format=%H${separator}%P${separator}%an${separator}%ae${separator}%at${separator}%cn${separator}%B`,
+          hash,
+        ],
+        names: ["diff-tree", "--no-commit-id", "--name-status", "-r", "-M", "--root", hash],
+        stats: ["diff-tree", "--no-commit-id", "--numstat", "-r", "-M", "--root", hash],
+      },
+      (results) => {
+        const meta = results.meta;
+        if (meta === undefined || meta.status !== "completed" || meta.exitCode !== 0) {
+          deliver({ command: "commitDetails", commitDetails: null } as QueryResponse);
+          return;
+        }
+        const details = parseCommitDetails(
+          decode(meta.stdout),
+          decode(results.names?.stdout),
+          decode(results.stats?.stdout),
+        );
+        deliver({ command: "commitDetails", commitDetails: details } as QueryResponse);
+      },
+    );
+  }
+
   private batch(
     cwd: string,
     operations: Record<string, string[]>,
@@ -156,6 +210,71 @@ export class MitGraphBackend {
     this.pending.set(requestId, callback);
     this.host.runGit({ requestId, cwd, args, timeoutMs: 15_000 });
   }
+}
+
+/** Splits `show` metadata and the two diff-tree listings into one detail record. */
+function parseCommitDetails(
+  meta: string,
+  nameStatus: string,
+  numStat: string,
+): GitCommitDetails | null {
+  const fields = meta.split("\u001f");
+  if (fields.length < 7) return null;
+  const date = Number.parseInt(fields[4], 10);
+  if (!Number.isSafeInteger(date)) return null;
+  return {
+    hash: fields[0],
+    parents: fields[1] === "" ? [] : fields[1].split(" "),
+    author: fields[2],
+    email: fields[3],
+    date,
+    committer: fields[5],
+    // %B is last so an unescaped body cannot swallow later fields.
+    body: fields.slice(6).join("\u001f").replace(/\s+$/, ""),
+    fileChanges: parseFileChanges(nameStatus, numStat),
+  };
+}
+
+/** Pairs name-status entries with their numstat counts, keyed by new path. */
+function parseFileChanges(nameStatus: string, numStat: string): GitFileChange[] {
+  const counts = new Map<string, { additions: number | null; deletions: number | null }>();
+  for (const line of nonEmptyLines(numStat)) {
+    const parts = line.split("\t");
+    if (parts.length < 3) continue;
+    const path = parts[parts.length - 1];
+    counts.set(path, {
+      additions: parts[0] === "-" ? null : Number.parseInt(parts[0], 10),
+      deletions: parts[1] === "-" ? null : Number.parseInt(parts[1], 10),
+    });
+  }
+
+  const changes: GitFileChange[] = [];
+  for (const line of nonEmptyLines(nameStatus)) {
+    const parts = line.split("\t");
+    if (parts.length < 2) continue;
+    const type = fileChangeType(parts[0]);
+    if (type === null) continue;
+    const oldFilePath = parts[1];
+    const newFilePath = type === "R" && parts.length > 2 ? parts[2] : parts[1];
+    const count = counts.get(newFilePath);
+    changes.push({
+      oldFilePath,
+      newFilePath,
+      type,
+      additions: count?.additions ?? null,
+      deletions: count?.deletions ?? null,
+    });
+  }
+  return changes;
+}
+
+function fileChangeType(status: string): GitFileChangeType | null {
+  const letter = status.charAt(0).toUpperCase();
+  return letter === "A" || letter === "M" || letter === "D" || letter === "R" ? letter : null;
+}
+
+function decode(bytes: Uint8Array<ArrayBufferLike> | undefined): string {
+  return bytes === undefined ? "" : new TextDecoder().decode(bytes);
 }
 
 function parseCommits(output: string): GitCommitNode[] {
