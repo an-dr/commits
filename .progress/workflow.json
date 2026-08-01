@@ -11,8 +11,8 @@
     "done": "Double clicking a commit expands it and shows the file tree; multiple branches can be selected and the graph reflects the selection; a menu bar exposes Open repo which opens the selector; regression tests cover the commitDetails round trip and multi-branch request shape; docs record the packages/core divergence; npm run verify and cargo test --workspace pass.",
     "outOfScope": "No mutating Git actions, no diff viewing or file opening beyond listing the tree, no changes to vendor/bones, no packaging or CI work."
   },
-  "currentIncrementId": "b2086eb5d2184612952db10cedea3e98",
-  "commitBaseline": "26fe5219397ef279cf247ab618714aef364200db",
+  "currentIncrementId": "f208ba638ec74ddd99085bab5b45a960",
+  "commitBaseline": "f67410b547f1165cd6bbda6c44d91545b15085c5",
   "increments": [
     {
       "id": "46d2acd4481c44d6a38ab22328708909",
@@ -31,14 +31,14 @@
     {
       "id": "b2086eb5d2184612952db10cedea3e98",
       "number": 3,
-      "status": "verified",
+      "status": "completed",
       "scope": "Multi-branch selection (~260 lines)",
       "description": "Extend the shared webview branch panel and view state to hold several selected branches, send them together, and load commits across the selection."
     },
     {
       "id": "f208ba638ec74ddd99085bab5b45a960",
       "number": 4,
-      "status": "planned",
+      "status": "verified",
       "scope": "Record the shared core divergence (~120 lines)",
       "description": "Update shared-core.md and THIRD_PARTY_NOTICES to state that packages/core now carries local modifications, and add an ADR superseding the unmodified-snapshot decision."
     }
@@ -129,8 +129,23 @@
       "at": "2026-08-01T13:35:14.1565942Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-08-01T13:35:17.8653012Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-08-01T13:37:04.7327897Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-01T13:37:05.5313816Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-08-01T13:22:31.9257107Z",
-  "updatedAt": "2026-08-01T13:35:14.1635518Z"
+  "updatedAt": "2026-08-01T13:37:05.5365708Z"
 }

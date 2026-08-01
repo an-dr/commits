@@ -8,10 +8,18 @@
 hashes were compared after copying with no mismatches. Its root MIT `LICENSE`
 and `NOTICE.md` were copied beside the package without changing their text.
 
-The imported package must not be edited as part of the initial integration.
-Changes to its source should be deliberate shared-core changes, kept separate
-from host adaptation. The repository root remains GPL-3.0; `packages/core`
-retains its explicit MIT grant and notice.
+The package is no longer a byte-for-byte snapshot. Multi-branch selection was
+added here rather than upstream, so `packages/core/src/webview` now carries
+local modifications: `main.ts` and `branchPanel.ts` track several selected
+branches, `branchSelection.ts` is new, and the view state and `loadCommits`
+request gained the fields that carry them. ADR-008 records why.
+
+Every other file remains as imported, and the MIT grant and notice are
+unchanged; MIT permits modification. What is lost is reproducibility: the
+snapshot can no longer be verified by hashing against
+`an-dr-com-mit-s`, and re-importing a newer upstream will conflict with these
+changes rather than replace them cleanly. Upstreaming the multi-branch work and
+re-importing is what restores that property.
 
 ## Working Bones slice
 
