@@ -33,6 +33,9 @@
   --vscode-menu-selectionForeground: #111111;
   --vscode-menu-separatorBackground: #d4d4d4;
   --vscode-scrollbar-shadow: rgba(0, 0, 0, 0.2);
+  --vscode-scrollbarSlider-background: rgba(100, 100, 100, 0.4);
+  --vscode-scrollbarSlider-hoverBackground: rgba(100, 100, 100, 0.6);
+  --vscode-scrollbarSlider-activeBackground: rgba(80, 80, 80, 0.8);
   --vscode-sideBar-background: #eeeeee;
   --vscode-toolbar-hoverBackground: rgba(90, 93, 94, 0.18);
   --vscode-widget-border: #c8c8c8;
@@ -51,6 +54,11 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
+  /* Without this the webview falls back to the browser's serif default, since
+     the shared stylesheet only names a font for code cells. */
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
   background: var(--vscode-editor-background);
   color: var(--vscode-editor-foreground);
 }
@@ -220,4 +228,41 @@ body {
 
 .standaloneMenuList button:hover {
   background: var(--vscode-menu-selectionBackground);
+}
+
+/* Scrollbars: the platform default is heavy next to the graph, so they are
+   drawn as slim overlays that pick up the theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: var(--vscode-scrollbarSlider-background);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
