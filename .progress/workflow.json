@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "DetailedAuto",
-  "phase": "FINAL_REVIEW",
+  "phase": "COMMIT",
   "baseBranch": "main",
   "baseCommit": "f6eb71a90010095259421977f9c3b3b07668edd1",
   "featureBranch": "fix/read-surface-gaps",
@@ -11,8 +11,8 @@
     "done": "Double clicking a commit expands it and shows the file tree; multiple branches can be selected and the graph reflects the selection; a menu bar exposes Open repo which opens the selector; regression tests cover the commitDetails round trip and multi-branch request shape; docs record the packages/core divergence; npm run verify and cargo test --workspace pass.",
     "outOfScope": "No mutating Git actions, no diff viewing or file opening beyond listing the tree, no changes to vendor/bones, no packaging or CI work."
   },
-  "currentIncrementId": null,
-  "commitBaseline": null,
+  "currentIncrementId": "9e741b0e37bf4c5da999f57395374362",
+  "commitBaseline": "3f6e9dd03231108977a356af565b59b16fdd27c2",
   "increments": [
     {
       "id": "46d2acd4481c44d6a38ab22328708909",
@@ -41,6 +41,13 @@
       "status": "completed",
       "scope": "Record the shared core divergence (~120 lines)",
       "description": "Update shared-core.md and THIRD_PARTY_NOTICES to state that packages/core now carries local modifications, and add an ADR superseding the unmodified-snapshot decision."
+    },
+    {
+      "id": "9e741b0e37bf4c5da999f57395374362",
+      "number": 5,
+      "status": "verified",
+      "scope": "Honour a host-requested repository switch (~150 lines)",
+      "description": "Treat a lastActiveRepo that differs from the shown repository as an instruction to switch and refresh, so opening a repository from the menu loads it."
     }
   ],
   "approvals": [],
@@ -151,11 +158,46 @@
       "detail": "Advanced from COMMIT to SUMMARY."
     },
     {
-      "at": "2026-08-01T13:38:06.5372580Z",
+      "at": "2026-08-01T13:38:06.537258Z",
       "action": "advance",
       "detail": "Advanced from SUMMARY to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-08-01T17:31:51.0065961Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 5: Honour a host-requested repository switch (~150 lines)"
+    },
+    {
+      "at": "2026-08-01T17:31:51.7707367Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-08-01T17:31:52.5672717Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-08-01T17:31:53.3610359Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-01T17:32:12.4249393Z",
+      "action": "return-to-build",
+      "detail": "Returned from VERIFY to BUILD."
+    },
+    {
+      "at": "2026-08-01T17:34:56.3969596Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-01T17:34:57.2512973Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-08-01T13:22:31.9257107Z",
-  "updatedAt": "2026-08-01T13:38:06.5480852Z"
+  "updatedAt": "2026-08-01T17:34:57.2582160Z"
 }

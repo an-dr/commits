@@ -198,6 +198,17 @@ class GitGraphView {
           : repoPaths[0];
       this.saveState();
       changedRepo = true;
+    } else if (
+      lastActiveRepo !== null &&
+      lastActiveRepo !== this.currentRepo &&
+      typeof repos[lastActiveRepo] !== "undefined"
+    ) {
+      // The host asks for a different repository than the one on screen, which
+      // happens when one is opened outside the view. Adding it to the set is
+      // not enough: without this the view keeps showing the previous one.
+      this.currentRepo = lastActiveRepo;
+      this.saveState();
+      changedRepo = true;
     }
 
     let options = [],
