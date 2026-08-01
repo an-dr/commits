@@ -2,6 +2,8 @@
 
 The repository includes an unchanged snapshot of `@an-dr/commits-core` under
 `packages/core` and reusable webview assets under `packages/webview-shell`.
+Files under `packages/core/src/webview` carry local modifications for
+multi-branch selection; everything else is unmodified.
 They were copied or adapted from `an-dr-com-mit-s` at commit
 `69271fe1462d5532f0a56b2872770121f6a4dbfd`. Its MIT license and upstream
 notice are preserved in each package's `LICENSE` and `NOTICE.md`.
