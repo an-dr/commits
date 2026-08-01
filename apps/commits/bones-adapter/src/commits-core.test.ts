@@ -255,6 +255,21 @@ describe("CommitsCore MIT webview host", () => {
     expect(log?.args).toContain("--branches");
   });
 
+  it("points the view at a newly opened repository", () => {
+    const host = new StubHost();
+    host.paths = ["C:/first"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/second" }));
+
+    const loadRepos = host.sent
+      .map(([, message]) => message as { command: string; lastActiveRepo?: string | null })
+      .filter((message) => message.command === "loadRepos")
+      .pop();
+    expect(loadRepos?.lastActiveRepo).toBe("C:/second");
+  });
+
   it("ignores malformed page JSON", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
