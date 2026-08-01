@@ -15,7 +15,7 @@
 - [x] **Record the shared core divergence (~120 lines)** (completed) — Update shared-core.md and THIRD_PARTY_NOTICES to state that packages/core now carries local modifications, and add an ADR superseding the unmodified-snapshot decision.
 - [x] **Honour a host-requested repository switch (~150 lines)** (completed) — Treat a lastActiveRepo that differs from the shown repository as an instruction to switch and refresh, so opening a repository from the menu loads it.
 - [x] **Reset view state on every repository change (~150 lines)** (completed) — Route all three repository switches through one helper that clears the branch selection, expanded commit and commit budget, so the graph and branch panel reload against the new repository.
-- [ ] **Readable page typography and scrollbars (~180 lines)** (verified) — Set a system UI font for the page so it stops falling back to the browser serif default, and style the scrollbars to match the theme in both light and dark.
-- [ ] **No console window in release builds (~60 lines)** (planned) — Mark the host as a Windows subsystem binary outside debug builds so the terminal no longer opens behind the app, while debug builds keep their log output.
+- [x] **Readable page typography and scrollbars (~180 lines)** (completed) — Set a system UI font for the page so it stops falling back to the browser serif default, and style the scrollbars to match the theme in both light and dark.
+- [ ] **No console window in release builds (~60 lines)** (verified) — Mark the host as a Windows subsystem binary outside debug builds so the terminal no longer opens behind the app, while debug builds keep their log output.
 
-_Last updated: 2026-08-01T17:46:25.9498084Z_
+_Last updated: 2026-08-01T17:48:01.4689415Z_
