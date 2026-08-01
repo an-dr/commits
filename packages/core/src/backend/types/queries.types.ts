@@ -39,6 +39,8 @@ type QueryPayloads = {
     request: {
       repo: string;
       branchName: string;
+      /** All selected branches; `branchName` is the first for older hosts. */
+      branches?: string[];
       maxCommits: number;
       showRemoteBranches: boolean;
       hard: boolean;

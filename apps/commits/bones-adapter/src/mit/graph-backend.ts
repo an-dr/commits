@@ -16,6 +16,8 @@ interface LoadCommitsRequest {
   readonly command: "loadCommits";
   readonly repo: string;
   readonly branchName: string;
+  /** Every selected branch; empty or containing "" means every ref. */
+  readonly branches?: readonly string[];
   readonly maxCommits: number;
   readonly showRemoteBranches: boolean;
   readonly hard: boolean;
@@ -62,8 +64,11 @@ export class MitGraphBackend {
       `--format=%H${separator}%P${separator}%an${separator}%ae${separator}%at${separator}%s`,
       "--date-order",
     ];
-    if (request.branchName) {
-      logArgs.push(request.branchName);
+    const selected = (request.branches ?? (request.branchName ? [request.branchName] : []))
+      .filter((branch) => branch !== "");
+    if (selected.length > 0) {
+      // Ranges are rejected so a branch name can never extend the argument list.
+      logArgs.push(...selected.filter((branch) => !branch.startsWith("-")));
     } else {
       logArgs.push("--branches", "--tags");
       if (request.showRemoteBranches) logArgs.push("--remotes");

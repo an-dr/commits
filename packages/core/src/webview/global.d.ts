@@ -113,6 +113,8 @@ declare global {
     commitHead: string | null;
     avatars: AvatarImageCollection;
     currentBranch: string | null;
+    /** Every selected branch; `currentBranch` mirrors the first entry. */
+    currentBranches: string[];
     currentRepo: string;
     moreCommitsAvailable: boolean;
     maxCommits: number;

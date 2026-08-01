@@ -40,6 +40,7 @@ import { getVSCodeStyle, sendMessage, vscode } from "./utils/host";
 import { escapeHtml, unescapeHtml } from "./utils/html";
 import { svgIcons, toolbarIcons } from "./utils/icons";
 import { renderTagPill } from "./utils/refPills";
+import { nextBranchSelection } from "./branchSelection";
 
 /** Asks the extension host to run a remote operation for the selected repository. */
 function requestRemoteOperation(operation: "fetch" | "pull" | "push") {
@@ -56,6 +57,11 @@ class GitGraphView {
   private commitLookup: { [hash: string]: number } = {};
   private avatars: AvatarImageCollection = {};
   private currentBranch: string | null = null;
+  /**
+   * Every branch the user has selected. `currentBranch` stays the first entry
+   * so single-branch call sites keep working unchanged.
+   */
+  private currentBranches: string[] = [];
   private currentRepo!: string;
 
   private graph: Graph;
@@ -102,7 +108,7 @@ class GitGraphView {
       this.currentRepo = value;
       this.maxCommits = this.config.initialLoadCommits;
       this.expandedCommit = null;
-      this.currentBranch = null;
+      this.setSelectedBranches([]);
       this.saveState();
       sendMessage({ command: "selectRepo", repo: value });
       this.refresh(true);
@@ -110,7 +116,7 @@ class GitGraphView {
     this.branchPanel = new BranchPanel(
       prevState?.branchPanel,
       () => this.saveState(),
-      (value) => this.selectBranch(value),
+      (value, additive) => this.selectBranch(value, additive),
       (value, kind, source, event) => this.handleBranchPanelAction(value, kind, source, event)
     );
     this.scrollShadowElem = <HTMLInputElement>document.getElementById("scrollShadow")!;
@@ -152,7 +158,13 @@ class GitGraphView {
 
     this.renderShowLoading();
     if (prevState) {
-      this.currentBranch = prevState.currentBranch;
+      this.setSelectedBranches(
+        Array.isArray(prevState.currentBranches) && prevState.currentBranches.length > 0
+          ? prevState.currentBranches
+          : prevState.currentBranch !== null
+            ? [prevState.currentBranch]
+            : []
+      );
       this.showRemoteBranches = prevState.showRemoteBranches;
       if (typeof this.gitRepos[prevState.currentRepo] !== "undefined") {
         this.currentRepo = prevState.currentRepo;
@@ -226,15 +238,18 @@ class GitGraphView {
 
     this.gitBranches = branchOptions;
     this.gitBranchHead = branchHead;
-    if (
-      this.currentBranch === null ||
-      (this.currentBranch !== "" && this.gitBranches.indexOf(this.currentBranch) === -1)
-    ) {
-      this.currentBranch =
-        this.config.showCurrentBranchByDefault && this.gitBranchHead !== null
-          ? this.gitBranchHead
-          : "";
-    }
+    const stillPresent = this.currentBranches.filter(
+      (branch) => branch === "" || this.gitBranches.indexOf(branch) > -1
+    );
+    this.setSelectedBranches(
+      stillPresent.length > 0
+        ? stillPresent
+        : [
+            this.config.showCurrentBranchByDefault && this.gitBranchHead !== null
+              ? this.gitBranchHead
+              : ""
+          ]
+    );
     this.saveState();
 
     let options = [{ name: l10n.showAll, value: "" }];
@@ -247,7 +262,7 @@ class GitGraphView {
         value: this.gitBranches[i]
       });
     }
-    this.branchPanel.setOptions(options, this.currentBranch);
+    this.branchPanel.setOptions(options, this.currentBranches);
     this.branchPanel.setCurrentBranch(this.gitBranchHead);
     this.renderToolbar();
 
@@ -335,8 +350,9 @@ class GitGraphView {
     this.fullDiffPanel.render(data);
   }
 
-  private selectBranch(value: string) {
-    this.currentBranch = value;
+  private selectBranch(value: string, additive = false) {
+    this.setSelectedBranches(nextBranchSelection(this.currentBranches, value, additive));
+    this.branchPanel.setSelectedValues(this.currentBranches);
     this.maxCommits = this.config.initialLoadCommits;
     this.expandedCommit = null;
     this.saveState();
@@ -697,6 +713,12 @@ class GitGraphView {
       hard: hard
     });
   }
+  /** Keeps the multi-branch list and its single-branch view in step. */
+  private setSelectedBranches(branches: readonly string[]) {
+    this.currentBranches = [...branches];
+    this.currentBranch = this.currentBranches.length > 0 ? this.currentBranches[0] : null;
+  }
+
   private requestLoadCommits(hard: boolean, loadedCallback: (changes: boolean) => void) {
     if (this.loadCommitsCallback !== null) {
       return;
@@ -706,6 +728,7 @@ class GitGraphView {
       command: "loadCommits",
       repo: this.currentRepo!,
       branchName: this.currentBranch !== null ? this.currentBranch : "",
+      branches: this.currentBranches,
       maxCommits: this.maxCommits,
       showRemoteBranches: this.showRemoteBranches,
       hard: hard
@@ -749,6 +772,7 @@ class GitGraphView {
       commitHead: this.commitHead,
       avatars: this.avatars,
       currentBranch: this.currentBranch,
+      currentBranches: this.currentBranches,
       currentRepo: this.currentRepo,
       moreCommitsAvailable: this.moreCommitsAvailable,
       maxCommits: this.maxCommits,
