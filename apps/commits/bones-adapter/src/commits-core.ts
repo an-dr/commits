@@ -1,5 +1,5 @@
-import type { RequestMessage, ResponseMessage } from "../../packages/core/src/types";
-import type { GitResult, NativeResult } from "../../ipc/ts/native";
+import type { RequestMessage, ResponseMessage } from "@an-dr/commits-core/types";
+import type { GitResult, NativeResult } from "@commits/ipc/native";
 import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
 import { MitGraphBackend } from "./mit/graph-backend";

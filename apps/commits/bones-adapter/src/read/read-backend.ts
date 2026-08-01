@@ -1,4 +1,4 @@
-import type { GitResult, GitRun } from "../../../ipc/ts/native";
+import type { GitResult, GitRun } from "@commits/ipc/native";
 import { parseLog, parseRefSnapshot } from "./parsers";
 import { RepositoryGraphCache } from "./repository-graph-cache";
 import type { Commit, RefSnapshot } from "./models";

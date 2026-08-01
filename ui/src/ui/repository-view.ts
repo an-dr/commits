@@ -1,4 +1,4 @@
-import type { RepositorySnapshotResponse } from "../../../core/src/protocol";
+import type { RepositorySnapshotResponse } from "@commits/adapter/protocol";
 import { relativeDate, shortHash } from "./format";
 
 export class RepositoryView {

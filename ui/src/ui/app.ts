@@ -1,4 +1,4 @@
-import type { RequestMessage, ResponseMessage } from "../../../core/src/protocol";
+import type { RequestMessage, ResponseMessage } from "@commits/adapter/protocol";
 import { installVsCodeApiShim } from "../vscode-api";
 import { RepositoryView } from "./repository-view";
 

@@ -1,4 +1,4 @@
-import { abbrevCommit } from "../../../packages/core/src/backend/utils/string";
+import { abbrevCommit } from "@an-dr/commits-core/backend/utils/string";
 
 /** Small display helpers deliberately kept independent of the DOM. */
 export function shortHash(hash: string): string { return abbrevCommit(hash); }

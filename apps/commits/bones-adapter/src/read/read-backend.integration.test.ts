@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import type { GitResult, GitRun } from "../../../ipc/ts/native";
+import type { GitResult, GitRun } from "@commits/ipc/native";
 import { ReadBackend, type RepositorySnapshot } from "./read-backend";
 
 describe("ReadBackend integration", () => {

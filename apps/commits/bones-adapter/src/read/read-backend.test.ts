@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ReadBackend, type RepositorySnapshot } from "./read-backend";
-import type { GitResult, GitRun } from "../../../ipc/ts/native";
+import type { GitResult, GitRun } from "@commits/ipc/native";
 
 describe("ReadBackend", () => {
   it("issues bounded correlated reads and delivers a parsed repository snapshot", () => {

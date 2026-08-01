@@ -1,4 +1,4 @@
-import type { WorkspacePort } from "../../../packages/core/src/host/port";
+import type { WorkspacePort } from "@an-dr/commits-core/host/port";
 
 /** A repository known to the host-agnostic read backend. */
 export interface ManagedRepository {

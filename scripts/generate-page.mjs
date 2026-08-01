@@ -34,9 +34,9 @@ window.ipc = { postMessage(json) {
 const preview = template
   .replace("/*__COMMITS_CSS__*/", css)
   .replace("/*__COMMITS_JS__*/", `${previewIpc}\n${script}`);
-const target = new URL("core/src/generated/page.ts", root);
+const target = new URL("apps/commits/bones-adapter/src/generated/page.ts", root);
 
-await mkdir(new URL("core/src/generated/", root), { recursive: true });
+await mkdir(new URL("apps/commits/bones-adapter/src/generated/", root), { recursive: true });
 await writeFile(new URL("dist/ui/preview.html", root), preview);
 await writeFile(
   target,

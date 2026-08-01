@@ -15,9 +15,9 @@ export interface HostPort {
   /** Raw bytes persisted by bones in this component's file-backed save slot. */
   loadSavedState(): Uint8Array<ArrayBufferLike>;
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void;
-  runGit(request: import("../../../ipc/ts/native").GitRun): void;
+  runGit(request: import("@commits/ipc/native").GitRun): void;
   respondPrompt(id: string, value: string): void;
-  requestOs(requestId: number, action: import("../../../ipc/ts/native").OsAction, value?: string): void;
+  requestOs(requestId: number, action: import("@commits/ipc/native").OsAction, value?: string): void;
   sendPageMessage(panel: string, message: unknown): void;
   subscribe(topic: string): void;
 }

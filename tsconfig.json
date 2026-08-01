@@ -6,6 +6,8 @@
     "baseUrl": ".",
     "paths": {
       "@an-dr/commits-core/*": ["packages/core/src/*"],
+      "@commits/adapter/*": ["apps/commits/bones-adapter/src/*"],
+      "@commits/ipc/*": ["ipc/ts/*"],
       "@an-dr/commits-webview-shell/assets/*": ["packages/webview-shell/assets/*"],
       "@an-dr/commits-webview-shell/*": ["packages/webview-shell/src/*"]
     },
@@ -15,7 +17,7 @@
     "types": ["node", "vitest/globals"]
   },
   "include": [
-    "core/**/*.ts",
+    "apps/commits/bones-adapter/**/*.ts",
     "packages/core/src/webview/**/*.d.ts",
     "packages/webview-shell/**/*.ts",
     "ipc/**/*.ts",

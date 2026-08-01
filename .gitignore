@@ -2,5 +2,5 @@
 /target/
 /dist/
 /.tools/
-/core/src/generated/page.ts
+/apps/commits/bones-adapter/src/generated/page.ts
 *.log

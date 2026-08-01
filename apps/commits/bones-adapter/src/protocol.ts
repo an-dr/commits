@@ -23,7 +23,7 @@ export interface CoreReadyResponse {
 export interface OsCapabilityRequest {
   readonly command: "osCapability";
   readonly requestId: number;
-  readonly action: import("../../ipc/ts/native").OsAction;
+  readonly action: import("@commits/ipc/native").OsAction;
   readonly value?: string;
 }
 

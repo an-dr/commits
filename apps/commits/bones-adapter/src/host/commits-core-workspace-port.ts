@@ -2,7 +2,7 @@ import type {
   Disposable,
   RootPathsChange,
   WorkspacePort,
-} from "../../../packages/core/src/host/port";
+} from "@an-dr/commits-core/host/port";
 import type { HostPort as BonesHostPort } from "./host-port";
 
 const NOOP_DISPOSABLE: Disposable = { dispose() {} };

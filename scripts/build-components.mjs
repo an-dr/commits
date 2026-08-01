@@ -7,8 +7,8 @@ const root = new URL("../", import.meta.url);
 const localWizer = new URL(".tools/wizer/bin/wizer.exe", root);
 await mkdir(new URL("dist/extensions/", root), { recursive: true });
 const wizerPath = await resolveWizerPath();
-await buildComponent("core/src/component.ts", "dist/extensions/commits.wasm", wizerPath);
-await buildComponent("core/src/hello.ts", "dist/extensions/hello.wasm", wizerPath);
+await buildComponent("apps/commits/bones-adapter/src/component.ts", "dist/extensions/commits.wasm", wizerPath);
+await buildComponent("apps/commits/bones-adapter/src/hello.ts", "dist/extensions/hello.wasm", wizerPath);
 
 async function resolveWizerPath() {
   if (platform !== "win32" || arch !== "arm64") {

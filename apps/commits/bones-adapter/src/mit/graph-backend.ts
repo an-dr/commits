@@ -2,8 +2,8 @@ import type {
   GitCommitNode,
   GitRef,
   QueryResponse,
-} from "../../../packages/core/src/backend/types";
-import type { GitResult, GitRun } from "../../../ipc/ts/native";
+} from "@an-dr/commits-core/backend/types";
+import type { GitResult, GitRun } from "@commits/ipc/native";
 
 interface GitHost {
   runGit(request: GitRun): void;

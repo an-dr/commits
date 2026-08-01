@@ -6,8 +6,8 @@ import {
   decodePanelClosed,
   decodePanelFailed,
   decodePanelOpened,
-} from "../../ipc/ts/web";
-import { decodeGitResult, decodeNativeResult } from "../../ipc/ts/native";
+} from "@commits/ipc/web";
+import { decodeGitResult, decodeNativeResult } from "@commits/ipc/native";
 
 const OWNER = "commits";
 const PANEL = "main";
