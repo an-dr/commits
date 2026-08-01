@@ -13,7 +13,8 @@ added here rather than upstream, so `packages/core/src/webview` now carries
 local modifications: `main.ts` and `branchPanel.ts` track several selected
 branches, `branchSelection.ts` is new, and the view state and `loadCommits`
 request gained the fields that carry them. `main.ts` also switches repository
-when the host names a different active one. ADR-008 records why.
+when the host names a different active one, and routes every repository change
+through one reset so selections never carry across repositories. ADR-008 records why.
 
 Every other file remains as imported, and the MIT grant and notice are
 unchanged; MIT permits modification. What is lost is reproducibility: the

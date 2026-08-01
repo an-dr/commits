@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "DetailedAuto",
-  "phase": "FINAL_REVIEW",
+  "phase": "COMMIT",
   "baseBranch": "main",
   "baseCommit": "f6eb71a90010095259421977f9c3b3b07668edd1",
   "featureBranch": "fix/read-surface-gaps",
@@ -11,8 +11,8 @@
     "done": "Double clicking a commit expands it and shows the file tree; multiple branches can be selected and the graph reflects the selection; a menu bar exposes Open repo which opens the selector; regression tests cover the commitDetails round trip and multi-branch request shape; docs record the packages/core divergence; npm run verify and cargo test --workspace pass.",
     "outOfScope": "No mutating Git actions, no diff viewing or file opening beyond listing the tree, no changes to vendor/bones, no packaging or CI work."
   },
-  "currentIncrementId": null,
-  "commitBaseline": null,
+  "currentIncrementId": "6d3a55d52b234c6e97a488cd87cb3786",
+  "commitBaseline": "919fadbdc391cb8b99db99845f415aacd1eec8bc",
   "increments": [
     {
       "id": "46d2acd4481c44d6a38ab22328708909",
@@ -48,6 +48,13 @@
       "status": "completed",
       "scope": "Honour a host-requested repository switch (~150 lines)",
       "description": "Treat a lastActiveRepo that differs from the shown repository as an instruction to switch and refresh, so opening a repository from the menu loads it."
+    },
+    {
+      "id": "6d3a55d52b234c6e97a488cd87cb3786",
+      "number": 6,
+      "status": "verified",
+      "scope": "Reset view state on every repository change (~150 lines)",
+      "description": "Route all three repository switches through one helper that clears the branch selection, expanded commit and commit budget, so the graph and branch panel reload against the new repository."
     }
   ],
   "approvals": [],
@@ -206,8 +213,43 @@
       "at": "2026-08-01T17:35:01.8572825Z",
       "action": "advance",
       "detail": "Advanced from SUMMARY to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-08-01T17:38:27.1564401Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 6: Reset view state on every repository change (~150 lines)"
+    },
+    {
+      "at": "2026-08-01T17:38:27.9551565Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-08-01T17:38:28.7969924Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-08-01T17:38:29.5630152Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-01T17:38:36.8621865Z",
+      "action": "return-to-build",
+      "detail": "Returned from VERIFY to BUILD."
+    },
+    {
+      "at": "2026-08-01T17:40:43.9294528Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-01T17:40:44.7481142Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-08-01T13:22:31.9257107Z",
-  "updatedAt": "2026-08-01T17:35:01.8657450Z"
+  "updatedAt": "2026-08-01T17:40:44.7553602Z"
 }
