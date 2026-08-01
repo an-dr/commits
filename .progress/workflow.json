@@ -11,20 +11,20 @@
     "done": "Double clicking a commit expands it and shows the file tree; multiple branches can be selected and the graph reflects the selection; a menu bar exposes Open repo which opens the selector; regression tests cover the commitDetails round trip and multi-branch request shape; docs record the packages/core divergence; npm run verify and cargo test --workspace pass.",
     "outOfScope": "No mutating Git actions, no diff viewing or file opening beyond listing the tree, no changes to vendor/bones, no packaging or CI work."
   },
-  "currentIncrementId": "46d2acd4481c44d6a38ab22328708909",
-  "commitBaseline": "f6eb71a90010095259421977f9c3b3b07668edd1",
+  "currentIncrementId": "94ec9ff55ceb4da4b9099a1364cac552",
+  "commitBaseline": "63628f10eb88fd160dd8b8d63aa7d6cc2bc0acf8",
   "increments": [
     {
       "id": "46d2acd4481c44d6a38ab22328708909",
       "number": 1,
-      "status": "verified",
+      "status": "completed",
       "scope": "Commit details and file tree (~280 lines)",
       "description": "Handle the commitDetails request in the core by running the native Git reads it needs, build the file tree the shared view expects, and reply so double click expands a commit."
     },
     {
       "id": "94ec9ff55ceb4da4b9099a1364cac552",
       "number": 2,
-      "status": "planned",
+      "status": "verified",
       "scope": "Menu bar with Open repo (~200 lines)",
       "description": "Add a standalone menu bar to the page with an Open repo item that shows the repository selector, styled with the existing theme tokens."
     },
@@ -99,8 +99,23 @@
       "at": "2026-08-01T13:28:07.0020628Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-08-01T13:28:10.6671642Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-08-01T13:29:46.6428722Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-01T13:29:47.4698394Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-08-01T13:22:31.9257107Z",
-  "updatedAt": "2026-08-01T13:28:07.0095781Z"
+  "updatedAt": "2026-08-01T13:29:47.4782056Z"
 }

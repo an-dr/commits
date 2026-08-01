@@ -9,9 +9,9 @@
 
 ## Iterations
 
-- [ ] **Commit details and file tree (~280 lines)** (verified) — Handle the commitDetails request in the core by running the native Git reads it needs, build the file tree the shared view expects, and reply so double click expands a commit.
-- [ ] **Menu bar with Open repo (~200 lines)** (planned) — Add a standalone menu bar to the page with an Open repo item that shows the repository selector, styled with the existing theme tokens.
+- [x] **Commit details and file tree (~280 lines)** (completed) — Handle the commitDetails request in the core by running the native Git reads it needs, build the file tree the shared view expects, and reply so double click expands a commit.
+- [ ] **Menu bar with Open repo (~200 lines)** (verified) — Add a standalone menu bar to the page with an Open repo item that shows the repository selector, styled with the existing theme tokens.
 - [ ] **Multi-branch selection (~260 lines)** (planned) — Extend the shared webview branch panel and view state to hold several selected branches, send them together, and load commits across the selection.
 - [ ] **Record the shared core divergence (~120 lines)** (planned) — Update shared-core.md and THIRD_PARTY_NOTICES to state that packages/core now carries local modifications, and add an ADR superseding the unmodified-snapshot decision.
 
-_Last updated: 2026-08-01T13:28:07.0095781Z_
+_Last updated: 2026-08-01T13:29:47.4782056Z_
