@@ -1,7 +1,7 @@
 # Progress
 
 **Flow:** Detailed Auto
-**Phase:** COMMIT
+**Phase:** FINAL_REVIEW
 **Goal:** Fix the standalone read surface: show the commit file tree, expand a commit on double click, allow selecting multiple branches at once, and add a menu bar whose Open repo item opens the repository selector.
 **Done when:** Double clicking a commit expands it and shows the file tree; multiple branches can be selected and the graph reflects the selection; a menu bar exposes Open repo which opens the selector; regression tests cover the commitDetails round trip and multi-branch request shape; docs record the packages/core divergence; npm run verify and cargo test --workspace pass.
 **Constraints:** The file tree and expansion are one root cause: the core drops the shared views commitDetails request. Multi-branch selection requires editing packages/core/src/webview, which the user explicitly authorized after being told it ends the byte-for-byte snapshot; record that divergence in docs and an ADR. vendor/bones stays read-only. Keep the apps/crates/ipc/packages layout and run-time page delivery.
@@ -16,6 +16,6 @@
 - [x] **Honour a host-requested repository switch (~150 lines)** (completed) — Treat a lastActiveRepo that differs from the shown repository as an instruction to switch and refresh, so opening a repository from the menu loads it.
 - [x] **Reset view state on every repository change (~150 lines)** (completed) — Route all three repository switches through one helper that clears the branch selection, expanded commit and commit budget, so the graph and branch panel reload against the new repository.
 - [x] **Readable page typography and scrollbars (~180 lines)** (completed) — Set a system UI font for the page so it stops falling back to the browser serif default, and style the scrollbars to match the theme in both light and dark.
-- [ ] **No console window in release builds (~60 lines)** (verified) — Mark the host as a Windows subsystem binary outside debug builds so the terminal no longer opens behind the app, while debug builds keep their log output.
+- [x] **No console window in release builds (~60 lines)** (completed) — Mark the host as a Windows subsystem binary outside debug builds so the terminal no longer opens behind the app, while debug builds keep their log output.
 
-_Last updated: 2026-08-01T17:48:01.4689415Z_
+_Last updated: 2026-08-01T17:48:13.4594384Z_
