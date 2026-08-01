@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "DetailedAuto",
-  "phase": "FINAL_REVIEW",
+  "phase": "COMMIT",
   "baseBranch": "main",
   "baseCommit": "f6eb71a90010095259421977f9c3b3b07668edd1",
   "featureBranch": "fix/read-surface-gaps",
@@ -11,8 +11,8 @@
     "done": "Double clicking a commit expands it and shows the file tree; multiple branches can be selected and the graph reflects the selection; a menu bar exposes Open repo which opens the selector; regression tests cover the commitDetails round trip and multi-branch request shape; docs record the packages/core divergence; npm run verify and cargo test --workspace pass.",
     "outOfScope": "No mutating Git actions, no diff viewing or file opening beyond listing the tree, no changes to vendor/bones, no packaging or CI work."
   },
-  "currentIncrementId": null,
-  "commitBaseline": null,
+  "currentIncrementId": "7a61414b276241f48438046167e52998",
+  "commitBaseline": "b67763b4b3c670e6ff4daa4059e513c3937d3032",
   "increments": [
     {
       "id": "46d2acd4481c44d6a38ab22328708909",
@@ -55,6 +55,20 @@
       "status": "completed",
       "scope": "Reset view state on every repository change (~150 lines)",
       "description": "Route all three repository switches through one helper that clears the branch selection, expanded commit and commit budget, so the graph and branch panel reload against the new repository."
+    },
+    {
+      "id": "7a61414b276241f48438046167e52998",
+      "number": 7,
+      "status": "verified",
+      "scope": "Readable page typography and scrollbars (~180 lines)",
+      "description": "Set a system UI font for the page so it stops falling back to the browser serif default, and style the scrollbars to match the theme in both light and dark."
+    },
+    {
+      "id": "1803aa5254594cc6bb7460f0a7eefab6",
+      "number": 8,
+      "status": "planned",
+      "scope": "No console window in release builds (~60 lines)",
+      "description": "Mark the host as a Windows subsystem binary outside debug builds so the terminal no longer opens behind the app, while debug builds keep their log output."
     }
   ],
   "approvals": [],
@@ -258,8 +272,48 @@
       "at": "2026-08-01T17:40:49.3288098Z",
       "action": "advance",
       "detail": "Advanced from SUMMARY to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-08-01T17:43:56.3124689Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 7: Readable page typography and scrollbars (~180 lines)"
+    },
+    {
+      "at": "2026-08-01T17:43:57.0821686Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 8: No console window in release builds (~60 lines)"
+    },
+    {
+      "at": "2026-08-01T17:43:57.8613191Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-08-01T17:43:58.712058Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-08-01T17:43:59.4521057Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-01T17:44:09.8379639Z",
+      "action": "return-to-build",
+      "detail": "Returned from VERIFY to BUILD."
+    },
+    {
+      "at": "2026-08-01T17:46:25.1228392Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-01T17:46:25.9425964Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-08-01T13:22:31.9257107Z",
-  "updatedAt": "2026-08-01T17:40:49.3366621Z"
+  "updatedAt": "2026-08-01T17:46:25.9498084Z"
 }
