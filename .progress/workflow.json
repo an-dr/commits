@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "DetailedAuto",
-  "phase": "FINAL_REVIEW",
+  "phase": "COMMIT",
   "baseBranch": "main",
   "baseCommit": "f6eb71a90010095259421977f9c3b3b07668edd1",
   "featureBranch": "fix/read-surface-gaps",
@@ -11,8 +11,8 @@
     "done": "Double clicking a commit expands it and shows the file tree; multiple branches can be selected and the graph reflects the selection; a menu bar exposes Open repo which opens the selector; regression tests cover the commitDetails round trip and multi-branch request shape; docs record the packages/core divergence; npm run verify and cargo test --workspace pass.",
     "outOfScope": "No mutating Git actions, no diff viewing or file opening beyond listing the tree, no changes to vendor/bones, no packaging or CI work."
   },
-  "currentIncrementId": null,
-  "commitBaseline": null,
+  "currentIncrementId": "3f2b7bf0fd5c495792a8d9c8d9b96d9e",
+  "commitBaseline": "d91d5b73eea39948ff293f5a3ec11f366167d057",
   "increments": [
     {
       "id": "46d2acd4481c44d6a38ab22328708909",
@@ -69,6 +69,13 @@
       "status": "completed",
       "scope": "No console window in release builds (~60 lines)",
       "description": "Mark the host as a Windows subsystem binary outside debug builds so the terminal no longer opens behind the app, while debug builds keep their log output."
+    },
+    {
+      "id": "3f2b7bf0fd5c495792a8d9c8d9b96d9e",
+      "number": 9,
+      "status": "verified",
+      "scope": "Spawn git without console windows (~80 lines)",
+      "description": "Set CREATE_NO_WINDOW on spawned Git processes so a windowed host does not flash a console for every command."
     }
   ],
   "approvals": [],
@@ -337,8 +344,43 @@
       "at": "2026-08-01T17:48:13.4497801Z",
       "action": "advance",
       "detail": "Advanced from SUMMARY to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-08-02T09:09:34.8679019Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 9: Spawn git without console windows (~80 lines)"
+    },
+    {
+      "at": "2026-08-02T09:09:35.599905Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-08-02T09:09:36.4400973Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-08-02T09:09:37.2724248Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-02T09:09:45.1855896Z",
+      "action": "return-to-build",
+      "detail": "Returned from VERIFY to BUILD."
+    },
+    {
+      "at": "2026-08-02T09:14:30.073171Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-08-02T09:14:30.9587484Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-08-01T13:22:31.9257107Z",
-  "updatedAt": "2026-08-01T17:48:13.4594384Z"
+  "updatedAt": "2026-08-02T09:14:30.9661136Z"
 }

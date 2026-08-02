@@ -56,6 +56,7 @@ impl ProcessRunner {
                 command.env(name, value);
             }
         }
+        suppress_console(&mut command);
         let mut child = command
             .spawn()
             .map_err(|error| format!("spawning {}: {error}", self.executable))?;
@@ -131,3 +132,20 @@ impl Default for ProcessRunner {
 }
 
 pub type Cancellation = Arc<AtomicBool>;
+
+/// Keeps spawned Git processes from creating a console.
+///
+/// A windowed host has no console to inherit, so without this Windows gives
+/// every Git command its own window, which flashes on screen for each one.
+#[cfg(windows)]
+fn suppress_console(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    /// `CREATE_NO_WINDOW` from the Win32 process creation flags.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn suppress_console(_command: &mut Command) {}
