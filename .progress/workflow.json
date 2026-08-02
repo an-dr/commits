@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "DetailedAuto",
-  "phase": "COMMIT",
+  "phase": "FINAL_REVIEW",
   "baseBranch": "main",
   "baseCommit": "f6eb71a90010095259421977f9c3b3b07668edd1",
   "featureBranch": "fix/read-surface-gaps",
@@ -11,8 +11,8 @@
     "done": "Double clicking a commit expands it and shows the file tree; multiple branches can be selected and the graph reflects the selection; a menu bar exposes Open repo which opens the selector; regression tests cover the commitDetails round trip and multi-branch request shape; docs record the packages/core divergence; npm run verify and cargo test --workspace pass.",
     "outOfScope": "No mutating Git actions, no diff viewing or file opening beyond listing the tree, no changes to vendor/bones, no packaging or CI work."
   },
-  "currentIncrementId": "3f2b7bf0fd5c495792a8d9c8d9b96d9e",
-  "commitBaseline": "d91d5b73eea39948ff293f5a3ec11f366167d057",
+  "currentIncrementId": null,
+  "commitBaseline": null,
   "increments": [
     {
       "id": "46d2acd4481c44d6a38ab22328708909",
@@ -73,7 +73,7 @@
     {
       "id": "3f2b7bf0fd5c495792a8d9c8d9b96d9e",
       "number": 9,
-      "status": "verified",
+      "status": "completed",
       "scope": "Spawn git without console windows (~80 lines)",
       "description": "Set CREATE_NO_WINDOW on spawned Git processes so a windowed host does not flash a console for every command."
     }
@@ -379,8 +379,18 @@
       "at": "2026-08-02T09:14:30.9587484Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-08-02T09:14:34.7747763Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to SUMMARY."
+    },
+    {
+      "at": "2026-08-02T09:14:35.5622560Z",
+      "action": "advance",
+      "detail": "Advanced from SUMMARY to FINAL_REVIEW."
     }
   ],
   "createdAt": "2026-08-01T13:22:31.9257107Z",
-  "updatedAt": "2026-08-02T09:14:30.9661136Z"
+  "updatedAt": "2026-08-02T09:14:35.5675555Z"
 }
