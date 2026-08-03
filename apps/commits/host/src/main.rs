@@ -14,6 +14,7 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     runner::Engine::new()
         .extensions_dir("extensions")
+        .startup_extension("commits")
         .saves_dir("saves")
         .window("commits", 1100, 720)
         .web()

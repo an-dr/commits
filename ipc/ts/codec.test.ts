@@ -45,6 +45,17 @@ describe("bones codec", () => {
     expect(() => reader.finish()).not.toThrow();
   });
 
+  it("encodes payloads larger than a JavaScript call argument limit", () => {
+    const page = "x".repeat(200_000);
+    const payload = encodeOpenPanel("main", { kind: "html", value: page });
+    const reader = new Reader(payload);
+
+    expect(reader.u8()).toBe(0);
+    expect(reader.string()).toBe("main");
+    expect(reader.u8()).toBe(0);
+    expect(reader.stringRest()).toBe(page);
+  });
+
   it("matches Rust-generated web command fixtures", () => {
     expect(toHex(encodeOpenPanel("main", { kind: "html", value: "<h1>commits</h1>" })))
       .toBe(fixtures.open_html);

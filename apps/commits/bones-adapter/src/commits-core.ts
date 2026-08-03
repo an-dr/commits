@@ -51,7 +51,7 @@ export class CommitsCore {
     this.host.subscribe("git/completed");
     // Fetched here rather than at construction so the request reaches a running
     // host instead of the build-time snapshot taken while componentizing.
-    this.host.openPanel(PANEL, this.host.loadPageHtml());
+    this.host.openPanel(PANEL, this.host.loadPageSource());
     this.host.log("info", "MIT commits graph panel requested");
   }
 
