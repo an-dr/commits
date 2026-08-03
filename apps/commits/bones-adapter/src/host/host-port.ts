@@ -1,10 +1,13 @@
 export type LogLevel = "debug" | "info" | "warn" | "error";
+export type PageSource =
+  | { readonly kind: "html"; readonly value: string }
+  | { readonly kind: "url"; readonly value: string };
 
 /** Host capabilities used by product behavior on bones and VS Code. */
 export interface HostPort {
   closePanel(panel: string): void;
   log(level: LogLevel, message: string): void;
-  openPanel(panel: string, html: string): void;
+  openPanel(panel: string, source: PageSource): void;
   /**
    * Paths made available by the standalone host.
    *
@@ -13,13 +16,13 @@ export interface HostPort {
    */
   repositoryPaths(): readonly string[];
   /**
-   * Webview page markup supplied by the host at run time.
+   * Webview page location supplied by the host at run time.
    *
    * The page is fetched rather than compiled in so rebuilding it does not
    * require rebuilding the component, matching how the VS Code extension host
    * supplies webview HTML.
    */
-  loadPageHtml(): string;
+  loadPageSource(): PageSource;
   /** Raw bytes persisted by bones in this component's file-backed save slot. */
   loadSavedState(): Uint8Array<ArrayBufferLike>;
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void;

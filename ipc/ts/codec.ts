@@ -3,12 +3,12 @@ const decoder = new TextDecoder("utf-8", { fatal: true });
 
 /** Builds bones fixed-layout little-endian payloads. */
 export class Writer {
-  private readonly bytes: number[] = [];
+  private readonly chunks: Uint8Array[] = [];
+  private length = 0;
 
   u8(value: number): this {
     assertIntegerInRange(value, 0, 0xff, "u8");
-    this.bytes.push(value);
-    return this;
+    return this.raw(Uint8Array.of(value));
   }
 
   u16(value: number): this {
@@ -35,7 +35,11 @@ export class Writer {
   }
 
   raw(value: Uint8Array): this {
-    this.bytes.push(...value);
+    // Keep arbitrary payloads as chunks instead of spreading their bytes into
+    // Array.push. The generated page exceeds some JS runtimes' call-argument
+    // limit, and copying it byte by byte is prohibitively slow in WASM.
+    this.chunks.push(value.slice());
+    this.length += value.length;
     return this;
   }
 
@@ -52,7 +56,13 @@ export class Writer {
   }
 
   finish(): Uint8Array {
-    return Uint8Array.from(this.bytes);
+    const bytes = new Uint8Array(this.length);
+    let offset = 0;
+    for (const chunk of this.chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return bytes;
   }
 
   private pushNumber(

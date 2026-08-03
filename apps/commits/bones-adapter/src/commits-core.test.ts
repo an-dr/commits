@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { GitResult, GitRun, NativeResult, OsAction } from "@commits/ipc/native";
 import { CommitsCore } from "./commits-core";
-import type { HostPort, LogLevel } from "./host/host-port";
+import type { HostPort, LogLevel, PageSource } from "./host/host-port";
 
 class StubHost implements HostPort {
   readonly closed: string[] = [];
   readonly logs: Array<[LogLevel, string]> = [];
-  readonly opened: Array<[string, string]> = [];
+  readonly opened: Array<[string, PageSource]> = [];
   readonly sent: Array<[string, unknown]> = [];
   readonly topics: string[] = [];
   readonly osRequests: unknown[] = [];
@@ -14,13 +14,13 @@ class StubHost implements HostPort {
   readonly promptReplies: string[] = [];
   savedState: Uint8Array<ArrayBufferLike> = new Uint8Array();
   paths: string[] = [];
-  pageHtml = "<main>MIT graph</main>";
+  pageSource: PageSource = { kind: "url", value: "file:///commits/page.html" };
 
   closePanel(panel: string): void { this.closed.push(panel); }
   log(level: LogLevel, message: string): void { this.logs.push([level, message]); }
-  openPanel(panel: string, html: string): void { this.opened.push([panel, html]); }
+  openPanel(panel: string, source: PageSource): void { this.opened.push([panel, source]); }
   repositoryPaths(): readonly string[] { return this.paths; }
-  loadPageHtml(): string { return this.pageHtml; }
+  loadPageSource(): PageSource { return this.pageSource; }
   loadSavedState(): Uint8Array<ArrayBufferLike> { return this.savedState; }
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void { this.savedState = value; }
   runGit(request: GitRun): void { this.gitRequests.push(request); }
@@ -39,7 +39,7 @@ describe("CommitsCore MIT webview host", () => {
 
     core.start();
 
-    expect(host.opened).toEqual([["main", "<main>MIT graph</main>"]]);
+    expect(host.opened).toEqual([["main", { kind: "url", value: "file:///commits/page.html" }]]);
     expect(host.topics).toEqual(["web/*", "os/result", "os/prompt", "git/completed"]);
   });
 

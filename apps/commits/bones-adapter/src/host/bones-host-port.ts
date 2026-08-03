@@ -9,7 +9,7 @@ import {
   encodeOpenPanel,
   encodeSendJson,
 } from "@commits/ipc/web";
-import type { HostPort, LogLevel } from "./host-port";
+import type { HostPort, LogLevel, PageSource } from "./host-port";
 import { encodeGitRun, encodeOsRequest, type GitRun, type OsAction } from "@commits/ipc/native";
 
 export class BonesHostPort implements HostPort {
@@ -21,8 +21,8 @@ export class BonesHostPort implements HostPort {
     hostLog(level, message);
   }
 
-  openPanel(panel: string, html: string): void {
-    this.sendWeb(encodeOpenPanel(panel, { kind: "html", value: html }));
+  openPanel(panel: string, source: PageSource): void {
+    this.sendWeb(encodeOpenPanel(panel, source));
   }
 
   repositoryPaths(): readonly string[] {
@@ -31,17 +31,17 @@ export class BonesHostPort implements HostPort {
     return [];
   }
 
-  loadPageHtml(): string {
+  loadPageSource(): PageSource {
     try {
       const page = send("page", new Uint8Array());
       if (page.length === 0) {
-        hostLog("error", "host served an empty page");
-        return "";
+        hostLog("error", "host did not provide a page URL");
+        return { kind: "html", value: "<p>Unable to load the Commits page.</p>" };
       }
-      return new TextDecoder().decode(page);
+      return { kind: "url", value: new TextDecoder().decode(page) };
     } catch (error) {
       hostLog("error", `could not load the page: ${String(error)}`);
-      return "";
+      return { kind: "html", value: "<p>Unable to load the Commits page.</p>" };
     }
   }
 

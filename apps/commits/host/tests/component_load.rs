@@ -13,6 +13,14 @@ impl Respond for WebResponder {
     }
 }
 
+struct PageResponder(Vec<u8>);
+
+impl Respond for PageResponder {
+    fn respond(&self, _sender: &str, _payload: &[u8]) -> Option<Vec<u8>> {
+        Some(self.0.clone())
+    }
+}
+
 #[test]
 fn generated_components_load_and_initialize_in_bones() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
@@ -21,6 +29,10 @@ fn generated_components_load_and_initialize_in_bones() {
     for name in ["hello", "commits"] {
         let registry = Registry::new();
         registry.insert("web", Arc::new(WebResponder));
+        registry.insert(
+            "page",
+            Arc::new(PageResponder(b"http://127.0.0.1:32123/page.html".to_vec())),
+        );
         let path = root.join(format!("dist/extensions/{name}.wasm"));
         let mut host = Host::load(
             &engine,
