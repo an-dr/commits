@@ -19,8 +19,12 @@ function memoizeByLocale<T>(build: (locale: string | undefined) => T) {
   };
 }
 
+/**
+ * The day is two digits so a column of dates keeps the time that follows it in
+ * one place; a variable-width day shifts every later character by a character.
+ */
 const getDateFormatter = memoizeByLocale(
-  (locale) => new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "numeric" })
+  (locale) => new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "2-digit" })
 );
 
 /** Format the date portion of a commit date using the VS Code display language. */

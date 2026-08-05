@@ -1419,7 +1419,7 @@ class GitGraphView {
   private renderUncommitedChanges() {
     let date = getCommitDate(this.commits[0].date);
     document.getElementsByClassName("unsavedChanges")[0].innerHTML =
-      '<td colspan="2"><span class="description"><b>' +
+      '<td><span class="description"><b>' +
       escapeHtml(this.commits[0].message) +
       "</b></span></td>" +
       // The asterisks are placeholder display text for the Dev and ID columns,
@@ -1702,8 +1702,14 @@ class GitGraphView {
     this.expandedCommit.srcElem.classList.add("commitDetailsOpen");
     this.saveState();
 
+    // The summary spans whatever columns the table currently shows, so hiding
+    // one never leaves it short or stretching the table.
+    const columnCount =
+      1 +
+      (viewState.columnVisibility.Committed ? 1 : 0) +
+      (viewState.columnVisibility.ID ? 1 : 0);
     let newElem = document.createElement("tr"),
-      html = '<td></td><td colspan="4"><div id="commitDetailsSummary">';
+      html = `<td colspan="${columnCount}"><div id="commitDetailsSummary">`;
     html +=
       '<span class="commitDetailsSummaryTop' +
       (typeof this.avatars[commitDetails.email] === "string" ? " withAvatar" : "") +
