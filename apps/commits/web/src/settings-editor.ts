@@ -3,6 +3,7 @@ import {
   type CoreSettingDefinition,
   type SettingsDocument,
 } from "@commits/adapter/read/settings";
+import { DARK_THEMES, LIGHT_THEMES } from "./themes";
 
 type SettingControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLFieldSetElement;
 
@@ -12,6 +13,9 @@ export class SettingsEditor {
   private readonly controls = new Map<string, SettingControl>();
   private readonly status = document.createElement("p");
   private readonly saveButton = document.createElement("button");
+  private readonly mode = createSelect([["system", "Follow system"], ["light", "Light"], ["dark", "Dark"]]);
+  private readonly lightTheme = createSelect(LIGHT_THEMES.map(({ id, name }) => [id, name]));
+  private readonly darkTheme = createSelect(DARK_THEMES.map(({ id, name }) => [id, name]));
   private settings: SettingsDocument | null = null;
 
   constructor(private readonly save: (settings: SettingsDocument) => void) {
@@ -40,7 +44,7 @@ export class SettingsEditor {
     }
     this.settings = settings;
     this.populate(settings);
-    this.status.textContent = "Saved. Graph settings apply when the window is reopened.";
+    this.status.textContent = "Saved. Appearance is active; graph settings apply when the window is reopened.";
     this.status.className = "standaloneSettingsStatus is-success";
   }
 
@@ -52,6 +56,11 @@ export class SettingsEditor {
       <button type="button" class="standaloneSettingsClose" aria-label="Close settings">×</button></header>`;
     const fields = document.createElement("div");
     fields.className = "standaloneSettingsFields";
+    fields.append(
+      createAppearanceField("Mode", this.mode),
+      createAppearanceField("Light theme", this.lightTheme),
+      createAppearanceField("Dark theme", this.darkTheme),
+    );
     for (const definition of CORE_SETTING_DEFINITIONS) fields.append(this.createField(definition));
     const footer = document.createElement("footer");
     this.status.className = "standaloneSettingsStatus";
@@ -127,6 +136,9 @@ export class SettingsEditor {
   }
 
   private populate(settings: SettingsDocument): void {
+    this.mode.value = settings.app.mode;
+    this.lightTheme.value = LIGHT_THEMES.some(({ id }) => id === settings.app.lightTheme) ? settings.app.lightTheme : LIGHT_THEMES[0].id;
+    this.darkTheme.value = DARK_THEMES.some(({ id }) => id === settings.app.darkTheme) ? settings.app.darkTheme : DARK_THEMES[0].id;
     for (const definition of CORE_SETTING_DEFINITIONS) {
       const control = this.controls.get(definition.key)!;
       const value = settings.core[definition.key];
@@ -170,8 +182,37 @@ export class SettingsEditor {
         core[definition.key] = control.value;
       }
     }
-    return { ...this.settings, core };
+    return {
+      ...this.settings,
+      core,
+      app: {
+        ...this.settings.app,
+        mode: this.mode.value as SettingsDocument["app"]["mode"],
+        lightTheme: this.lightTheme.value,
+        darkTheme: this.darkTheme.value,
+      },
+    };
   }
+}
+
+function createSelect(options: readonly (readonly [string, string])[]): HTMLSelectElement {
+  const select = document.createElement("select");
+  for (const [value, label] of options) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    select.append(option);
+  }
+  return select;
+}
+
+function createAppearanceField(label: string, control: HTMLSelectElement): HTMLElement {
+  const field = document.createElement("label");
+  field.className = "standaloneSettingField standaloneAppearanceField";
+  const title = document.createElement("span");
+  title.textContent = label;
+  field.append(title, control);
+  return field;
 }
 
 /** Converts a dotted manifest key into a compact human-readable label. */

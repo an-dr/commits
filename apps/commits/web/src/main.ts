@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS, type SettingsDocument } from "@commits/adapter/read/s
 import "./standalone-theme.css";
 import { createViewState } from "./settings";
 import { SettingsEditor } from "./settings-editor";
+import { createAppearanceController } from "./themes";
 
 const STATE_KEY = "commits.mit-webview.state";
 
@@ -54,6 +55,7 @@ async function boot(): Promise<void> {
   let loadSettingsError = "";
   let nextSettingsRequestId = 1;
   let settingsEditor: SettingsEditor;
+  const appearance = createAppearanceController();
 
   window.addEventListener("bones-message", (event) => {
     try {
@@ -69,6 +71,7 @@ async function boot(): Promise<void> {
         finishSettings(activeSettings);
       } else if (data.command === "standaloneSettingsSaved") {
         activeSettings = data.settings ?? activeSettings;
+        if (!data.error) appearance.update(activeSettings);
         settingsEditor.finishSave(activeSettings, data.error ?? "");
       }
       window.dispatchEvent(new MessageEvent("message", { data }));
@@ -92,7 +95,9 @@ async function boot(): Promise<void> {
   ]);
   // Request settings before the shared view reads its global view state.
   post({ command: "standaloneReady" });
-  globalThis.viewState = createViewState(await settingsReady);
+  const initialSettings = await settingsReady;
+  appearance.update(initialSettings);
+  globalThis.viewState = createViewState(initialSettings);
   const [{ setWebviewHost }, { startCommitsView }] = await imports;
   setWebviewHost({
     postMessage: (message: RequestMessage) => post(message),

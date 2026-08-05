@@ -260,6 +260,13 @@ body {
   min-width: 0;
 }
 
+.standaloneAppearanceField {
+  padding: 10px;
+  border: 1px solid var(--vscode-focusBorder);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--vscode-focusBorder) 8%, transparent);
+}
+
 .standaloneSettingField > span {
   font-weight: 600;
 }
