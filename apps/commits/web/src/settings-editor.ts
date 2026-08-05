@@ -83,13 +83,21 @@ export class SettingsEditor {
   }
 
   private createField(definition: CoreSettingDefinition): HTMLElement {
-    const field = document.createElement("label");
+    const field = document.createElement("div");
     field.className = "standaloneSettingField";
-    const title = document.createElement("span");
+    const title = document.createElement("label");
     title.textContent = formatSettingLabel(definition.key);
     const key = document.createElement("code");
     key.textContent = definition.key;
     const control = this.createControl(definition);
+    const id = `standaloneSetting${this.controls.size}`;
+    if (control instanceof HTMLFieldSetElement) {
+      title.id = `${id}Label`;
+      control.setAttribute("aria-labelledby", title.id);
+    } else {
+      control.id = id;
+      title.htmlFor = id;
+    }
     this.controls.set(definition.key, control);
     field.append(title, key, control);
     return field;

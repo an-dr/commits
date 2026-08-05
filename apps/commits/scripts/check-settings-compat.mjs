@@ -46,5 +46,19 @@ for (const key of Object.keys(properties)) {
   if (!catalog.some((definition) => definition.key === key)) failures.push(`${key}: missing from standalone`);
 }
 
+const colours = properties["an-dr-com-mit-s.graphColours"];
+const colourPattern = "^\\s*(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|rgb[a]?\\s*\\(\\d{1,3},\\s*\\d{1,3},\\s*\\d{1,3}\\))\\s*$";
+if (colours?.items?.type !== "string" || colours.items.pattern !== colourPattern) {
+  failures.push("an-dr-com-mit-s.graphColours: item schema differs");
+}
+
+const columns = properties["an-dr-com-mit-s.repository.commits.columnVisibility"];
+const columnNames = Object.keys(columns?.properties ?? {}).sort();
+const booleanColumns = columnNames.every((name) => columns.properties[name]?.type === "boolean");
+if (JSON.stringify(columnNames) !== JSON.stringify(["Committed", "ID"])
+  || !booleanColumns || columns?.additionalProperties !== false) {
+  failures.push("an-dr-com-mit-s.repository.commits.columnVisibility: property schema differs");
+}
+
 if (failures.length > 0) throw new Error(`settings catalogs differ:\n${failures.join("\n")}`);
 console.log(`Settings catalog matches ${catalog.length} declarations in ${pathToFileURL(extensionDirectory)}.`);
