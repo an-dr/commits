@@ -907,6 +907,10 @@ class GitGraphView {
         i +
         '" data-color="' +
         this.graph.getVertexColour(i) +
+        // Ref labels, the HEAD dot and the row marker are all drawn in the
+        // commit's own lane colour, so the row carries that colour itself.
+        '" style="--git-graph-color:' +
+        escapeHtml(this.laneColour(i)) +
         '"><td><span class="description" style="padding-left:' +
         messageIndent +
         'px">' +
@@ -1469,6 +1473,12 @@ class GitGraphView {
       );
     }
   }
+  /** Colour of a commit's graph lane, taken from the configured palette. */
+  private laneColour(index: number): string {
+    const colours = this.config.graphColours;
+    return colours.length === 0 ? "" : colours[this.graph.getVertexColour(index) % colours.length];
+  }
+
   private makeTableResizable() {
     let colHeadersElem = document.getElementById("tableColHeaders")!,
       cols = <HTMLCollectionOf<HTMLElement>>document.getElementsByClassName("tableColHeader");
