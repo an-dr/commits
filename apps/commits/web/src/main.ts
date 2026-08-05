@@ -89,16 +89,17 @@ async function boot(): Promise<void> {
     settingsEditor.open(activeSettings, loadSettingsError);
   });
 
-  const imports = Promise.all([
-    import("@an-dr/commits-core/webview/utils/host"),
-    import("@an-dr/commits-core/webview/main"),
-  ]);
   // Request settings before the shared view reads its global view state.
   post({ command: "standaloneReady" });
   const initialSettings = await settingsReady;
   appearance.update(initialSettings);
   globalThis.viewState = createViewState(initialSettings);
-  const [{ setWebviewHost }, { startCommitsView }] = await imports;
+  // The shared graph reads viewState while its module is evaluated, so these
+  // imports must not begin until the settings-backed global exists.
+  const [{ setWebviewHost }, { startCommitsView }] = await Promise.all([
+    import("@an-dr/commits-core/webview/utils/host"),
+    import("@an-dr/commits-core/webview/main"),
+  ]);
   setWebviewHost({
     postMessage: (message: RequestMessage) => post(message),
     getState: () => readState(),
