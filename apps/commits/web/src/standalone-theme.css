@@ -20,6 +20,7 @@
   --vscode-gitDecoration-addedResourceForeground: #1a7f37;
   --vscode-gitDecoration-deletedResourceForeground: #cf222e;
   --vscode-gitDecoration-modifiedResourceForeground: #9a6700;
+  --vscode-gitDecoration-untrackedResourceForeground: #1a7f37;
   --vscode-input-background: #ffffff;
   --vscode-input-border: #c8c8c8;
   --vscode-input-foreground: #24292f;

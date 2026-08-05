@@ -8,7 +8,9 @@ import type {
   GitResetMode
 } from "@an-dr/commits-core/backend/types";
 
+import type { GitWorkingTreeChange } from "@an-dr/commits-core/data-source/models";
 import { BranchPanel, NO_REMOTE_INFO, type BranchPanelRemoteInfo } from "./branchPanel";
+import { renderChangesPanel } from "./changesPanelRender";
 import { CommitSelection, readSelectionGesture } from "./commitSelection";
 import { hideContextMenuIfOpen, isContextMenuOpen, showContextMenu } from "./contextMenu";
 import {
@@ -82,6 +84,9 @@ class GitGraphView {
   private comparison: { from: string; to: string } | null = null;
   /** Commit whose files the panel is previewing, when no row is open. */
   private previewHash: string | null = null;
+  /** True while the panel shows the working tree rather than a revision. */
+  private workingTreeOpen = false;
+  private workingTree: GitWorkingTreeChange[] = [];
   private scrollShadowElem: HTMLElement;
   private filesPanel: FilesPanel;
   private fullDiffPanel: FullDiffPanel;
@@ -303,12 +308,13 @@ class GitGraphView {
 
   /** Drops the selection, returning the panel to the open commit's own files. */
   public clearSelection() {
-    if (this.selection.size() === 0) {
+    if (this.selection.size() === 0 && !this.workingTreeOpen) {
       return;
     }
     this.selection.clear();
     this.comparison = null;
     this.previewHash = null;
+    this.workingTreeOpen = false;
     this.renderSelection();
     this.filesPanel.clear();
     this.filesPanel.hide();
@@ -1256,6 +1262,9 @@ class GitGraphView {
         this.previewCommitFiles(hash);
       }
     });
+    // The uncommitted row opens on a single click: it is one row that always
+    // means the same thing, so there is no selection to build up first.
+    addListenerToClass("unsavedChanges", "click", () => this.openWorkingTree());
     addListenerToClass("commit", "dblclick", (e: Event) => {
       const sourceElem = <HTMLElement>(<Element>e.target).closest(".commit")!;
       const hash = sourceElem.dataset.hash;
@@ -1625,6 +1634,9 @@ class GitGraphView {
   /** Lists a commit's changed files in the side panel without opening the row. */
   private previewCommitFiles(hash: string) {
     this.previewHash = hash;
+    // A revision replaces the working tree in the panel, so a reply still in
+    // flight for the tree must not paint over it.
+    this.workingTreeOpen = false;
     sendMessage({ command: "commitDetails", repo: this.currentRepo!, commitHash: hash });
   }
 
@@ -1640,6 +1652,34 @@ class GitGraphView {
     if (this.previewHash === commitDetails.hash) {
       this.fillFilesPanel(commitDetails, fileTree, commitDetails.hash);
     }
+  }
+
+  /**
+   * Opens the working tree in the side panel.
+   *
+   * The uncommitted row is not a commit, so it has no details to expand; what
+   * it has is a working tree, which the panel shows as its own surface.
+   */
+  private openWorkingTree() {
+    this.selection.clear();
+    this.comparison = null;
+    this.previewHash = null;
+    this.renderSelection();
+    this.hideCommitDetails();
+    this.workingTreeOpen = true;
+    this.filesPanel.setHeader(`<b>${l10n.changesPanelTitle}</b>`);
+    this.filesPanel.setContentLoading();
+    this.filesPanel.show();
+    sendMessage({ command: "workingTreeChanges", repo: this.currentRepo! });
+  }
+
+  /** Renders the working tree the host reported, while the panel still wants it. */
+  public renderWorkingTreeChanges(changes: GitWorkingTreeChange[], error: string | null) {
+    if (!this.workingTreeOpen) {
+      return;
+    }
+    this.workingTree = changes;
+    this.filesPanel.setContent(renderChangesPanel(changes, error));
   }
 
   /** Fills the side panel with one revision's changed files. */
@@ -1976,6 +2016,9 @@ window.addEventListener("message", (event) => {
       break;
     case "loadRepos":
       gitGraph.loadRepos(msg.repos, msg.lastActiveRepo);
+      break;
+    case "workingTreeChanges":
+      gitGraph.renderWorkingTreeChanges(msg.changes, msg.error);
       break;
     case "mergeBranch":
       refreshGraphOrDisplayError(msg.status, l10n.unableToMergeBranch);

@@ -30,6 +30,15 @@ export interface LocalizedStrings {
   readonly repoInProgressAbortConfirm: string;
   readonly repoInProgressActionFailed: string;
   readonly branchPanelLocalBranches: string;
+  readonly changesPanelTitle: string;
+  readonly changesStagedSection: string;
+  readonly changesUnstagedSection: string;
+  readonly changesNothingToCommit: string;
+  readonly changesStatusAdded: string;
+  readonly changesStatusDeleted: string;
+  readonly changesStatusModified: string;
+  readonly changesStatusRenamed: string;
+  readonly changesStatusUntracked: string;
   readonly branchPanelNoBranches: string;
   readonly branchPanelNoMatchingBranches: string;
   readonly fullDiffUnableToLoad: string;
