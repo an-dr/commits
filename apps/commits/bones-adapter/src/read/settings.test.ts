@@ -1,27 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, FileBackedSettings, parseSettings, validateSettings } from "./settings";
+import {
+  CORE_SETTING_DEFINITIONS,
+  DEFAULT_SETTINGS,
+  parseSettings,
+  validateSettings,
+} from "./settings";
 
-describe("FileBackedSettings", () => {
-  it("uses defaults for an absent or corrupt file", () => {
-    const storage = { load: () => new TextEncoder().encode("not json"), save: () => undefined };
-    expect(new FileBackedSettings(storage).load()).toEqual(DEFAULT_SETTINGS);
+describe("settings document", () => {
+  it("contains every setting in the MIT extension manifest", () => {
+    expect(CORE_SETTING_DEFINITIONS).toHaveLength(40);
+    expect(CORE_SETTING_DEFINITIONS.map(({ key }) => key)).toContain("an-dr-com-mit-s.keyboardShortcut.refresh");
+    expect(DEFAULT_SETTINGS.core["an-dr-com-mit-s.loadMoreCommits"]).toBe(100);
   });
 
-  it("persists only valid versioned JSON settings", () => {
-    let bytes: Uint8Array<ArrayBufferLike> = new Uint8Array();
-    const settings = new FileBackedSettings({
-      load: () => bytes,
-      save: (value) => { bytes = value; },
+  it("uses defaults for absent, corrupt, or unsupported documents", () => {
+    expect(parseSettings("not json")).toBe(DEFAULT_SETTINGS);
+    expect(validateSettings({ version: 3, core: {}, app: {} })).toBe(DEFAULT_SETTINGS);
+  });
+
+  it("validates known settings independently and preserves future keys", () => {
+    const settings = validateSettings({
+      version: 2,
+      core: {
+        "an-dr-com-mit-s.graphStyle": "invalid",
+        "an-dr-com-mit-s.initialLoadCommits": 500,
+        "an-dr-com-mit-s.futureSetting": { enabled: true },
+      },
+      app: { mode: "dark", lightTheme: "custom-light", futureSetting: true },
     });
-    const saved = settings.save({ version: 1, commitLimit: 500, includeRemotes: false, theme: "dark" });
 
-    expect(saved).toEqual({ version: 1, commitLimit: 500, includeRemotes: false, theme: "dark" });
-    expect(settings.load()).toEqual(saved);
-    expect(new TextDecoder().decode(bytes)).toBe('{"version":1,"commitLimit":500,"includeRemotes":false,"theme":"dark"}');
+    expect(settings.core["an-dr-com-mit-s.graphStyle"]).toBe("rounded");
+    expect(settings.core["an-dr-com-mit-s.initialLoadCommits"]).toBe(500);
+    expect(settings.core["an-dr-com-mit-s.futureSetting"]).toEqual({ enabled: true });
+    expect(settings.app).toMatchObject({ mode: "dark", lightTheme: "custom-light", darkTheme: "graphite", futureSetting: true });
   });
 
-  it("bounds settings and rejects unknown schema revisions", () => {
-    expect(parseSettings('{"version":1,"commitLimit":9,"includeRemotes":true,"theme":"system"}')).toEqual(DEFAULT_SETTINGS);
-    expect(validateSettings({ version: 2, commitLimit: 50, includeRemotes: true, theme: "light" })).toEqual(DEFAULT_SETTINGS);
+  it("migrates the v1 standalone fields from either root or Bones state", () => {
+    const legacy = { version: 1, commitLimit: 750, includeRemotes: false, theme: "light" };
+
+    for (const candidate of [legacy, { settings: legacy, state: { recent: [] } }]) {
+      const migrated = validateSettings(candidate);
+      expect(migrated.version).toBe(2);
+      expect(migrated.core["an-dr-com-mit-s.initialLoadCommits"]).toBe(750);
+      expect(migrated.app.mode).toBe("light");
+    }
   });
 });

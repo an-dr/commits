@@ -1,4 +1,7 @@
-import type { SettingsStorage } from "./settings";
+interface StateStorage {
+  load(): Uint8Array<ArrayBufferLike>;
+  save(value: Uint8Array<ArrayBufferLike>): void;
+}
 
 /** State kept across component restarts; all fields are optional by design. */
 export interface PersistentState {
@@ -24,7 +27,7 @@ export const DEFAULT_PERSISTENT_STATE: PersistentState = {
 
 /** Coexists with settings in the one component-owned bones save file. */
 export class PersistentExtensionState {
-  constructor(private readonly storage: SettingsStorage) {}
+  constructor(private readonly storage: StateStorage) {}
 
   load(): PersistentState {
     try {
