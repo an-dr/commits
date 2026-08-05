@@ -4484,6 +4484,7 @@ dependencies = [
  "bones-messages",
  "bus",
  "logging",
+ "platform",
  "raw-window-handle",
  "sdl3",
  "send_wrapper",
