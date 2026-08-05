@@ -20,8 +20,17 @@ export interface BranchPanelRenderOption {
   current: boolean;
 }
 
+/** What HEAD points at, named the way a Git client's branch panel names it. */
+export interface BranchPanelHead {
+  /** Checked-out branch, or null while HEAD is detached. */
+  branch: string | null;
+  /** Commit HEAD resolves to, shown abbreviated beside the row. */
+  hash: string | null;
+}
+
 export interface BranchPanelRenderModel {
   options: readonly BranchPanelRenderOption[];
+  head: BranchPanelHead;
   filter: string;
   collapsedFolders: ReadonlySet<string>;
   /** Sorts folders above plain refs; matches `branchPanel.groupsFirst`. */
@@ -48,6 +57,7 @@ export class BranchPanel {
   private filter = "";
   private readonly collapsedFolders = new Set<string>();
   private options: BranchPanelRenderOption[] = [];
+  private head: BranchPanelHead = { branch: null, hash: null };
 
   constructor(
     state: Partial<BranchPanelState> | undefined,
@@ -89,7 +99,9 @@ export class BranchPanel {
     this.render();
   }
 
-  public setCurrentBranch(branch: string | null) {
+  /** Names the checked-out branch and the revision it resolves to. */
+  public setHead(branch: string | null, hash: string | null) {
+    this.head = { branch, hash };
     for (const option of this.options) {
       option.current = option.value === branch;
     }
@@ -182,8 +194,11 @@ export class BranchPanel {
       if (item?.dataset.value === undefined) {
         return;
       }
-      // Ctrl (or Cmd) adds to or removes from the selection; a plain click replaces it.
-      const additive = event.ctrlKey || event.metaKey;
+      // Ctrl (or Cmd) adds to or removes from the selection; a plain click
+      // replaces it. The checkbox is what it looks like, so hitting the box
+      // adds or removes without the modifier.
+      const onCheck = (event.target as Element).closest(".branchPanelCheck") !== null;
+      const additive = onCheck || event.ctrlKey || event.metaKey;
       this.onSelect(item.dataset.value, additive);
     });
     this.list.addEventListener("dblclick", (event) => this.dispatchAction(event, "doubleClick"));
@@ -202,6 +217,7 @@ export class BranchPanel {
   private render() {
     this.list.innerHTML = renderBranchPanel({
       options: this.options,
+      head: this.head,
       filter: this.filter,
       collapsedFolders: this.collapsedFolders,
       groupsFirst: viewState.branchPanelGroupsFirst,

@@ -1,6 +1,8 @@
-import type { BranchPanelRenderModel, BranchPanelRenderOption } from "./branchPanel";
+import type { BranchPanelHead, BranchPanelRenderModel, BranchPanelRenderOption } from "./branchPanel";
+import { abbrevCommit } from "./utils/git";
 import { escapeHtml } from "./utils/html";
-import { svgIcons } from "./utils/icons";
+
+const REMOTE_PREFIX = "remotes/";
 
 type BranchTreeNode = BranchTreeFolder | BranchTreeLeaf;
 
@@ -91,6 +93,20 @@ function flattenSingleChildFolders(nodes: BranchTreeNode[]): BranchTreeNode[] {
   });
 }
 
+function renderCheck(selected: boolean): string {
+  return `<span class="branchPanelCheck">${selected ? "✓" : ""}</span>`;
+}
+
+/**
+ * Full ref the row stands for. A remote row carries only what its section
+ * header does not, so the whole name has to come back from the value.
+ */
+function itemTitle(option: BranchPanelRenderOption): string {
+  return option.value.startsWith(REMOTE_PREFIX)
+    ? option.value.slice(REMOTE_PREFIX.length)
+    : option.name;
+}
+
 function renderItem(option: BranchPanelRenderOption, name: string, indent: number): string {
   const classes = ["branchPanelItem"];
   if (option.selected) {
@@ -99,10 +115,35 @@ function renderItem(option: BranchPanelRenderOption, name: string, indent: numbe
   if (option.current) {
     classes.push("currentBranch");
   }
-  return `<div class="${classes.join(" ")}" data-value="${escapeHtml(option.value)}" title="${escapeHtml(option.name)}" style="padding-left:${4 + indent * 14}px">
-    <span class="branchPanelCheck">${option.selected ? "✓" : ""}</span>
+  return `<div class="${classes.join(" ")}" data-value="${escapeHtml(option.value)}" title="${escapeHtml(itemTitle(option))}" style="padding-left:${4 + indent * 14}px">
+    ${renderCheck(option.selected)}
+    ${option.current ? '<span class="branchPanelCurrentMarker">▶</span>' : ""}
     <span class="branchPanelItemName">${escapeHtml(name)}</span>
-    ${option.current ? '<span class="branchPanelCurrentBadge">HEAD</span>' : ""}
+  </div>`;
+}
+
+/**
+ * The checked-out revision, at the top of the panel where a Git client shows
+ * it. Clicking the row selects the current branch; a detached HEAD has no
+ * branch to select, so the row only reports where HEAD sits.
+ */
+function renderHeadRow(head: BranchPanelHead, current: BranchPanelRenderOption | undefined): string {
+  if (head.branch === null && head.hash === null) {
+    return "";
+  }
+  const classes = ["branchPanelItem", "branchPanelHeadRow"];
+  if (current?.selected === true) {
+    classes.push("selected");
+  }
+  const value = current === undefined ? "" : ` data-value="${escapeHtml(current.value)}"`;
+  const hash =
+    head.hash === null
+      ? ""
+      : `<span class="branchPanelHeadHash">(${escapeHtml(abbrevCommit(head.hash))})</span>`;
+  return `<div class="${classes.join(" ")}"${value} title="${escapeHtml(head.branch ?? head.hash ?? "")}" style="padding-left:4px">
+    ${renderCheck(current?.selected === true)}
+    <span class="branchPanelItemName">HEAD</span>
+    ${hash}
   </div>`;
 }
 
@@ -119,8 +160,8 @@ function renderTree(
     }
     const isCollapsed = collapsed.has(node.path);
     html += `<div class="branchPanelFolder" data-folder="${escapeHtml(node.path)}" style="padding-left:${4 + indent * 14}px">
-      <span class="branchPanelFolderIcon">${isCollapsed ? svgIcons.closedFolder : svgIcons.openFolder}</span>
-      <span class="branchPanelFolderName">${escapeHtml(node.name)}/</span>
+      <span class="branchPanelTwisty">${isCollapsed ? "▸" : "▾"}</span>
+      <span class="branchPanelFolderName">${escapeHtml(node.name)}</span>
     </div>`;
     if (!isCollapsed) {
       html += renderTree(node.children, indent + 1, collapsed);
@@ -149,6 +190,32 @@ function renderSection(
   )}`;
 }
 
+/**
+ * One section per remote, named after the remote itself, so its refs sit under
+ * `origin` rather than nesting every remote below one shared folder.
+ */
+function renderRemoteSections(
+  remotes: readonly BranchPanelRenderOption[],
+  model: BranchPanelRenderModel
+): string {
+  const byRemote = new Map<string, BranchPanelRenderOption[]>();
+  for (const option of remotes) {
+    const path = option.value.slice(REMOTE_PREFIX.length);
+    const slash = path.indexOf("/");
+    const remote = slash < 0 ? path : path.slice(0, slash);
+    // The section header carries the remote, so the rows below it show only
+    // what distinguishes them.
+    const name = slash < 0 ? path : path.slice(slash + 1);
+    const options = byRemote.get(remote) ?? [];
+    options.push({ ...option, name });
+    byRemote.set(remote, options);
+  }
+  return Array.from(byRemote.keys())
+    .toSorted((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }))
+    .map((remote) => renderSection(remote, `remote:${remote}`, byRemote.get(remote)!, model))
+    .join("");
+}
+
 /** Builds the branch-panel list without attaching interaction behavior. */
 export function renderBranchPanel(model: BranchPanelRenderModel): string {
   if (model.options.length === 0) {
@@ -163,21 +230,26 @@ export function renderBranchPanel(model: BranchPanelRenderModel): string {
       option.value === "" && (filter === "" || l10n.showAll.toLocaleLowerCase().includes(filter))
   );
   const locals = model.options.filter(
-    (option) => option.value !== "" && !option.value.startsWith("remotes/") && matches(option)
+    (option) => option.value !== "" && !option.value.startsWith(REMOTE_PREFIX) && matches(option)
   );
-  const remotes = model.options
-    .filter((option) => option.value.startsWith("remotes/") && matches(option))
-    .map((option) => ({
-      name: option.value.slice("remotes/".length),
-      value: option.value,
-      selected: option.selected,
-      current: option.current
-    }));
+  const remotes = model.options.filter(
+    (option) => option.value.startsWith(REMOTE_PREFIX) && matches(option)
+  );
+  // While a filter narrows the panel to matching refs, the two rows that are
+  // not refs would only be noise.
+  const head =
+    filter === ""
+      ? renderHeadRow(
+          model.head,
+          model.options.find((option) => option.current)
+        )
+      : "";
 
   return (
-    (showAll ? renderItem(showAll, showAll.name, 0) : "") +
-      renderSection(l10n.branchPanelLocal, "local", locals, model) +
-      renderSection(l10n.branchPanelRemote, "remote", remotes, model) ||
+    head +
+      (showAll ? renderItem(showAll, showAll.name, 0) : "") +
+      renderSection(l10n.branchPanelLocalBranches, "local", locals, model) +
+      renderRemoteSections(remotes, model) ||
     `<div class="branchPanelEmpty">${escapeHtml(l10n.branchPanelNoMatchingBranches)}</div>`
   );
 }

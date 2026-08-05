@@ -68,10 +68,8 @@ body.branchPanelHidden #branchPanelSidebar {
 }
 .branchPanelSectionHeader {
   padding: 8px 6px 3px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
-  opacity: 0.7;
 }
 .branchPanelFilterInput {
   width: calc(100% - 12px);
@@ -99,25 +97,43 @@ body.branchPanelHidden #branchPanelSidebar {
   background: var(--vscode-list-activeSelectionBackground, rgba(128, 128, 128, 0.2));
 }
 .branchPanelCheck {
-  width: 18px;
-  flex: 0 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  margin: 0 5px 0 2px;
+  box-sizing: border-box;
+  border: 1px solid var(--vscode-input-border, rgba(128, 128, 128, 0.6));
+  border-radius: 2px;
+  font-size: 10px;
+  line-height: 1;
 }
 .branchPanelItemName,
 .branchPanelFolderName {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.branchPanelFolderIcon {
-  width: 20px;
-  flex: 0 0 20px;
+.branchPanelTwisty {
+  width: 14px;
+  flex: 0 0 14px;
+  text-align: center;
+  opacity: 0.8;
+  font-size: 10px;
 }
-.branchPanelCurrentBadge {
-  margin-left: 6px;
-  padding: 0 4px;
-  border-radius: 3px;
+.branchPanelCurrentMarker {
+  margin-right: 3px;
   font-size: 9px;
-  background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
+}
+.branchPanelItem.currentBranch .branchPanelItemName,
+.branchPanelHeadRow .branchPanelItemName {
+  font-weight: 700;
+}
+.branchPanelHeadHash {
+  margin-left: 6px;
+  opacity: 0.7;
+  font-family: var(--vscode-editor-font-family, monospace);
 }
 .branchPanelEmpty {
   padding: 10px;

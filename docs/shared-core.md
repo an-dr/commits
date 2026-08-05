@@ -16,6 +16,17 @@ request gained the fields that carry them. `main.ts` also switches repository
 when the host names a different active one, and routes every repository change
 through one reset so selections never carry across repositories. ADR-008 records why.
 
+The branch panel also diverges in what it shows. `branchPanelRender.ts` renders a
+HEAD row carrying the checked-out revision, one section per remote named after
+that remote, disclosure rows for folders, and a checkbox on every row; the panel
+model gained the `head` field that carries the branch and revision, and
+`branchPanel.ts` exposes `setHead` in place of `setCurrentBranch`. The
+`branchPanelLocal` and `branchPanelRemote` strings gave way to
+`branchPanelLocalBranches`. This follows a desktop Git client's panel rather than
+the extension's original list, and the shared CSS in
+`packages/webview-shell/assets/main.css` moved with it, so both hosts get the
+same panel.
+
 Every other file remains as imported, and the MIT grant and notice are
 unchanged; MIT permits modification. What is lost is reproducibility: the
 snapshot can no longer be verified by hashing against

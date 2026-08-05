@@ -34,7 +34,7 @@ import { renderAuthorVisualHtml } from "./utils/avatarVisuals";
 import { formatRelativeDate, formatShortDate, pad2 } from "./utils/date";
 import { addListenerToClass, insertAfter } from "./utils/dom";
 import { resolveFileIcon } from "./utils/fileIcons";
-import { arraysEqual, ELLIPSIS } from "./utils/git";
+import { abbrevCommit, arraysEqual, ELLIPSIS } from "./utils/git";
 import { UNCOMMITTED } from "./utils/graphConstants";
 import { getVSCodeStyle, sendMessage, vscode } from "./utils/host";
 import { escapeHtml, unescapeHtml } from "./utils/html";
@@ -269,7 +269,7 @@ class GitGraphView {
       });
     }
     this.branchPanel.setOptions(options, this.currentBranches);
-    this.branchPanel.setCurrentBranch(this.gitBranchHead);
+    this.branchPanel.setHead(this.gitBranchHead, this.commitHead);
     this.renderToolbar();
 
     this.triggerLoadBranchesCallback(true, isRepo);
@@ -584,6 +584,9 @@ class GitGraphView {
     this.moreCommitsAvailable = moreAvailable;
     this.commits = commits;
     this.commitHead = commitHead;
+    // Branches and commits arrive independently, so the panel is told again
+    // once the revision HEAD resolves to is known.
+    this.branchPanel.setHead(this.gitBranchHead, this.commitHead);
     if (this.commits.length > 0 && this.commits[0].hash === UNCOMMITTED) {
       const match = this.commits[0].message.match(/\((\d+)\)$/);
       const count = match ? match[1] : "?";
@@ -2180,10 +2183,6 @@ function alterGitFileTree(folder: GitFolder, folderPath: string, open: boolean) 
     }
   }
 }
-function abbrevCommit(commitHash: string) {
-  return commitHash.substring(0, 8);
-}
-
 /* Context Menu */
 
 /* Global Listeners */

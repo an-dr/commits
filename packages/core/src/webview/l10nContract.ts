@@ -29,8 +29,7 @@ export interface LocalizedStrings {
   readonly repoInProgressAbort: string;
   readonly repoInProgressAbortConfirm: string;
   readonly repoInProgressActionFailed: string;
-  readonly branchPanelLocal: string;
-  readonly branchPanelRemote: string;
+  readonly branchPanelLocalBranches: string;
   readonly branchPanelNoBranches: string;
   readonly branchPanelNoMatchingBranches: string;
   readonly fullDiffUnableToLoad: string;
