@@ -145,8 +145,14 @@ body.branchPanelHidden #branchPanelSidebar {
   text-overflow: ellipsis;
   opacity: 0.6;
 }
+.branchPanelSectionName {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .branchPanelRemoteUrl {
   margin-left: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   font-weight: 400;
   white-space: nowrap;
@@ -284,10 +290,12 @@ body.unableToLoad p {
 /* Full diff panel, docked to the bottom of the view.
    Everything that reaches the bottom edge insets itself by the height the
    panel reserves, so opening it never hides content behind it. */
+/* Docked across the window bottom. Both side panels end above it, so insetting
+   it by their widths would only leave empty corners beside it. */
 #fullDiffPanel {
   position: fixed;
-  left: var(--branch-panel-width, 0px);
-  right: var(--files-panel-width, 0px);
+  left: 0;
+  right: 0;
   bottom: 0;
   z-index: 9;
   display: flex;
@@ -710,6 +718,13 @@ svg.fileIcon {
   fill-opacity: 0.6;
   margin-right: 8px;
   vertical-align: top;
+}
+/* The folder and file icons are the tree's markers, and one step of indent per
+   level is enough to read the nesting; the list defaults are far wider. */
+.gitFolderContents {
+  margin: 0;
+  padding-left: 14px;
+  list-style: none;
 }
 .gitFolderContents.hidden {
   display: none;

@@ -134,6 +134,8 @@ describe("renderBranchPanel", () => {
 
     expect(html).toContain("origin (1)");
     expect(html).toContain("https:&#x2F;&#x2F;github.com&#x2F;an-dr&#x2F;commits");
+    // The name and count stay together; only the URL beside them may shrink.
+    expect(html).toContain('<span class="branchPanelSectionName">origin (1)</span>');
   });
 
   it("renders without tracking data, which is what a host that sends none gets", () => {

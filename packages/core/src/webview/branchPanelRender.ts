@@ -217,7 +217,10 @@ function renderSection(
   }
   const url =
     detail === "" ? "" : `<span class="branchPanelRemoteUrl">${escapeHtml(detail)}</span>`;
-  return `<div class="branchPanelSectionHeader">${escapeHtml(label)} (${options.length})${url}</div>${renderTree(
+  // The name and its count are one unbreakable unit; only the detail beside
+  // them gives way when the sidebar is narrow.
+  const name = `<span class="branchPanelSectionName">${escapeHtml(label)} (${options.length})</span>`;
+  return `<div class="branchPanelSectionHeader">${name}${url}</div>${renderTree(
     tree,
     1,
     model.collapsedFolders,
