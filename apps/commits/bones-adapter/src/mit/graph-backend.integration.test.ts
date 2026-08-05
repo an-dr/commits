@@ -163,6 +163,32 @@ describe("MitGraphBackend read queries integration", () => {
     expect(response.newExists).toBe(false);
   });
 
+  it("reads a real working tree as staged and unstaged entries", () => {
+    write(repo, "tracked.txt", "one\ntwo\n");
+    git(repo, ["add", "tracked.txt"]);
+    write(repo, "tracked.txt", "one\ntwo\nthree\n");
+    write(repo, "untracked.txt", "new file\n");
+
+    const response = drive((backend, deliver) =>
+      backend.loadWorkingTreeChanges({ command: "workingTreeChanges", repo }, deliver),
+    ) as Extract<QueryResponse, { command: "workingTreeChanges" }>;
+
+    expect(response.error).toBeNull();
+    // The same file is staged and unstaged at once, which is what the panel's
+    // two sections show.
+    expect(response.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "tracked.txt", staged: true, status: "A", additions: 2 }),
+        expect.objectContaining({ path: "tracked.txt", staged: false, status: "M", additions: 1 }),
+        expect.objectContaining({ path: "untracked.txt", staged: false, status: "U" }),
+      ]),
+    );
+
+    git(repo, ["reset", "--quiet", "HEAD", "--", "tracked.txt"]);
+    rmSync(join(repo, "tracked.txt"));
+    rmSync(join(repo, "untracked.txt"));
+  });
+
   it("answers a revision it cannot diff without asking Git", () => {
     const response = loadFullDiff({
       command: "fullDiffContent",

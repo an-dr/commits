@@ -6,6 +6,7 @@ import type {
   GitRef,
   QueryResponse,
 } from "@an-dr/commits-core/backend/types";
+import type { GitWorkingTreeChange } from "@an-dr/commits-core/data-source/models";
 import type { GitResult, GitRun } from "@commits/ipc/native";
 
 interface GitHost {
@@ -41,6 +42,11 @@ interface CommitComparisonRequest {
   readonly repo: string;
   readonly fromHash: string;
   readonly toHash: string;
+}
+
+interface WorkingTreeChangesRequest {
+  readonly command: "workingTreeChanges";
+  readonly repo: string;
 }
 
 interface FullDiffContentRequest {
@@ -240,6 +246,47 @@ export class MitGraphBackend {
           decode(results.stats?.stdout),
         );
         deliver({ command: "commitDetails", commitDetails: details } as QueryResponse);
+      },
+    );
+  }
+
+  /**
+   * Staged and unstaged entries of the working tree, each with the line counts
+   * of the side it sits on.
+   *
+   * A file can appear twice, once staged and once not, because Git tracks the
+   * index and the working tree separately and the panel shows both.
+   */
+  loadWorkingTreeChanges(
+    request: WorkingTreeChangesRequest,
+    deliver: (response: QueryResponse) => void,
+  ): void {
+    if (request.repo === "") {
+      deliver(workingTreeError("No repository is open."));
+      return;
+    }
+    const numstat = ["diff", "--numstat", "--find-renames", "-z"];
+    this.batch(
+      request.repo,
+      {
+        status: ["status", "--porcelain=v2", "-z", "--untracked-files=all"],
+        staged: [...numstat, "--cached"],
+        unstaged: numstat,
+      },
+      (results) => {
+        if (!succeeded(results.status)) {
+          deliver(workingTreeError(failureText(results.status) || "Unable to read the working tree."));
+          return;
+        }
+        deliver({
+          command: "workingTreeChanges",
+          changes: parseWorkingTreeChanges(
+            decode(results.status.stdout),
+            parseNumStatCounts(successText(results.staged)),
+            parseNumStatCounts(successText(results.unstaged)),
+          ),
+          error: null,
+        } as QueryResponse);
       },
     );
   }
@@ -477,6 +524,102 @@ function parseCommits(output: string): GitCommitNode[] {
     });
   }
   return commits;
+}
+
+type ChangeCounts = { additions: number | null; deletions: number | null };
+
+const NO_COUNTS: ChangeCounts = { additions: null, deletions: null };
+
+/**
+ * Line counts of a `--numstat -z` listing, keyed by path.
+ *
+ * A record is one NUL-terminated field, except for a rename, which leaves the
+ * path empty and follows with the old and the new path as their own fields.
+ */
+function parseNumStatCounts(output: string): Map<string, ChangeCounts> {
+  const fields = output.split("\0");
+  const counts = new Map<string, ChangeCounts>();
+  for (let index = 0; index < fields.length && fields[index] !== ""; ) {
+    const parts = fields[index].split("\t");
+    if (parts.length !== 3) break;
+    const renamed = parts[2] === "";
+    const path = renamed ? fields[index + 2] : parts[2];
+    if (path !== undefined) {
+      counts.set(path, {
+        additions: parts[0] === "-" ? null : Number.parseInt(parts[0], 10),
+        deletions: parts[1] === "-" ? null : Number.parseInt(parts[1], 10),
+      });
+    }
+    index += renamed ? 3 : 1;
+  }
+  return counts;
+}
+
+/**
+ * Splits a `status --porcelain=v2 -z` listing into the panel's entries.
+ *
+ * Ordinary and renamed entries carry an index status and a working-tree status,
+ * and each one that is not "." becomes its own row; an untracked file has no
+ * index side at all.
+ */
+function parseWorkingTreeChanges(
+  status: string,
+  staged: Map<string, ChangeCounts>,
+  unstaged: Map<string, ChangeCounts>,
+): GitWorkingTreeChange[] {
+  const entries = status.split("\0");
+  const changes: GitWorkingTreeChange[] = [];
+  for (let index = 0; index < entries.length && entries[index] !== ""; index++) {
+    const entry = entries[index];
+    if (entry.startsWith("? ")) {
+      changes.push({
+        path: entry.slice(2),
+        status: "U",
+        staged: false,
+        ...(unstaged.get(entry.slice(2)) ?? NO_COUNTS),
+        submodule: null,
+      });
+      continue;
+    }
+    if (entry[0] !== "1" && entry[0] !== "2") continue;
+    const renamed = entry[0] === "2";
+    const fields = entry.split(" ");
+    const pathIndex = renamed ? 9 : 8;
+    if (fields.length <= pathIndex) continue;
+    // A path may hold spaces, so everything from its field onwards is the path.
+    const path = fields.slice(pathIndex).join(" ");
+    const oldPath = renamed ? entries[++index] : undefined;
+    const indexStatus = fields[1][0];
+    const workTreeStatus = fields[1][1];
+    if (indexStatus !== ".") {
+      changes.push({
+        path,
+        oldPath,
+        status: workingTreeStatus(indexStatus),
+        staged: true,
+        ...(staged.get(path) ?? NO_COUNTS),
+        submodule: null,
+      });
+    }
+    if (workTreeStatus !== ".") {
+      changes.push({
+        path,
+        status: workingTreeStatus(workTreeStatus),
+        staged: false,
+        ...(unstaged.get(path) ?? NO_COUNTS),
+        submodule: null,
+      });
+    }
+  }
+  return changes;
+}
+
+function workingTreeStatus(letter: string): GitWorkingTreeChange["status"] {
+  return letter === "A" || letter === "D" ? letter : letter === "R" || letter === "C" ? "R" : "M";
+}
+
+function workingTreeError(error: string): QueryResponse {
+  return { command: "workingTreeChanges", changes: [], error } as QueryResponse;
 }
 
 /** Upstream of each local branch that has one, keyed by branch name. */

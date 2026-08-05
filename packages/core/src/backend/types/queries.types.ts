@@ -1,3 +1,4 @@
+import type { GitWorkingTreeChange } from "../../data-source/models";
 import type {
   GitCommitDetails,
   GitCommitNode,
@@ -30,6 +31,14 @@ type QueryPayloads = {
       oldExists: boolean;
       newExists: boolean;
     };
+  };
+  /**
+   * Staged and unstaged entries of the working tree. The uncommitted row is not
+   * a commit, so its files come from here rather than from commit details.
+   */
+  workingTreeChanges: {
+    request: { repo: string };
+    response: { changes: GitWorkingTreeChange[]; error: string | null };
   };
   loadBranches: {
     request: { showRemoteBranches: boolean; hard: boolean };

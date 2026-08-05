@@ -144,6 +144,12 @@ export class CommitsCore {
           );
         }
         return;
+      case "workingTreeChanges":
+        this.graph.loadWorkingTreeChanges(
+          { command: "workingTreeChanges", repo: this.currentRepository ?? "" },
+          (response) => this.send(response),
+        );
+        return;
       case "commitComparison": {
         // Changing the selection supersedes the previous comparison the same
         // way a second file click supersedes the first.

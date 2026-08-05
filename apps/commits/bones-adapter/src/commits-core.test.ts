@@ -216,6 +216,61 @@ describe("CommitsCore MIT webview host", () => {
     expect(reply?.commitDetails).toBeNull();
   });
 
+  it("reports the working tree as staged and unstaged entries", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({ command: "workingTreeChanges", repo: "C:/repo" }));
+
+    expect(host.gitRequests[0].args).toEqual([
+      "status", "--porcelain=v2", "-z", "--untracked-files=all",
+    ]);
+    expect(host.gitRequests[1].args).toContain("--cached");
+    // A file modified in both places, one staged only, one untracked, and a
+    // rename, which names its old path in a field of its own.
+    completeGitAt(host, core, 0, [
+      "1 MM N... 100644 100644 100644 aaa bbb both.ts",
+      "1 M. N... 100644 100644 100644 aaa bbb staged.ts",
+      "2 R. N... 100644 100644 100644 aaa bbb R100 new.ts",
+      "old.ts",
+      "? fresh.ts",
+      "",
+    ].join("\0"));
+    completeGitAt(host, core, 1, "3\t1\tboth.ts\x002\t0\tstaged.ts\x005\t0\t\x00old.ts\x00new.ts\x00");
+    completeGitAt(host, core, 2, "1\t1\tboth.ts\x007\t0\tfresh.ts\x00");
+
+    const reply = host.sent
+      .map(([, message]) => message as { command: string; changes?: unknown[]; error?: string | null })
+      .find((message) => message.command === "workingTreeChanges");
+    expect(reply?.error).toBeNull();
+    expect(reply?.changes).toEqual([
+      { path: "both.ts", oldPath: undefined, status: "M", staged: true, additions: 3, deletions: 1, submodule: null },
+      { path: "both.ts", status: "M", staged: false, additions: 1, deletions: 1, submodule: null },
+      { path: "staged.ts", oldPath: undefined, status: "M", staged: true, additions: 2, deletions: 0, submodule: null },
+      { path: "new.ts", oldPath: "old.ts", status: "R", staged: true, additions: 5, deletions: 0, submodule: null },
+      { path: "fresh.ts", status: "U", staged: false, additions: 7, deletions: 0, submodule: null },
+    ]);
+  });
+
+  it("reports why the working tree could not be read", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({ command: "workingTreeChanges", repo: "C:/repo" }));
+    failGitAt(host, core, 0, "fatal: not a git repository");
+    completeGitAt(host, core, 1, "");
+    completeGitAt(host, core, 2, "");
+
+    const reply = host.sent
+      .map(([, message]) => message as { command: string; error?: string | null })
+      .find((message) => message.command === "workingTreeChanges");
+    expect(reply?.error).toBe("fatal: not a git repository");
+  });
+
   it("reports what each branch tracks and where each remote points", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
