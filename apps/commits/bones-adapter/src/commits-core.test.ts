@@ -216,6 +216,34 @@ describe("CommitsCore MIT webview host", () => {
     expect(reply?.commitDetails).toBeNull();
   });
 
+  it("runs a working-tree action and answers its outcome", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "stageFiles", repo: "C:/repo", files: ["src/a.ts"],
+    }));
+
+    expect(host.gitRequests[0].args).toEqual(["add", "--", "src/a.ts"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "stageFiles", status: null }]);
+  });
+
+  it("still refuses a Git action it does not implement", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "mergeBranch", repo: "C:/repo" }));
+
+    const reply = host.sent
+      .map(([, message]) => message as { command: string; status?: string | null })
+      .find((message) => message.command === "mergeBranch");
+    expect(reply?.status).toContain("not available in the standalone host yet");
+  });
+
   it("reports the working tree as staged and unstaged entries", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);

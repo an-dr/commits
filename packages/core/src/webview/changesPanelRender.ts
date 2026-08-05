@@ -1,7 +1,7 @@
 import type { GitWorkingTreeChange } from "../data-source/models";
 import { resolveFileIcon } from "./utils/fileIcons";
 import { escapeHtml } from "./utils/html";
-import { svgIcons } from "./utils/icons";
+import { svgIcons, toolbarIcons } from "./utils/icons";
 
 /**
  * The working tree is a flat list of files rather than a folder tree: a change
@@ -24,7 +24,26 @@ function renderRow(change: GitWorkingTreeChange): string {
       : `<span class="changesFileDir">${escapeHtml(directory)}</span>`) +
     renderCounts(change) +
     `<span class="changesFileStatus" title="${statusTitle(change.status)}">${change.status}</span>` +
+    renderActions(change) +
     `</div>`
+  );
+}
+
+/**
+ * The actions each side offers: a staged file can only be taken back out, while
+ * an unstaged one can be staged or thrown away.
+ */
+function renderActions(change: GitWorkingTreeChange): string {
+  const button = (action: string, title: string, icon: string) =>
+    `<button class="changesFileBtn" data-action="${action}" title="${escapeHtml(title)}"` +
+    ` aria-label="${escapeHtml(title)}">${icon}</button>`;
+  return (
+    `<span class="changesFileActions">` +
+    (change.staged
+      ? button("unstage", l10n.changesUnstageFile, toolbarIcons.minus)
+      : button("stage", l10n.changesStageFile, toolbarIcons.plus) +
+        button("discard", l10n.changesDiscardFile, toolbarIcons.cross)) +
+    `</span>`
   );
 }
 

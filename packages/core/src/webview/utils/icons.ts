@@ -25,6 +25,12 @@ export const toolbarIcons = {
   ),
   /** Horizontal ellipsis: the overflow menu. */
   more: toolbarIcon('<path d="M3.5 8h.1M8 8h.1M12.5 8h.1"/>'),
+  /** Plus: move a working-tree file into the index. */
+  plus: toolbarIcon('<path d="M8 3.5v9"/><path d="M3.5 8h9"/>'),
+  /** Minus: take a file back out of the index. */
+  minus: toolbarIcon('<path d="M3.5 8h9"/>'),
+  /** Cross: throw working-tree changes away. */
+  cross: toolbarIcon('<path d="M4.5 4.5l7 7"/><path d="M11.5 4.5l-7 7"/>'),
   /** Two commits joined by a check: send the selection to review. */
   review: toolbarIcon(
     '<circle cx="4" cy="4" r="2"/><circle cx="4" cy="12" r="2"/><path d="M4 6v4"/><path d="m8.5 8.5 2 2 4-4.5"/>'

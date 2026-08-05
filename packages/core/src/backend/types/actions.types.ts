@@ -10,6 +10,15 @@ type ActionPayloads = {
   createBranch: { commitHash: string; branchName: string };
   deleteBranch: { branchName: string; forceDelete: boolean };
   deleteTag: { tagName: string };
+  /** Moves working-tree files into the index. */
+  stageFiles: { files: string[] };
+  /** Takes files back out of the index, leaving the working tree alone. */
+  unstageFiles: { files: string[] };
+  /**
+   * Throws away working-tree changes. An untracked file is deleted rather than
+   * restored, because Git has no earlier version of it to restore.
+   */
+  discardFiles: { files: string[]; untracked: boolean };
   mergeBranch: { branchName: string; createNewCommit: boolean };
   mergeCommit: { commitHash: string; createNewCommit: boolean };
   pushTag: { tagName: string };

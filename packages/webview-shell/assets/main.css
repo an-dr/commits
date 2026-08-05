@@ -799,6 +799,39 @@ svg.fileIcon {
   font-weight: 700;
   opacity: 0.7;
 }
+/* Actions appear on the row under the pointer, as a source-control list does,
+   so a still list stays readable. */
+.changesFileActions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  visibility: hidden;
+}
+.changesFile:hover .changesFileActions,
+.changesFileActions:focus-within {
+  visibility: visible;
+}
+.changesFileBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--vscode-editor-foreground);
+  cursor: pointer;
+}
+.changesFileBtn:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.25));
+}
+.changesFileBtn svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
 .changesMessage {
   padding: 10px;
   opacity: 0.75;

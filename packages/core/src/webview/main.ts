@@ -1683,8 +1683,58 @@ class GitGraphView {
     this.registerChangesPanelListeners();
   }
 
+  /**
+   * Closes out a working-tree action: a failure is shown with Git's own words,
+   * and either way the tree and the graph are re-read, because the change count
+   * on the uncommitted row moves with it.
+   */
+  public afterWorkingTreeAction(status: GitCommandStatus, title: string) {
+    if (status !== null) {
+      showErrorDialog(title, status, null);
+    }
+    if (this.workingTreeOpen) {
+      sendMessage({ command: "workingTreeChanges", repo: this.currentRepo! });
+    }
+    this.refresh(true);
+  }
+
   /** A working-tree row opens in the docked panel, as a commit's file does. */
   private registerChangesPanelListeners() {
+    addListenerToClass("changesFileBtn", "click", (e: Event) => {
+      // The row itself opens the diff, so an action on it must not also open one.
+      e.stopPropagation();
+      const button = <HTMLElement>(<Element>e.target).closest(".changesFileBtn")!;
+      const row = <HTMLElement>button.closest(".changesFile")!;
+      const path = row.dataset.path;
+      if (path === undefined) {
+        return;
+      }
+      if (button.dataset.action === "stage") {
+        sendMessage({ command: "stageFiles", repo: this.currentRepo!, files: [path] });
+        return;
+      }
+      if (button.dataset.action === "unstage") {
+        sendMessage({ command: "unstageFiles", repo: this.currentRepo!, files: [path] });
+        return;
+      }
+      // Discarding is the one action Git cannot undo, so it is confirmed first.
+      const untracked = row.dataset.status === "U";
+      showConfirmationDialog(
+        (untracked ? l10n.changesDiscardUntrackedConfirm : l10n.changesDiscardConfirm).replace(
+          "{0}",
+          `<b><i>${escapeHtml(path)}</i></b>`
+        ),
+        () => {
+          sendMessage({
+            command: "discardFiles",
+            repo: this.currentRepo!,
+            files: [path],
+            untracked
+          });
+        },
+        null
+      );
+    });
     addListenerToClass("changesFile", "click", (e: Event) => {
       const row = <HTMLElement>(<Element>e.target).closest(".changesFile")!;
       const path = row.dataset.path;
@@ -2048,6 +2098,15 @@ window.addEventListener("message", (event) => {
       break;
     case "workingTreeChanges":
       gitGraph.renderWorkingTreeChanges(msg.changes, msg.error);
+      break;
+    case "stageFiles":
+      gitGraph.afterWorkingTreeAction(msg.status, l10n.changesUnableToStage);
+      break;
+    case "unstageFiles":
+      gitGraph.afterWorkingTreeAction(msg.status, l10n.changesUnableToUnstage);
+      break;
+    case "discardFiles":
+      gitGraph.afterWorkingTreeAction(msg.status, l10n.changesUnableToDiscard);
       break;
     case "mergeBranch":
       refreshGraphOrDisplayError(msg.status, l10n.unableToMergeBranch);

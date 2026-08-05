@@ -32,6 +32,14 @@ export interface LocalizedStrings {
   readonly branchPanelLocalBranches: string;
   readonly changesPanelTitle: string;
   readonly changesStagedSection: string;
+  readonly changesStageFile: string;
+  readonly changesUnstageFile: string;
+  readonly changesDiscardFile: string;
+  readonly changesDiscardConfirm: string;
+  readonly changesDiscardUntrackedConfirm: string;
+  readonly changesUnableToStage: string;
+  readonly changesUnableToUnstage: string;
+  readonly changesUnableToDiscard: string;
   readonly changesUnstagedSection: string;
   readonly changesNothingToCommit: string;
   readonly changesStatusAdded: string;

@@ -63,6 +63,20 @@ describe("renderChangesPanel", () => {
     expect(html).toContain('data-status="R"');
   });
 
+  it("offers each side only the actions that apply to it", () => {
+    const html = renderChangesPanel(
+      [change({ path: "staged.ts", staged: true }), change({ path: "live.ts", staged: false })],
+      null
+    );
+    const stagedRow = html.slice(html.indexOf("staged.ts"), html.indexOf("live.ts"));
+    const unstagedRow = html.slice(html.indexOf("live.ts"));
+
+    expect(stagedRow).toContain('data-action="unstage"');
+    expect(stagedRow).not.toContain('data-action="discard"');
+    expect(unstagedRow).toContain('data-action="stage"');
+    expect(unstagedRow).toContain('data-action="discard"');
+  });
+
   it("reports a clean tree and a failed read differently", () => {
     expect(renderChangesPanel([], null)).toContain("Nothing to commit");
     expect(renderChangesPanel([], "fatal: not a git repository")).toContain("not a git repository");

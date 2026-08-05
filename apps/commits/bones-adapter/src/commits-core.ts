@@ -4,6 +4,7 @@ import { encodeFileRead, type GitResult, type NativeResult } from "@commits/ipc/
 import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
 import { MitGraphBackend } from "./mit/graph-backend";
+import { WorkingTreeActions } from "./mit/working-tree-actions";
 import { RepositoryManager } from "./read/repository-manager";
 import {
   DEFAULT_PERSISTENT_STATE,
@@ -30,6 +31,7 @@ export class CommitsCore {
   private readonly repositories: RepositoryManager;
   private readonly persistent: PersistentExtensionState;
   private readonly graph: MitGraphBackend;
+  private readonly workingTreeActions: WorkingTreeActions;
   private readonly pendingOs = new Map<number, PendingOs>();
   private state: PersistentState = DEFAULT_PERSISTENT_STATE;
   private currentRepository: string | null = null;
@@ -50,6 +52,7 @@ export class CommitsCore {
     this.graph = new MitGraphBackend(host, (repo, path, deliver) =>
       this.readWorkingTreeFile(repo, path, deliver),
     );
+    this.workingTreeActions = new WorkingTreeActions(host);
   }
 
   /**
@@ -162,6 +165,21 @@ export class CommitsCore {
           );
         }
         return;
+      case "stageFiles":
+      case "unstageFiles":
+      case "discardFiles": {
+        const files = Array.isArray(value.files)
+          ? value.files.filter((file): file is string => typeof file === "string")
+          : [];
+        this.workingTreeActions.run(
+          this.currentRepository ?? "",
+          value.command === "discardFiles"
+            ? { command: "discardFiles", files, untracked: value.untracked === true }
+            : { command: value.command, files },
+          (status) => this.send({ command: value.command as string, status }),
+        );
+        return;
+      }
       case "workingTreeChanges":
         this.graph.loadWorkingTreeChanges(
           { command: "workingTreeChanges", repo: this.currentRepository ?? "" },
@@ -258,6 +276,7 @@ export class CommitsCore {
 
   receiveGitResult(result: GitResult): void {
     this.graph.receive(result);
+    this.workingTreeActions.receive(result);
   }
 
   receivePrompt(payload: string): void {
