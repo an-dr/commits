@@ -21,7 +21,9 @@ bus = { path = "../../../vendor/bones/core/bus" }
 commits-git = { path = "../../../crates/git" }
 commits-os = { path = "../../../crates/os" }
 commits-watcher = { path = "../../../crates/watcher" }
+dirs = "6.0.0"
 logging = { path = "../../../vendor/bones/core/logging" }
 runner = { path = "../../../vendor/bones/core/runner", features = ["web"] }
+tempfile = "3.27.0"
 wasm-extensions = { path = "../../../vendor/bones/core/wasm-extensions" }
 

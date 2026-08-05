@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod page;
+mod settings;
 
 fn main() {
     if let Err(error) = run() {
@@ -22,6 +23,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(commits_watcher::WatcherModule::default())
         .module(commits_os::OsModule::default())
         .module(page::PageModule::default())
+        .module(settings::SettingsModule::default())
         .run()?;
     Ok(())
 }

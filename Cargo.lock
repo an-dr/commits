@@ -559,8 +559,10 @@ dependencies = [
  "commits-git",
  "commits-os",
  "commits-watcher",
+ "dirs",
  "logging",
  "runner",
+ "tempfile",
  "wasm-extensions",
 ]
 

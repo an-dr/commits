@@ -5,6 +5,7 @@
 - [`phase-2-3.md`](phase-2-3.md) — native capabilities and read backend evidence
 - [`phase-4.md`](phase-4.md) — standalone graphical read surface and exclusions
 - [`settings.md`](settings.md) — standalone persisted settings schema
+- [`design/settings.md`](design/settings.md) — extension-compatible and desktop settings boundary
 - [`shared-core.md`](shared-core.md) — immutable MIT core snapshot, Bones integration, and submodule plan
 - [`mit-webview-transition.md`](mit-webview-transition.md) — executable plan for replacing the old page with the shared Git Graph interface
 - [`adr/`](adr/) — settled architectural decisions, including the repository
