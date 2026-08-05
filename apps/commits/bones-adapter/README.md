@@ -12,8 +12,7 @@ ABI, so everything else stays testable without a running engine.
 The page is requested from the host at run time rather than compiled in, so
 rebuilding the page does not rebuild this component.
 
-Startup is order-independent by design. The shared view begins querying as soon
-as it mounts, which can precede the page's readiness message, so the core
-bootstraps on the first page message of any kind. A repository query that
-arrives early is answered rather than dropped, because the view issues each
-query once and never retries.
+Startup is order-independent by design. The core bootstraps on the first page
+message, supplies normalized settings in response to `standaloneReady`, and
+waits for `standaloneViewReady` before announcing repositories. A repository
+query that arrives early is still answered rather than dropped.

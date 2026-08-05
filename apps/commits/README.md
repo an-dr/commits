@@ -9,7 +9,9 @@ the Bones ABI. `web` is the page and speaks to the DOM. `scripts` builds those
 parts.
 
 The File menu opens the repository selector, which lists recently opened
-repositories.
+repositories. Settings opens the extension-compatible editor backed by
+`~/.commits/settings.json`; desktop mode and light/dark theme choices occupy a
+separate section of that document.
 
 Everything here is GPL-3.0 and may depend on Bones. Product logic that should
 also work in the VS Code extension does not belong here; it belongs in

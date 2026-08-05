@@ -12,6 +12,7 @@
     "build:wasm": "node apps/commits/scripts/build-components.mjs",
     "build:web": "npm run check:ui-theme && npm run build:bundle && npm run build:page",
     "check": "tsc --noEmit",
+    "check:settings-compat": "node apps/commits/scripts/check-settings-compat.mjs",
     "check:ui-theme": "node apps/commits/scripts/check-ui-theme.mjs",
     "clean": "node scripts/clean.mjs",
     "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1",

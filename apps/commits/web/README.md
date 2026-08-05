@@ -16,6 +16,11 @@ The repository overlay lists recently opened repositories, which the core sends
 with its request for a repository. Paths are inserted as text, never markup,
 because a path is arbitrary input arriving from persisted state.
 
-Readiness is announced before the shared view mounts. The view queries
-immediately on mount, and announcing afterwards would put those queries ahead of
-the core's startup.
+Startup uses two readiness messages. The page first receives and applies
+settings, then mounts the shared view and announces that repository messages
+can be delivered. This keeps initial graph configuration deterministic.
+
+The settings dialog is generated from the MIT compatibility catalog. Its app
+section selects independent light and dark presets plus system/light/dark mode;
+the appearance controller maps the active preset to the VS Code variables that
+the shared webview consumes.

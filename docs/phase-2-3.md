@@ -15,8 +15,8 @@
 
 ## Safety boundaries
 
-- Git output is capped before parsing in the component; settings cap reads at
-  2,000 commits and default to 250.
+- Git output is capped before parsing in the component; graph requests are
+  clamped to 2,000 commits and the extension-compatible default is 300.
 - External URLs are restricted to `http`, `https`, and `mailto`.
 - The persistence file is component-scoped by bones. Product data is UTF-8
   JSON, with missing or invalid documents falling back to safe defaults.
