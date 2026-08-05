@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -189,12 +189,43 @@ describe("MitGraphBackend read queries integration", () => {
     rmSync(join(repo, "untracked.txt"));
   });
 
+  it("diffs both sides of an uncommitted file against real Git", () => {
+    write(repo, "live.txt", "committed\n");
+    git(repo, ["add", "live.txt"]);
+    git(repo, ["commit", "--quiet", "--message", "add live"]);
+    write(repo, "live.txt", "staged\n");
+    git(repo, ["add", "live.txt"]);
+    write(repo, "live.txt", "on disk\n");
+
+    const request = (staged: boolean) => ({
+      command: "fullDiffContent" as const,
+      repo,
+      fromHash: "*",
+      toHash: "*",
+      oldFilePath: "live.txt",
+      newFilePath: "live.txt",
+      type: "M" as const,
+      staged,
+    });
+
+    const stagedSide = loadFullDiff(request(true));
+    expect(stagedSide.oldContent).toBe("committed\n");
+    expect(stagedSide.newContent).toBe("staged\n");
+
+    // The unstaged side compares the index with the file on disk, which only
+    // the host can read.
+    const unstagedSide = driveWithFileReads(request(false));
+    expect(unstagedSide.oldContent).toBe("staged\n");
+    expect(unstagedSide.newContent).toBe("on disk\n");
+    expect(unstagedSide.diff).toContain("+on disk");
+  });
+
   it("answers a revision it cannot diff without asking Git", () => {
     const response = loadFullDiff({
       command: "fullDiffContent",
       repo,
-      fromHash: "*",
-      toHash: "*",
+      fromHash: "refs/heads/main",
+      toHash: "refs/heads/main",
       oldFilePath: "kept.txt",
       newFilePath: "kept.txt",
       type: "M",
@@ -230,6 +261,32 @@ function drive(
 
 function loadFullDiff(request: Parameters<MitGraphBackend["loadFullDiff"]>[0]): FullDiffResponse {
   return drive((backend, deliver) => backend.loadFullDiff(request, deliver)) as FullDiffResponse;
+}
+
+/**
+ * Drives a query whose working-tree side is read from disk, standing in for the
+ * host capability that reads it in the running app.
+ */
+function driveWithFileReads(
+  request: Parameters<MitGraphBackend["loadFullDiff"]>[0]
+): FullDiffResponse {
+  const requests: GitRun[] = [];
+  const backend = new MitGraphBackend(
+    { runGit: (scheduled) => requests.push(scheduled) },
+    (root, path, deliver) => {
+      try {
+        deliver(readFileSync(join(root, path), "utf8"));
+      } catch {
+        deliver(null);
+      }
+    }
+  );
+  const responses: FullDiffResponse[] = [];
+  backend.loadFullDiff(request, (response) => responses.push(response as FullDiffResponse));
+  for (let index = 0; index < requests.length; index++) backend.receive(runGit(requests[index]));
+
+  expect(responses).toHaveLength(1);
+  return responses[0];
 }
 
 function git(cwd: string, args: string[]): string {

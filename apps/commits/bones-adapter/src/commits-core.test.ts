@@ -538,15 +538,88 @@ describe("CommitsCore MIT webview host", () => {
     expect(fullDiffReply(host)).toMatchObject({ diff: null });
   });
 
-  it("answers a non-diffable revision without asking Git", () => {
-    // The panel waits for this reply, so the synthetic uncommitted row still
-    // has to be answered rather than dropped.
+  it("diffs an unstaged file against the index and the working tree", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest({
+      fromHash: "*", toHash: "*", staged: false,
+    })));
+
+    expect(host.gitRequests[0].args).toEqual([
+      "diff", "--no-color", "--no-ext-diff", "-M", "--", "src/a.ts",
+    ]);
+    expect(host.gitRequests[1].args).toEqual(["show", ":src/a.ts"]);
+    completeGitAt(host, core, 0, "@@ -1 +1 @@\n-indexed\n+on disk\n");
+    completeGitAt(host, core, 1, "indexed\n");
+
+    // Only the working tree needs the host: Git cannot print a file on disk.
+    expect(host.osRequests).toEqual([
+      { requestId: 50_000, action: "read-file", value: "C:/repo\nsrc/a.ts" },
+    ]);
+    core.receiveOsResult({ requestId: 50_000, accepted: true, value: "on disk\n", error: "" });
+
+    expect(fullDiffReply(host)).toEqual({
+      command: "fullDiffContent",
+      diff: "@@ -1 +1 @@\n-indexed\n+on disk\n",
+      oldContent: "indexed\n",
+      newContent: "on disk\n",
+      oldExists: true,
+      newExists: true,
+    });
+  });
+
+  it("diffs a staged file between HEAD and the index without leaving Git", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest({
+      fromHash: "*", toHash: "*", staged: true,
+    })));
+
+    expect(host.gitRequests[0].args).toContain("--cached");
+    expect(host.gitRequests[1].args).toEqual(["show", "HEAD:src/a.ts"]);
+    expect(host.gitRequests[2].args).toEqual(["show", ":src/a.ts"]);
+    completeGitAt(host, core, 0, "@@ -1 +1 @@\n-committed\n+staged\n");
+    completeGitAt(host, core, 1, "committed\n");
+    completeGitAt(host, core, 2, "staged\n");
+
+    expect(host.osRequests).toEqual([]);
+    expect(fullDiffReply(host)).toMatchObject({
+      oldContent: "committed\n",
+      newContent: "staged\n",
+    });
+  });
+
+  it("reports no working-tree side when the file cannot be read", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
 
     core.receivePageJson(JSON.stringify(fullDiffRequest({ fromHash: "*", toHash: "*" })));
+    completeGitAt(host, core, 0, "@@ -1 +0,0 @@\n-gone\n");
+    completeGitAt(host, core, 1, "gone\n");
+    core.receiveOsResult({ requestId: 50_000, accepted: false, value: "", error: "" });
+
+    expect(fullDiffReply(host)).toMatchObject({ newExists: false, newContent: null });
+  });
+
+  it("answers a non-diffable revision without asking Git", () => {
+    // The panel waits for this reply, so a revision that is neither a commit
+    // nor the working tree still has to be answered rather than dropped.
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest({
+      fromHash: "refs/heads/main", toHash: "refs/heads/main",
+    })));
 
     expect(host.gitRequests).toHaveLength(0);
     expect(fullDiffReply(host)).toMatchObject({ diff: null, oldExists: false, newExists: false });

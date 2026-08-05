@@ -1,6 +1,6 @@
 import type { GitFileChangeType } from "@an-dr/commits-core/backend/types";
 import type { RequestMessage, ResponseMessage } from "@an-dr/commits-core/types";
-import type { GitResult, NativeResult } from "@commits/ipc/native";
+import { encodeFileRead, type GitResult, type NativeResult } from "@commits/ipc/native";
 import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
 import { MitGraphBackend } from "./mit/graph-backend";
@@ -22,7 +22,8 @@ type StandaloneRequest =
 type PendingOs =
   | { readonly kind: "chooseRepository" }
   | { readonly kind: "copy"; readonly type: string }
-  | { readonly kind: "openExternalUrl" };
+  | { readonly kind: "openExternalUrl" }
+  | { readonly kind: "readFile"; readonly deliver: (content: string | null) => void };
 
 /** Bones owner of the unchanged MIT webview's host protocol. */
 export class CommitsCore {
@@ -46,7 +47,24 @@ export class CommitsCore {
     };
     this.repositories = new RepositoryManager(new CommitsCoreWorkspacePort(host));
     this.persistent = new PersistentExtensionState(storage);
-    this.graph = new MitGraphBackend(host);
+    this.graph = new MitGraphBackend(host, (repo, path, deliver) =>
+      this.readWorkingTreeFile(repo, path, deliver),
+    );
+  }
+
+  /**
+   * Reads one working-tree file through the host, which confines the read to
+   * the repository. An unreadable file is answered as absent, the same as Git
+   * answers a blob it does not have.
+   */
+  private readWorkingTreeFile(
+    repo: string,
+    path: string,
+    deliver: (content: string | null) => void,
+  ): void {
+    const requestId = this.nextOsRequestId++;
+    this.pendingOs.set(requestId, { kind: "readFile", deliver });
+    this.host.requestOs(requestId, "read-file", encodeFileRead(repo, path));
   }
 
   start(): void {
@@ -182,6 +200,7 @@ export class CommitsCore {
             oldFilePath: asString(value.oldFilePath),
             newFilePath: asString(value.newFilePath),
             type: asFileChangeType(value.type),
+            staged: value.staged === true,
           },
           (response) => {
             if (sequence === this.fullDiffSequence) this.send(response);
@@ -224,7 +243,10 @@ export class CommitsCore {
     const pending = this.pendingOs.get(result.requestId);
     if (pending === undefined) return;
     this.pendingOs.delete(result.requestId);
-    if (pending.kind === "chooseRepository") {
+    if (pending.kind === "readFile") {
+      if (result.error) this.host.log("warn", result.error);
+      pending.deliver(result.accepted ? result.value : null);
+    } else if (pending.kind === "chooseRepository") {
       if (result.accepted && result.value) this.openRepository(result.value);
       else if (result.error) this.host.log("warn", result.error);
     } else if (pending.kind === "copy") {

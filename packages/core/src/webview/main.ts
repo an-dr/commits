@@ -1680,6 +1680,35 @@ class GitGraphView {
     }
     this.workingTree = changes;
     this.filesPanel.setContent(renderChangesPanel(changes, error));
+    this.registerChangesPanelListeners();
+  }
+
+  /** A working-tree row opens in the docked panel, as a commit's file does. */
+  private registerChangesPanelListeners() {
+    addListenerToClass("changesFile", "click", (e: Event) => {
+      const row = <HTMLElement>(<Element>e.target).closest(".changesFile")!;
+      const path = row.dataset.path;
+      if (path === undefined) {
+        return;
+      }
+      const staged = row.dataset.staged === "true";
+      const change = this.workingTree.find(
+        (candidate) => candidate.path === path && candidate.staged === staged
+      );
+      this.fullDiffPanel.open(path);
+      sendMessage({
+        command: "fullDiffContent",
+        repo: this.currentRepo!,
+        fromHash: UNCOMMITTED,
+        toHash: UNCOMMITTED,
+        oldFilePath: change?.oldPath ?? path,
+        newFilePath: path,
+        // An untracked file has no old side at all, which is what "added" means
+        // to the query.
+        type: change?.status === "U" ? "A" : (change?.status ?? "M"),
+        staged
+      });
+    });
   }
 
   /** Fills the side panel with one revision's changed files. */

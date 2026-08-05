@@ -57,12 +57,24 @@ interface FullDiffContentRequest {
   readonly oldFilePath: string;
   readonly newFilePath: string;
   readonly type: GitFileChangeType;
+  /** Which side of the index an uncommitted file was clicked on. */
+  readonly staged?: boolean;
 }
+
+/** Reads a working-tree file, which Git itself cannot print. */
+type ReadWorkingTreeFile = (
+  repo: string,
+  path: string,
+  deliver: (content: string | null) => void,
+) => void;
 
 type BatchResult = Record<string, GitResult>;
 
 /** Revisions the view sends are commit hashes; anything else is not diffable. */
 const REVISION = /^[0-9a-f]{4,64}$/i;
+
+/** Hash the view gives the synthetic working-tree row. */
+const UNCOMMITTED = "*";
 
 /**
  * Git's empty tree. Diffing a parentless commit against it shows every file as
@@ -94,7 +106,16 @@ export class MitGraphBackend {
   private nextRequestId = 30_000;
   private readonly pending = new Map<number, (result: GitResult) => void>();
 
-  constructor(private readonly host: GitHost) {}
+  /**
+   * The working-tree reader is optional so a host without the file capability
+   * still serves every committed query; an uncommitted file then reports no
+   * working-tree side rather than failing the whole read.
+   */
+  constructor(
+    private readonly host: GitHost,
+    private readonly readWorkingTreeFile: ReadWorkingTreeFile = (_repo, _path, deliver) =>
+      deliver(null),
+  ) {}
 
   receive(result: GitResult): void {
     const callback = this.pending.get(result.requestId);
@@ -337,7 +358,15 @@ export class MitGraphBackend {
    * instead of an error. Only a failed diff makes the whole file unreadable.
    */
   loadFullDiff(request: FullDiffContentRequest, deliver: (response: QueryResponse) => void): void {
-    if (request.repo === "" || !REVISION.test(request.fromHash) || !REVISION.test(request.toHash)) {
+    if (request.repo === "") {
+      deliver(UNREADABLE_FULL_DIFF as QueryResponse);
+      return;
+    }
+    if (request.toHash === UNCOMMITTED) {
+      this.loadWorkingTreeDiff(request, deliver);
+      return;
+    }
+    if (!REVISION.test(request.fromHash) || !REVISION.test(request.toHash)) {
       deliver(UNREADABLE_FULL_DIFF as QueryResponse);
       return;
     }
@@ -374,6 +403,53 @@ export class MitGraphBackend {
           newExists: newBlob.exists,
         } as QueryResponse);
       });
+    });
+  }
+
+  /**
+   * One uncommitted file, on the side of the index it was clicked on.
+   *
+   * The staged side is HEAD against the index, both of which Git can print. The
+   * unstaged side is the index against the working tree, and the working tree
+   * is the one endpoint that has to be read from disk.
+   */
+  private loadWorkingTreeDiff(
+    request: FullDiffContentRequest,
+    deliver: (response: QueryResponse) => void,
+  ): void {
+    const staged = request.staged === true;
+    const path = request.newFilePath;
+    const operations: Record<string, string[]> = {
+      diff: ["diff", "--no-color", "--no-ext-diff", "-M", ...(staged ? ["--cached"] : []), "--", path],
+    };
+    // An addition has no old side, and on the unstaged side an untracked file
+    // has no index entry either.
+    if (request.type !== "A") {
+      operations.oldBlob = ["show", staged ? `HEAD:${request.oldFilePath}` : `:${request.oldFilePath}`];
+    }
+    if (staged && request.type !== "D") {
+      operations.newBlob = ["show", `:${path}`];
+    }
+    this.batch(request.repo, operations, (results) => {
+      const oldBlob = readBlob(results.oldBlob);
+      const diff = succeeded(results.diff) ? decode(results.diff.stdout) : null;
+      const answer = (newContent: string | null) =>
+        deliver({
+          command: "fullDiffContent",
+          diff,
+          oldContent: oldBlob.content,
+          newContent,
+          oldExists: oldBlob.exists,
+          newExists: newContent !== null,
+        } as QueryResponse);
+
+      if (staged) {
+        answer(readBlob(results.newBlob).content);
+      } else if (request.type === "D") {
+        answer(null);
+      } else {
+        this.readWorkingTreeFile(request.repo, path, answer);
+      }
     });
   }
 

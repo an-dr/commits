@@ -23,6 +23,12 @@ type QueryPayloads = {
       oldFilePath: string;
       newFilePath: string;
       type: GitFileChangeType;
+      /**
+       * Which side of the index an uncommitted file was clicked on: the staged
+       * side compares HEAD with the index, the unstaged side compares the index
+       * with the working tree. Ignored for a commit.
+       */
+      staged?: boolean;
     };
     response: {
       diff: string | null;
