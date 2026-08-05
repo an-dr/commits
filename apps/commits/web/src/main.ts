@@ -1,21 +1,25 @@
-import type { GitGraphViewState, RequestMessage, ResponseMessage } from "@an-dr/commits-core/types";
+import type { RequestMessage, ResponseMessage } from "@an-dr/commits-core/types";
 
 import "@an-dr/commits-webview-shell/assets/main.css";
 import "@an-dr/commits-webview-shell/assets/dropdown.css";
 import { createLocalizedStrings } from "@an-dr/commits-webview-shell/l10n";
 import { buildGraphShell } from "@an-dr/commits-webview-shell/shell";
+import { DEFAULT_SETTINGS, type SettingsDocument } from "@commits/adapter/read/settings";
 import "./standalone-theme.css";
+import { createViewState } from "./settings";
 
 const STATE_KEY = "commits.mit-webview.state";
 
 interface StandaloneMessage {
-  command: "standaloneReady" | "standaloneChooseRepository" | "standaloneOpenRepository";
+  command: "standaloneReady" | "standaloneViewReady" | "standaloneChooseRepository" | "standaloneOpenRepository";
   path?: string;
 }
 
 interface StandaloneResponse {
-  command: "standaloneRepositoryRequired";
+  command: "standaloneRepositoryRequired" | "standaloneSettings";
   recent?: readonly string[];
+  settings?: SettingsDocument;
+  error?: string;
 }
 
 declare global {
@@ -28,10 +32,20 @@ void boot();
 
 async function boot(): Promise<void> {
   const translate = (message: string) => message;
-  globalThis.viewState = defaultViewState();
   globalThis.l10n = createLocalizedStrings(translate);
   document.body.innerHTML =
     `${menuBarHtml()}${buildGraphShell(translate)}${repositoryOverlayHtml()}`;
+
+  let settingsSettled = false;
+  let resolveSettings = (_settings: SettingsDocument): void => undefined;
+  const settingsReady = new Promise<SettingsDocument>((resolve) => { resolveSettings = resolve; });
+  const finishSettings = (settings: SettingsDocument): void => {
+    if (settingsSettled) return;
+    settingsSettled = true;
+    window.clearTimeout(settingsTimeout);
+    resolveSettings(settings);
+  };
+  const settingsTimeout = window.setTimeout(() => finishSettings(DEFAULT_SETTINGS), 2_000);
 
   window.addEventListener("bones-message", (event) => {
     try {
@@ -41,6 +55,8 @@ async function boot(): Promise<void> {
         showRepositoryOverlay();
       } else if (data.command === "loadRepos" && Object.keys(data.repos).length > 0) {
         hideRepositoryOverlay();
+      } else if (data.command === "standaloneSettings") {
+        finishSettings(data.settings ?? DEFAULT_SETTINGS);
       }
       window.dispatchEvent(new MessageEvent("message", { data }));
     } catch {
@@ -51,20 +67,22 @@ async function boot(): Promise<void> {
   wireMenuBar();
   wireRepositoryOverlay();
 
-  const [{ setWebviewHost }, { startCommitsView }] = await Promise.all([
+  const imports = Promise.all([
     import("@an-dr/commits-core/webview/utils/host"),
     import("@an-dr/commits-core/webview/main"),
   ]);
+  // Request settings before the shared view reads its global view state.
+  post({ command: "standaloneReady" });
+  globalThis.viewState = createViewState(await settingsReady);
+  const [{ setWebviewHost }, { startCommitsView }] = await imports;
   setWebviewHost({
     postMessage: (message: RequestMessage) => post(message),
     getState: () => readState(),
     setState: (state) => writeState(state),
     getStyleValue: (name) => getComputedStyle(document.documentElement).getPropertyValue(name),
   });
-  // Announce readiness before the shared view mounts, so the core has bootstrapped
-  // by the time the view issues its first repository query.
-  post({ command: "standaloneReady" });
   startCommitsView();
+  post({ command: "standaloneViewReady" });
 }
 
 function menuBarHtml(): string {
@@ -119,33 +137,6 @@ function repositoryOverlayHtml(): string {
       <ul id="standaloneRecentRepos" hidden></ul>
     </form>
   </div>`;
-}
-
-function defaultViewState(): GitGraphViewState {
-  return {
-    autoCenterCommitDetailsView: true,
-    committedVisual: "Initials",
-    avatarMode: "Disabled",
-    avatarSize: "Small",
-    avatarShape: "Circle",
-    dateFormat: "Date & Time",
-    fetchAvatars: false,
-    fileIcons: {},
-    uiDensity: "Compact",
-    refreshShortcutKey: "r",
-    branchPanelGroupsFirst: true,
-    branchPanelFlattenSingleChildGroups: false,
-    confirmAbortRepoInProgress: true,
-    columnVisibility: { Committed: true, ID: true },
-    graphColours: ["#0066ff", "#e51400", "#16a34a", "#9333ea", "#ea580c", "#0891b2"],
-    graphStyle: "rounded",
-    initialLoadCommits: 300,
-    lastActiveRepo: null,
-    loadMoreCommits: 100,
-    locale: navigator.language || "en",
-    repos: {},
-    showCurrentBranchByDefault: false,
-  };
 }
 
 function wireRepositoryOverlay(): void {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GitResult, GitRun, NativeResult, OsAction } from "@commits/ipc/native";
 import { CommitsCore } from "./commits-core";
-import type { HostPort, LogLevel, PageSource } from "./host/host-port";
+import type { HostPort, LogLevel, PageSource, SettingsIoResult } from "./host/host-port";
 
 class StubHost implements HostPort {
   readonly closed: string[] = [];
@@ -13,6 +13,8 @@ class StubHost implements HostPort {
   readonly gitRequests: GitRun[] = [];
   readonly promptReplies: string[] = [];
   savedState: Uint8Array<ArrayBufferLike> = new Uint8Array();
+  settingsBytes: Uint8Array<ArrayBufferLike> = new Uint8Array();
+  settingsSaveError = "";
   paths: string[] = [];
   pageSource: PageSource = { kind: "url", value: "file:///commits/page.html" };
 
@@ -21,6 +23,12 @@ class StubHost implements HostPort {
   openPanel(panel: string, source: PageSource): void { this.opened.push([panel, source]); }
   repositoryPaths(): readonly string[] { return this.paths; }
   loadPageSource(): PageSource { return this.pageSource; }
+  loadSettings(): SettingsIoResult { return { ok: true, value: this.settingsBytes, error: "" }; }
+  saveSettings(value: Uint8Array<ArrayBufferLike>): SettingsIoResult {
+    if (this.settingsSaveError) return { ok: false, value: new Uint8Array(), error: this.settingsSaveError };
+    this.settingsBytes = value;
+    return { ok: true, value: new Uint8Array(), error: "" };
+  }
   loadSavedState(): Uint8Array<ArrayBufferLike> { return this.savedState; }
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void { this.savedState = value; }
   runGit(request: GitRun): void { this.gitRequests.push(request); }
@@ -49,6 +57,7 @@ describe("CommitsCore MIT webview host", () => {
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
 
     expect(host.sent).toContainEqual(["main", {
       command: "loadRepos",
@@ -57,11 +66,58 @@ describe("CommitsCore MIT webview host", () => {
     }]);
   });
 
+  it("loads settings before repository messages and acknowledges atomic saves", () => {
+    const host = new StubHost();
+    host.settingsBytes = new TextEncoder().encode(JSON.stringify({
+      version: 2,
+      core: { "an-dr-com-mit-s.uiDensity": "Compact" },
+      app: { mode: "dark", lightTheme: "paper", darkTheme: "graphite" },
+    }));
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    expect(host.sent[0]).toEqual(["main", expect.objectContaining({
+      command: "standaloneSettings",
+      settings: expect.objectContaining({ app: expect.objectContaining({ mode: "dark" }) }),
+    })]);
+
+    core.receivePageJson(JSON.stringify({
+      command: "standaloneSaveSettings",
+      requestId: 7,
+      settings: { version: 2, core: {}, app: { mode: "light" } },
+    }));
+    expect(new TextDecoder().decode(host.settingsBytes)).toContain('"mode": "light"');
+    expect(host.sent).toContainEqual(["main", expect.objectContaining({
+      command: "standaloneSettingsSaved", requestId: 7, error: "",
+    })]);
+  });
+
+  it("keeps active settings when a save fails", () => {
+    const host = new StubHost();
+    host.settingsSaveError = "disk full";
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "standaloneSaveSettings",
+      requestId: 8,
+      settings: { version: 2, core: {}, app: { mode: "dark" } },
+    }));
+
+    expect(host.sent).toContainEqual(["main", expect.objectContaining({
+      command: "standaloneSettingsSaved",
+      requestId: 8,
+      settings: expect.objectContaining({ app: expect.objectContaining({ mode: "system" }) }),
+      error: "disk full",
+    })]);
+  });
+
   it("asks Bones for a folder when no repository is available", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
     expect(host.sent).toContainEqual(["main", { command: "standaloneRepositoryRequired", recent: [] }]);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneChooseRepository" }));
@@ -163,6 +219,7 @@ describe("CommitsCore MIT webview host", () => {
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneRepositoryRequired",

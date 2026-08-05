@@ -3,6 +3,12 @@ export type PageSource =
   | { readonly kind: "html"; readonly value: string }
   | { readonly kind: "url"; readonly value: string };
 
+export interface SettingsIoResult {
+  readonly ok: boolean;
+  readonly value: Uint8Array<ArrayBufferLike>;
+  readonly error: string;
+}
+
 /** Host capabilities used by product behavior on bones and VS Code. */
 export interface HostPort {
   closePanel(panel: string): void;
@@ -23,6 +29,10 @@ export interface HostPort {
    * supplies webview HTML.
    */
   loadPageSource(): PageSource;
+  /** Reads the standalone user-facing settings document. */
+  loadSettings(): SettingsIoResult;
+  /** Atomically replaces the standalone user-facing settings document. */
+  saveSettings(value: Uint8Array<ArrayBufferLike>): SettingsIoResult;
   /** Raw bytes persisted by bones in this component's file-backed save slot. */
   loadSavedState(): Uint8Array<ArrayBufferLike>;
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void;

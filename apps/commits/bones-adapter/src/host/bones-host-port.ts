@@ -9,7 +9,7 @@ import {
   encodeOpenPanel,
   encodeSendJson,
 } from "@commits/ipc/web";
-import type { HostPort, LogLevel, PageSource } from "./host-port";
+import type { HostPort, LogLevel, PageSource, SettingsIoResult } from "./host-port";
 import { encodeGitRun, encodeOsRequest, type GitRun, type OsAction } from "@commits/ipc/native";
 
 export class BonesHostPort implements HostPort {
@@ -54,6 +54,17 @@ export class BonesHostPort implements HostPort {
     }
   }
 
+  loadSettings(): SettingsIoResult {
+    return this.requestSettings(new Uint8Array([0]));
+  }
+
+  saveSettings(value: Uint8Array<ArrayBufferLike>): SettingsIoResult {
+    const request = new Uint8Array(value.length + 1);
+    request[0] = 1;
+    request.set(value, 1);
+    return this.requestSettings(request);
+  }
+
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void {
     publish("persistence/save", value);
   }
@@ -81,6 +92,19 @@ export class BonesHostPort implements HostPort {
       send("web", payload);
     } catch (error) {
       hostLog("error", `web command failed: ${String(error)}`);
+    }
+  }
+
+  private requestSettings(payload: Uint8Array): SettingsIoResult {
+    try {
+      const response = send("settings", payload);
+      if (response[0] === 0) return { ok: true, value: response.slice(1), error: "" };
+      const error = response.length > 1
+        ? new TextDecoder().decode(response.slice(1))
+        : "settings host returned an invalid response";
+      return { ok: false, value: new Uint8Array(), error };
+    } catch (error) {
+      return { ok: false, value: new Uint8Array(), error: String(error) };
     }
   }
 }

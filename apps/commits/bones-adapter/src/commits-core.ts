@@ -12,13 +12,16 @@ import {
   PersistentExtensionState,
   type PersistentState,
 } from "./read/persistent-state";
+import { DEFAULT_SETTINGS, parseSettings, validateSettings, type SettingsDocument } from "./read/settings";
 
 const PANEL = "main";
 
 type StandaloneRequest =
   | { readonly command: "standaloneReady" }
+  | { readonly command: "standaloneViewReady" }
   | { readonly command: "standaloneChooseRepository" }
-  | { readonly command: "standaloneOpenRepository"; readonly path: string };
+  | { readonly command: "standaloneOpenRepository"; readonly path: string }
+  | { readonly command: "standaloneSaveSettings"; readonly requestId: number; readonly settings: unknown };
 
 type PendingOs =
   | { readonly kind: "chooseRepository" }
@@ -34,6 +37,8 @@ export class CommitsCore {
   private readonly workingTreeActions: WorkingTreeActions;
   private readonly pendingOs = new Map<number, PendingOs>();
   private state: PersistentState = DEFAULT_PERSISTENT_STATE;
+  private settings: SettingsDocument = DEFAULT_SETTINGS;
+  private settingsError = "";
   private currentRepository: string | null = null;
   private bootstrapped = false;
   private nextOsRequestId = 50_000;
@@ -105,7 +110,13 @@ export class CommitsCore {
 
     switch (value.command) {
       case "standaloneReady":
+        this.send({ command: "standaloneSettings", settings: this.settings, error: this.settingsError });
+        return;
+      case "standaloneViewReady":
         this.sendCurrentRepositories();
+        return;
+      case "standaloneSaveSettings":
+        this.saveSettings(value.requestId, value.settings);
         return;
       case "standaloneChooseRepository":
         this.chooseRepository();
@@ -324,17 +335,38 @@ export class CommitsCore {
 
   private bootstrap(): void {
     this.state = this.persistent.load();
+    const loaded = this.host.loadSettings();
+    if (loaded.ok) {
+      const source = loaded.value.length > 0 ? loaded.value : this.host.loadSavedState();
+      this.settings = source.length > 0
+        ? parseSettings(new TextDecoder().decode(source))
+        : DEFAULT_SETTINGS;
+    } else {
+      this.settingsError = loaded.error;
+      this.host.log("warn", `could not load settings: ${loaded.error}`);
+    }
     this.repositories.discover();
     if (this.state.lastActiveRepository !== null) {
       this.repositories.addExternal(this.state.lastActiveRepository);
       this.currentRepository = this.state.lastActiveRepository;
     }
-    if (this.repositories.all().length === 0) {
-      this.send({ command: "standaloneRepositoryRequired", recent: this.state.recentRepositories });
-    } else {
-      this.currentRepository ??= this.repositories.all()[0].path;
-      this.sendRepos();
+    if (this.repositories.all().length > 0) this.currentRepository ??= this.repositories.all()[0].path;
+  }
+
+  private saveSettings(requestId: unknown, candidate: unknown): void {
+    const settings = validateSettings(candidate);
+    const bytes = new TextEncoder().encode(`${JSON.stringify(settings, null, 2)}\n`);
+    const saved = this.host.saveSettings(bytes);
+    if (saved.ok) {
+      this.settings = settings;
+      this.settingsError = "";
     }
+    this.send({
+      command: "standaloneSettingsSaved",
+      requestId: Number.isSafeInteger(requestId) ? requestId : 0,
+      settings: this.settings,
+      error: saved.error,
+    });
   }
 
   private chooseRepository(): void {
