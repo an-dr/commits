@@ -31,6 +31,9 @@ impl OsBackend for StubBackend {
     fn pick_folder(&self, _title: &str) -> Result<Option<String>, String> {
         Ok(None)
     }
+    fn read_file(&self, request: &str) -> Result<Option<String>, String> {
+        Ok(Some(request.replace('\n', ":")))
+    }
 }
 
 #[test]
@@ -89,4 +92,34 @@ fn publishes_results_for_every_capability() {
     assert!(results
         .iter()
         .any(|result| result.request_id == 6 && result.error == "unsafe URL"));
+}
+
+/// The read is confined to one repository, and an unreadable entry inside it is
+/// absent rather than an error, which is how a working-tree file behaves.
+#[test]
+fn reads_only_text_files_inside_the_repository() {
+    let root = std::env::temp_dir().join(format!("commits-os-read-{}", std::process::id()));
+    let nested = root.join("src");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::write(nested.join("file.txt"), "one\ntwo\n").unwrap();
+    std::fs::write(nested.join("binary.bin"), [0u8, 159, 146, 150]).unwrap();
+    let outside = std::env::temp_dir().join(format!("commits-os-outside-{}.txt", std::process::id()));
+    std::fs::write(&outside, "secret").unwrap();
+    let backend = crate::SystemOsBackend;
+    let request = |path: &str| format!("{}\n{}", root.display(), path);
+
+    assert_eq!(
+        backend.read_file(&request("src/file.txt")).unwrap(),
+        Some("one\ntwo\n".into())
+    );
+    assert_eq!(backend.read_file(&request("src/missing.txt")).unwrap(), None);
+    assert_eq!(backend.read_file(&request("src/binary.bin")).unwrap(), None);
+    assert_eq!(backend.read_file(&request("src")).unwrap(), None);
+    assert!(backend
+        .read_file(&request(&format!("../{}", outside.file_name().unwrap().to_string_lossy())))
+        .is_err());
+    assert!(backend.read_file("no-newline-separator").is_err());
+
+    std::fs::remove_dir_all(&root).ok();
+    std::fs::remove_file(&outside).ok();
 }

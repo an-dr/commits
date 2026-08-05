@@ -189,7 +189,7 @@ impl OsRequest {
             action: reader.u8()?,
             value: reader.string()?,
         };
-        if request.action > 4 {
+        if request.action > 5 {
             return Err(WireError::from("unknown os action"));
         }
         reader.finish()?;

@@ -11,12 +11,23 @@ pub const RESULT_TOPIC: &str = "os/result";
 pub const PROMPT_TOPIC: &str = "os/prompt";
 pub const PROMPT_RESPONSE_TOPIC: &str = "os/prompt-response";
 
+/// Largest working-tree file the page is served. Beyond this the view would be
+/// unusable anyway, and the text crosses the panel boundary as one string.
+pub const MAX_FILE_READ_BYTES: u64 = 4 * 1024 * 1024;
+
 pub trait OsBackend: Send + Sync {
     fn read_clipboard(&self) -> Result<String, String>;
     fn write_clipboard(&self, value: &str) -> Result<(), String>;
     fn open_url(&self, value: &str) -> Result<(), String>;
     fn pick_file(&self, title: &str) -> Result<Option<String>, String>;
     fn pick_folder(&self, title: &str) -> Result<Option<String>, String>;
+    /// Reads a text file inside one repository.
+    ///
+    /// `request` carries the repository and the path, separated by a newline.
+    /// A file that is missing, binary, or larger than [`MAX_FILE_READ_BYTES`]
+    /// is reported as absent rather than as an error: not being readable is a
+    /// normal outcome for a working-tree entry.
+    fn read_file(&self, request: &str) -> Result<Option<String>, String>;
 }
 
 pub struct SystemOsBackend;
@@ -53,6 +64,41 @@ impl OsBackend for SystemOsBackend {
             .pick_folder()
             .map(|path| path.to_string_lossy().into_owned()))
     }
+    fn read_file(&self, request: &str) -> Result<Option<String>, String> {
+        let (repository, path) = request
+            .split_once('\n')
+            .ok_or_else(|| String::from("a file read names a repository and a path"))?;
+        read_repository_file(std::path::Path::new(repository), path)
+    }
+}
+
+/// Reads `path` only when it resolves inside `repository`.
+///
+/// The path arrives over the page boundary, so containment is checked against
+/// the canonical repository rather than trusted; a path escaping it is an error,
+/// while an unreadable file inside it is simply absent.
+fn read_repository_file(
+    repository: &std::path::Path,
+    path: &str,
+) -> Result<Option<String>, String> {
+    let root = repository
+        .canonicalize()
+        .map_err(|error| format!("repository is unavailable: {error}"))?;
+    let Ok(target) = root.join(path).canonicalize() else {
+        return Ok(None);
+    };
+    if !target.starts_with(&root) {
+        return Err("a file read may not leave its repository".into());
+    }
+    let Ok(metadata) = std::fs::metadata(&target) else {
+        return Ok(None);
+    };
+    if !metadata.is_file() || metadata.len() > MAX_FILE_READ_BYTES {
+        return Ok(None);
+    }
+    // Invalid UTF-8 means the file is not text the panel can show, which is the
+    // same outcome as a file it cannot read.
+    Ok(std::fs::read(&target).ok().and_then(|bytes| String::from_utf8(bytes).ok()))
 }
 
 pub struct OsModule {
@@ -149,6 +195,7 @@ fn execute(backend: &dyn OsBackend, request: &OsRequest) -> NativeResult {
             .map(|_| Some(String::new())),
         3 => backend.pick_file(&request.value),
         4 => backend.pick_folder(&request.value),
+        5 => backend.read_file(&request.value),
         _ => Err("unknown OS action".into()),
     };
     match outcome {

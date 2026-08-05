@@ -8,6 +8,7 @@ import {
   decodeWatchEvent,
   encodeGitCancel,
   encodeGitRun,
+  encodeFileRead,
   encodeOsRequest,
   encodeWatchRequest,
 } from "./native";
@@ -81,6 +82,10 @@ describe("native protocol", () => {
     expect(encodeWatchRequest(1, "stop", "x")[4]).toBe(1);
     expect(encodeOsRequest(1, "clipboard-read")[4]).toBe(0);
     expect(encodeOsRequest(1, "pick-folder")[4]).toBe(4);
+    expect(encodeOsRequest(1, "read-file")[4]).toBe(5);
+    // A file read carries its repository and path as one value, so the host can
+    // confine the read without a second field on the wire.
+    expect(encodeFileRead("C:/repo", "src/a.ts")).toBe("C:/repo\nsrc/a.ts");
     expect(toHex(encodeWatchRequest(1, "start", "C:/repo"))).toBe(fixtures.watch_start);
     expect(toHex(encodeOsRequest(2, "pick-folder", "Choose repository")))
       .toBe(fixtures.os_pick_folder);

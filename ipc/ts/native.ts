@@ -68,7 +68,17 @@ export type OsAction =
   | "clipboard-write"
   | "open-url"
   | "pick-file"
-  | "pick-folder";
+  | "pick-folder"
+  | "read-file";
+
+/**
+ * Value of a `read-file` request: the repository the read is confined to, then
+ * the path to read, separated by a newline. The host resolves the path inside
+ * that repository and refuses anything that leaves it.
+ */
+export function encodeFileRead(repository: string, path: string): string {
+  return `${repository}\n${path}`;
+}
 
 export function encodeOsRequest(
   requestId: number,
@@ -81,6 +91,7 @@ export function encodeOsRequest(
     "open-url": 2,
     "pick-file": 3,
     "pick-folder": 4,
+    "read-file": 5,
   };
   return new Writer().u32(requestId).u8(tag[action]).string(value).finish();
 }
