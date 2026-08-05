@@ -36,7 +36,36 @@ interface LoadBranchesRequest {
   readonly hard: boolean;
 }
 
+interface FullDiffContentRequest {
+  readonly command: "fullDiffContent";
+  readonly repo: string;
+  readonly fromHash: string;
+  readonly toHash: string;
+  readonly oldFilePath: string;
+  readonly newFilePath: string;
+  readonly type: GitFileChangeType;
+}
+
 type BatchResult = Record<string, GitResult>;
+
+/** Revisions the view sends are commit hashes; anything else is not diffable. */
+const REVISION = /^[0-9a-f]{4,64}$/i;
+
+/**
+ * Git's empty tree. Diffing a parentless commit against it shows every file as
+ * added, where its missing parent would simply fail to resolve.
+ */
+const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/** Panel input for a file that cannot be read; the panel reports it as unloadable. */
+const UNREADABLE_FULL_DIFF = {
+  command: "fullDiffContent",
+  diff: null,
+  oldContent: null,
+  newContent: null,
+  oldExists: false,
+  newExists: false,
+} as const;
 
 /**
  * Adapts the MIT view's read queries to the correlated native Bones Git
@@ -142,7 +171,7 @@ export class MitGraphBackend {
           branches: head === null ? branches : [head, ...branches.filter((branch) => branch !== head)],
           head,
           hard: request.hard,
-          isRepo: branchesResult.status === "completed" && branchesResult.exitCode === 0,
+          isRepo: succeeded(branchesResult),
         });
       },
     );
@@ -179,7 +208,7 @@ export class MitGraphBackend {
       },
       (results) => {
         const meta = results.meta;
-        if (meta === undefined || meta.status !== "completed" || meta.exitCode !== 0) {
+        if (!succeeded(meta)) {
           deliver({ command: "commitDetails", commitDetails: null } as QueryResponse);
           return;
         }
@@ -191,6 +220,78 @@ export class MitGraphBackend {
         deliver({ command: "commitDetails", commitDetails: details } as QueryResponse);
       },
     );
+  }
+
+  /**
+   * Reads one file's unified diff together with the full text of both
+   * endpoints, which is what lets the docked panel show the unchanged
+   * remainder of the file around the change.
+   *
+   * A missing endpoint is a normal outcome — the file exists on only one side
+   * of an addition or a deletion — so a failed blob read becomes "not present"
+   * instead of an error. Only a failed diff makes the whole file unreadable.
+   */
+  loadFullDiff(request: FullDiffContentRequest, deliver: (response: QueryResponse) => void): void {
+    if (request.repo === "" || !REVISION.test(request.fromHash) || !REVISION.test(request.toHash)) {
+      deliver(UNREADABLE_FULL_DIFF as QueryResponse);
+      return;
+    }
+    this.resolveOldRevision(request, (oldRevision) => {
+      const paths =
+        request.oldFilePath === request.newFilePath
+          ? [request.newFilePath]
+          : [request.oldFilePath, request.newFilePath];
+      const operations: Record<string, string[]> = {
+        // The panel parses this output, so rename detection and the built-in
+        // diff format are asked for explicitly rather than left to the
+        // repository's own configuration. Paths follow `--`, so a name that
+        // looks like an option stays a path.
+        diff: [
+          "diff", "--no-color", "--no-ext-diff", "-M",
+          oldRevision, request.toHash, "--", ...paths,
+        ],
+      };
+      if (request.type !== "A") {
+        operations.oldBlob = ["show", `${oldRevision}:${request.oldFilePath}`];
+      }
+      if (request.type !== "D") {
+        operations.newBlob = ["show", `${request.toHash}:${request.newFilePath}`];
+      }
+      this.batch(request.repo, operations, (results) => {
+        const oldBlob = readBlob(results.oldBlob);
+        const newBlob = readBlob(results.newBlob);
+        deliver({
+          command: "fullDiffContent",
+          diff: succeeded(results.diff) ? decode(results.diff.stdout) : null,
+          oldContent: oldBlob.content,
+          newContent: newBlob.content,
+          oldExists: oldBlob.exists,
+          newExists: newBlob.exists,
+        } as QueryResponse);
+      });
+    });
+  }
+
+  /**
+   * The revision holding the old side of the change: the named one when two
+   * commits are compared, otherwise the commit's first parent, or the empty
+   * tree when it has none.
+   */
+  private resolveOldRevision(
+    request: FullDiffContentRequest,
+    use: (revision: string) => void,
+  ): void {
+    if (request.fromHash !== request.toHash) {
+      use(request.fromHash);
+      return;
+    }
+    // `rev-list --parents -n 1` prints the commit followed by its parents, so a
+    // single token means a root commit. This reads the output rather than
+    // relying on a non-zero exit, which Git reports inconsistently here.
+    this.run(request.repo, ["rev-list", "--parents", "-n", "1", request.fromHash], (result) => {
+      const tokens = successText(result).trim().split(/\s+/).filter((token) => token !== "");
+      use(tokens.length > 1 ? tokens[1] : EMPTY_TREE);
+    });
   }
 
   private batch(
@@ -340,10 +441,25 @@ function attachRefs(commits: GitCommitNode[], refs: GitRef[]): void {
   for (const ref of refs) byHash.get(ref.hash)?.refs.push(ref);
 }
 
-function successText(result: GitResult): string {
-  return result.status === "completed" && result.exitCode === 0
-    ? new TextDecoder().decode(result.stdout)
-    : "";
+/**
+ * One endpoint of a change, absent when its blob could not be read.
+ *
+ * A blob holding a NUL byte is binary, and the panel shows text, so it counts
+ * as absent rather than being handed decoded bytes to render as lines.
+ */
+function readBlob(result: GitResult | undefined): { exists: boolean; content: string | null } {
+  if (!succeeded(result) || result.stdout.includes(0)) {
+    return { exists: false, content: null };
+  }
+  return { exists: true, content: decode(result.stdout) };
+}
+
+function succeeded(result: GitResult | undefined): result is GitResult {
+  return result !== undefined && result.status === "completed" && result.exitCode === 0;
+}
+
+function successText(result: GitResult | undefined): string {
+  return succeeded(result) ? decode(result.stdout) : "";
 }
 
 function nonEmptyLines(value: string): string[] {

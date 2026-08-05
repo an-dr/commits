@@ -214,6 +214,180 @@ describe("CommitsCore MIT webview host", () => {
     expect(reply?.commitDetails).toBeNull();
   });
 
+  it("answers fullDiffContent with the file diff and both endpoints", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest()));
+
+    expect(host.gitRequests[0].args).toEqual(["rev-list", "--parents", "-n", "1", "abc1234"]);
+    completeGitAt(host, core, 0, "abc1234 par1 par2\n");
+
+    expect(host.gitRequests[1].args).toEqual([
+      "diff", "--no-color", "--no-ext-diff", "-M", "par1", "abc1234", "--", "src/a.ts",
+    ]);
+    expect(host.gitRequests[2].args).toEqual(["show", "par1:src/a.ts"]);
+    expect(host.gitRequests[3].args).toEqual(["show", "abc1234:src/a.ts"]);
+    completeGitAt(host, core, 1, "@@ -1 +1 @@\n-old\n+new\n");
+    completeGitAt(host, core, 2, "old\n");
+    completeGitAt(host, core, 3, "new\n");
+
+    expect(fullDiffReply(host)).toEqual({
+      command: "fullDiffContent",
+      diff: "@@ -1 +1 @@\n-old\n+new\n",
+      oldContent: "old\n",
+      newContent: "new\n",
+      oldExists: true,
+      newExists: true,
+    });
+  });
+
+  it("diffs a root commit against the empty tree", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest()));
+    completeGitAt(host, core, 0, "abc1234\n");
+
+    expect(host.gitRequests[1].args).toContain("4b825dc642cb6eb9a060e54bf8d69288fbee4904");
+    completeGitAt(host, core, 1, "@@ -0,0 +1 @@\n+new\n");
+    completeGitAt(host, core, 2, "", 128);
+    completeGitAt(host, core, 3, "new\n");
+
+    expect(fullDiffReply(host)).toMatchObject({ oldExists: false, oldContent: null, newExists: true });
+  });
+
+  it("reads only the surviving endpoint of an added file", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest({ type: "A" })));
+    completeGitAt(host, core, 0, "abc1234 par1\n");
+
+    expect(host.gitRequests).toHaveLength(3);
+    expect(host.gitRequests[2].args).toEqual(["show", "abc1234:src/a.ts"]);
+    completeGitAt(host, core, 1, "@@ -0,0 +1 @@\n+new\n");
+    completeGitAt(host, core, 2, "new\n");
+
+    expect(fullDiffReply(host)).toMatchObject({ oldExists: false, newExists: true });
+  });
+
+  it("reads only the surviving endpoint of a deleted file", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest({ type: "D" })));
+    completeGitAt(host, core, 0, "abc1234 par1\n");
+
+    expect(host.gitRequests).toHaveLength(3);
+    expect(host.gitRequests[2].args).toEqual(["show", "par1:src/a.ts"]);
+    completeGitAt(host, core, 1, "@@ -1 +0,0 @@\n-old\n");
+    completeGitAt(host, core, 2, "old\n");
+
+    expect(fullDiffReply(host)).toMatchObject({ oldExists: true, newExists: false, newContent: null });
+  });
+
+  it("treats a binary endpoint as absent instead of decoding it", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest({ newFilePath: "icon.png", oldFilePath: "icon.png" })));
+    completeGitAt(host, core, 0, "abc1234 par1\n");
+    completeGitAt(host, core, 1, "Binary files a/icon.png and b/icon.png differ\n");
+    completeGitAt(host, core, 2, "\u0000\u0001PNG");
+    completeGitAt(host, core, 3, "\u0000\u0002PNG");
+
+    expect(fullDiffReply(host)).toMatchObject({
+      oldExists: false,
+      oldContent: null,
+      newExists: false,
+      newContent: null,
+    });
+  });
+
+  it("answers only the newest file read", () => {
+    // The reply names no file, so a slower earlier read would otherwise land
+    // under the filename of the file clicked after it.
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest({ newFilePath: "first.ts", oldFilePath: "first.ts" })));
+    core.receivePageJson(JSON.stringify(fullDiffRequest({ newFilePath: "second.ts", oldFilePath: "second.ts" })));
+    // The newest read finishes first; the older one lands afterwards.
+    completeGitAt(host, core, 1, "abc1234 par1\n");
+    for (const index of [2, 3, 4]) completeGitAt(host, core, index, "second\n");
+    completeGitAt(host, core, 0, "abc1234 par1\n");
+    for (const index of [5, 6, 7]) completeGitAt(host, core, index, "first\n");
+
+    const replies = host.sent
+      .map(([, message]) => message as { command: string; newContent?: string | null })
+      .filter((message) => message.command === "fullDiffContent");
+    expect(replies).toEqual([expect.objectContaining({ newContent: "second\n" })]);
+  });
+
+  it("names both paths of a renamed file across a comparison", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest({
+      fromHash: "aaa1111",
+      toHash: "bbb2222",
+      oldFilePath: "old.ts",
+      newFilePath: "new.ts",
+      type: "R",
+    })));
+
+    // A comparison names its own old side, so no parent has to be resolved.
+    expect(host.gitRequests[0].args).toEqual([
+      "diff", "--no-color", "--no-ext-diff", "-M", "aaa1111", "bbb2222", "--", "old.ts", "new.ts",
+    ]);
+    expect(host.gitRequests[1].args).toEqual(["show", "aaa1111:old.ts"]);
+    expect(host.gitRequests[2].args).toEqual(["show", "bbb2222:new.ts"]);
+  });
+
+  it("reports a file as unreadable when its diff fails", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest()));
+    completeGitAt(host, core, 0, "abc1234 par1\n");
+    completeGitAt(host, core, 1, "", 128);
+    completeGitAt(host, core, 2, "old\n");
+    completeGitAt(host, core, 3, "new\n");
+
+    expect(fullDiffReply(host)).toMatchObject({ diff: null });
+  });
+
+  it("answers a non-diffable revision without asking Git", () => {
+    // The panel waits for this reply, so the synthetic uncommitted row still
+    // has to be answered rather than dropped.
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify(fullDiffRequest({ fromHash: "*", toHash: "*" })));
+
+    expect(host.gitRequests).toHaveLength(0);
+    expect(fullDiffReply(host)).toMatchObject({ diff: null, oldExists: false, newExists: false });
+  });
+
   it("logs across every selected branch", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
@@ -291,14 +465,40 @@ function completeGit(host: StubHost, core: CommitsCore, command: string, stdout:
   core.receiveGitResult(result);
 }
 
-function completeGitAt(host: StubHost, core: CommitsCore, index: number, stdout: string): void {
+function completeGitAt(
+  host: StubHost,
+  core: CommitsCore,
+  index: number,
+  stdout: string,
+  exitCode = 0,
+): void {
   const request = host.gitRequests[index];
   if (request === undefined) throw new Error(`missing git request ${index}`);
   core.receiveGitResult({
     requestId: request.requestId,
     status: "completed",
-    exitCode: 0,
+    exitCode,
     stdout: new TextEncoder().encode(stdout),
     stderr: new Uint8Array(),
   });
+}
+
+/** One file of one commit, which is what a single click in the file tree sends. */
+function fullDiffRequest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    command: "fullDiffContent",
+    repo: "C:/repo",
+    fromHash: "abc1234",
+    toHash: "abc1234",
+    oldFilePath: "src/a.ts",
+    newFilePath: "src/a.ts",
+    type: "M",
+    ...overrides,
+  };
+}
+
+function fullDiffReply(host: StubHost): unknown {
+  return host.sent
+    .map(([, message]) => message as { command: string })
+    .find((message) => message.command === "fullDiffContent");
 }

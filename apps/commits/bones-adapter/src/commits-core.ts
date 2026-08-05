@@ -1,3 +1,4 @@
+import type { GitFileChangeType } from "@an-dr/commits-core/backend/types";
 import type { RequestMessage, ResponseMessage } from "@an-dr/commits-core/types";
 import type { GitResult, NativeResult } from "@commits/ipc/native";
 import type { HostPort } from "./host/host-port";
@@ -33,6 +34,8 @@ export class CommitsCore {
   private currentRepository: string | null = null;
   private bootstrapped = false;
   private nextOsRequestId = 50_000;
+  /** Counts panel file reads so only the newest one answers. */
+  private fullDiffSequence = 0;
 
   constructor(private readonly host: HostPort) {
     const storage = {
@@ -139,6 +142,28 @@ export class CommitsCore {
           );
         }
         return;
+      case "fullDiffContent": {
+        // The page names no file in its reply, so a slower earlier read would
+        // land under the filename of the file clicked after it. Only the newest
+        // request may answer. The panel waits on that reply, so an unusable
+        // request is answered with the unreadable outcome rather than dropped.
+        const sequence = ++this.fullDiffSequence;
+        this.graph.loadFullDiff(
+          {
+            command: "fullDiffContent",
+            repo: this.currentRepository ?? "",
+            fromHash: asString(value.fromHash),
+            toHash: asString(value.toHash),
+            oldFilePath: asString(value.oldFilePath),
+            newFilePath: asString(value.newFilePath),
+            type: asFileChangeType(value.type),
+          },
+          (response) => {
+            if (sequence === this.fullDiffSequence) this.send(response);
+          },
+        );
+        return;
+      }
       case "repoInProgress":
         this.send({ command: "repoInProgress", state: null });
         return;
@@ -274,6 +299,19 @@ export class CommitsCore {
 /** Puts a path at the head of the recent list, bounded and deduplicated. */
 function withMostRecent(recent: readonly string[], path: string): readonly string[] {
   return [path, ...recent.filter((entry) => entry !== path)].slice(0, MAX_RECENT_REPOSITORIES);
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/**
+ * Change kind of a file, defaulting to a modification: that reads both
+ * endpoints, which is the safe assumption for an unrecognised kind.
+ */
+function asFileChangeType(value: unknown): GitFileChangeType {
+  const letter = asString(value).toUpperCase();
+  return letter === "A" || letter === "D" || letter === "R" ? letter : "M";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
