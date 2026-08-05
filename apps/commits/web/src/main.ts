@@ -7,19 +7,21 @@ import { buildGraphShell } from "@an-dr/commits-webview-shell/shell";
 import { DEFAULT_SETTINGS, type SettingsDocument } from "@commits/adapter/read/settings";
 import "./standalone-theme.css";
 import { createViewState } from "./settings";
+import { SettingsEditor } from "./settings-editor";
 
 const STATE_KEY = "commits.mit-webview.state";
 
-interface StandaloneMessage {
-  command: "standaloneReady" | "standaloneViewReady" | "standaloneChooseRepository" | "standaloneOpenRepository";
-  path?: string;
-}
+type StandaloneMessage =
+  | { command: "standaloneReady" | "standaloneViewReady" | "standaloneChooseRepository" }
+  | { command: "standaloneOpenRepository"; path: string }
+  | { command: "standaloneSaveSettings"; requestId: number; settings: SettingsDocument };
 
 interface StandaloneResponse {
-  command: "standaloneRepositoryRequired" | "standaloneSettings";
+  command: "standaloneRepositoryRequired" | "standaloneSettings" | "standaloneSettingsSaved";
   recent?: readonly string[];
   settings?: SettingsDocument;
   error?: string;
+  requestId?: number;
 }
 
 declare global {
@@ -43,9 +45,15 @@ async function boot(): Promise<void> {
     if (settingsSettled) return;
     settingsSettled = true;
     window.clearTimeout(settingsTimeout);
+    const button = document.getElementById("standaloneSettingsButton") as HTMLButtonElement | null;
+    if (button !== null) button.disabled = false;
     resolveSettings(settings);
   };
   const settingsTimeout = window.setTimeout(() => finishSettings(DEFAULT_SETTINGS), 2_000);
+  let activeSettings = DEFAULT_SETTINGS;
+  let loadSettingsError = "";
+  let nextSettingsRequestId = 1;
+  let settingsEditor: SettingsEditor;
 
   window.addEventListener("bones-message", (event) => {
     try {
@@ -56,7 +64,12 @@ async function boot(): Promise<void> {
       } else if (data.command === "loadRepos" && Object.keys(data.repos).length > 0) {
         hideRepositoryOverlay();
       } else if (data.command === "standaloneSettings") {
-        finishSettings(data.settings ?? DEFAULT_SETTINGS);
+        activeSettings = data.settings ?? DEFAULT_SETTINGS;
+        loadSettingsError = data.error ?? "";
+        finishSettings(activeSettings);
+      } else if (data.command === "standaloneSettingsSaved") {
+        activeSettings = data.settings ?? activeSettings;
+        settingsEditor.finishSave(activeSettings, data.error ?? "");
       }
       window.dispatchEvent(new MessageEvent("message", { data }));
     } catch {
@@ -66,6 +79,12 @@ async function boot(): Promise<void> {
 
   wireMenuBar();
   wireRepositoryOverlay();
+  settingsEditor = new SettingsEditor((settings) => {
+    post({ command: "standaloneSaveSettings", requestId: nextSettingsRequestId++, settings });
+  });
+  document.getElementById("standaloneSettingsButton")!.addEventListener("click", () => {
+    settingsEditor.open(activeSettings, loadSettingsError);
+  });
 
   const imports = Promise.all([
     import("@an-dr/commits-core/webview/utils/host"),
@@ -93,6 +112,7 @@ function menuBarHtml(): string {
         <li><button type="button" id="standaloneMenuOpenRepo">Open repo&hellip;</button></li>
       </ul>
     </div>
+    <button type="button" id="standaloneSettingsButton" disabled>Settings</button>
   </nav>`;
 }
 

@@ -169,6 +169,139 @@ body {
   font-size: 12px;
 }
 
+#standaloneSettingsButton {
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+#standaloneSettingsButton:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+#standaloneSettingsDialog {
+  width: min(760px, calc(100vw - 48px));
+  max-width: none;
+  height: min(760px, calc(100vh - 48px));
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 8px;
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-foreground);
+  box-shadow: 0 18px 60px var(--vscode-widget-shadow);
+}
+
+#standaloneSettingsDialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.standaloneSettingsForm {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+}
+
+.standaloneSettingsForm > header,
+.standaloneSettingsForm > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-color: var(--vscode-widget-border);
+}
+
+.standaloneSettingsForm > header {
+  border-bottom: 1px solid var(--vscode-widget-border);
+}
+
+.standaloneSettingsForm > footer {
+  border-top: 1px solid var(--vscode-widget-border);
+}
+
+.standaloneSettingsForm h1,
+.standaloneSettingsForm header p {
+  margin: 0;
+}
+
+.standaloneSettingsForm h1 {
+  font-size: 20px;
+}
+
+.standaloneSettingsForm header p,
+.standaloneSettingField code {
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.standaloneSettingsClose {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 24px;
+}
+
+.standaloneSettingsFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+  padding: 18px;
+  overflow-y: auto;
+}
+
+.standaloneSettingField {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.standaloneSettingField > span {
+  font-weight: 600;
+}
+
+.standaloneSettingField input:not([type="checkbox"]),
+.standaloneSettingField select,
+.standaloneSettingField textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--vscode-input-border);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+
+.standaloneSettingField fieldset {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--vscode-input-border);
+}
+
+.standaloneSettingsStatus {
+  margin: 0;
+}
+
+.standaloneSettingsStatus.is-error {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+.standaloneSettingsStatus.is-success {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+@media (max-width: 680px) {
+  .standaloneSettingsFields {
+    grid-template-columns: 1fr;
+  }
+}
+
 #view {
   top: var(--standalone-menu-height);
 }
