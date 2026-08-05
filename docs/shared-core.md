@@ -18,9 +18,12 @@ through one reset so selections never carry across repositories. ADR-008 records
 
 The branch panel also diverges in what it shows. `branchPanelRender.ts` renders a
 HEAD row carrying the checked-out revision, one section per remote named after
-that remote, disclosure rows for folders, and a checkbox on every row; the panel
-model gained the `head` field that carries the branch and revision, and
-`branchPanel.ts` exposes `setHead` in place of `setCurrentBranch`. The
+that remote, disclosure rows for folders, a checkbox on every row, the remote
+each branch tracks, and each remote's fetch URL; the panel model gained the
+`head` and `remoteInfo` fields that carry them, and `branchPanel.ts` exposes
+`setHead` and `setRemoteInfo` in place of `setCurrentBranch`. The `loadBranches`
+response gained optional `upstreams` and `remotes` maps, so a host that sends
+neither still gets the panel without those marks. The
 `branchPanelLocal` and `branchPanelRemote` strings gave way to
 `branchPanelLocalBranches`. This follows a desktop Git client's panel rather than
 the extension's original list, and the shared CSS in

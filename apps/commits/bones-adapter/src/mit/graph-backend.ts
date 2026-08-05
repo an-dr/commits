@@ -166,6 +166,13 @@ export class MitGraphBackend {
       {
         branches: ["for-each-ref", "--format=%(refname)", ...refRoots],
         head: ["symbolic-ref", "--quiet", "--short", "HEAD"],
+        // The panel names what each branch tracks and where each remote points.
+        upstreams: [
+          "for-each-ref",
+          "--format=%(refname:short)%1f%(upstream:short)",
+          "refs/heads",
+        ],
+        remotes: ["remote", "--verbose"],
       },
       (results) => {
         const branchesResult = results.branches;
@@ -185,6 +192,8 @@ export class MitGraphBackend {
           head,
           hard: request.hard,
           isRepo: succeeded(branchesResult),
+          upstreams: parseUpstreams(successText(results.upstreams)),
+          remotes: parseRemotes(successText(results.remotes)),
         });
       },
     );
@@ -468,6 +477,33 @@ function parseCommits(output: string): GitCommitNode[] {
     });
   }
   return commits;
+}
+
+/** Upstream of each local branch that has one, keyed by branch name. */
+function parseUpstreams(output: string): Record<string, string> {
+  const upstreams: Record<string, string> = {};
+  for (const line of nonEmptyLines(output)) {
+    const [branch, upstream] = line.split("\u001f");
+    if (branch !== undefined && upstream !== undefined && upstream !== "") {
+      upstreams[branch] = upstream;
+    }
+  }
+  return upstreams;
+}
+
+/**
+ * Fetch URL of each remote, keyed by remote name. `remote --verbose` prints one
+ * line per direction, and the fetch URL is the one the panel reports.
+ */
+function parseRemotes(output: string): Record<string, string> {
+  const remotes: Record<string, string> = {};
+  for (const line of nonEmptyLines(output)) {
+    const match = /^(\S+)\s+(\S.*?)\s+\((fetch|push)\)$/.exec(line);
+    if (match !== null && (match[3] === "fetch" || remotes[match[1]] === undefined)) {
+      remotes[match[1]] = match[2];
+    }
+  }
+  return remotes;
 }
 
 function parseRefs(output: string): { head: string | null; refs: GitRef[] } {

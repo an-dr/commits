@@ -67,6 +67,9 @@ body.branchPanelHidden #branchPanelSidebar {
   cursor: col-resize;
 }
 .branchPanelSectionHeader {
+  display: flex;
+  align-items: baseline;
+  overflow: hidden;
   padding: 8px 6px 3px;
   font-size: 12px;
   font-weight: 700;
@@ -134,6 +137,21 @@ body.branchPanelHidden #branchPanelSidebar {
   margin-left: 6px;
   opacity: 0.7;
   font-family: var(--vscode-editor-font-family, monospace);
+}
+.branchPanelTracking {
+  margin-left: 6px;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.6;
+}
+.branchPanelRemoteUrl {
+  margin-left: 6px;
+  overflow: hidden;
+  font-weight: 400;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.6;
 }
 .branchPanelEmpty {
   padding: 10px;

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createLocalizedStrings } from "@an-dr/commits-webview-shell/l10n";
-import type { BranchPanelRenderModel } from "@an-dr/commits-core/webview/branchPanel";
+import { NO_REMOTE_INFO, type BranchPanelRenderModel } from "@an-dr/commits-core/webview/branchPanel";
 import { renderBranchPanel } from "@an-dr/commits-core/webview/branchPanelRender";
 
 /** The panel reads its strings from the page global the host installs. */
@@ -108,6 +108,41 @@ describe("renderBranchPanel", () => {
     expect(html.match(/branchPanelCheck">✓/g)).toHaveLength(2);
   });
 
+  it("names the remote a branch tracks, and the whole upstream when the names differ", () => {
+    const html = render({
+      options: [
+        { name: "main", value: "main", selected: false, current: true },
+        { name: "work", value: "work", selected: false, current: false },
+        { name: "local-only", value: "local-only", selected: false, current: false },
+      ],
+      remoteInfo: {
+        upstreams: { main: "origin/main", work: "origin/other" },
+        remotes: {},
+      },
+    });
+
+    expect(html).toContain("= origin<");
+    expect(html).toContain("= origin&#x2F;other<");
+    expect(html.match(/branchPanelTracking/g)).toHaveLength(2);
+  });
+
+  it("shows a remote's fetch URL beside its header", () => {
+    const html = render({
+      options: [{ name: "origin/main", value: "remotes/origin/main", selected: false, current: false }],
+      remoteInfo: { upstreams: {}, remotes: { origin: "https://github.com/an-dr/commits" } },
+    });
+
+    expect(html).toContain("origin (1)");
+    expect(html).toContain("https:&#x2F;&#x2F;github.com&#x2F;an-dr&#x2F;commits");
+  });
+
+  it("renders without tracking data, which is what a host that sends none gets", () => {
+    const html = render({ options: [{ name: "main", value: "main", selected: false, current: true }] });
+
+    expect(html).toContain("Local Branches (1)");
+    expect(html).not.toContain("branchPanelTracking");
+  });
+
   it("reports no matching branches when the filter excludes every ref", () => {
     const html = render({ filter: "nothing-matches" });
 
@@ -119,6 +154,7 @@ function render(overrides: Partial<BranchPanelRenderModel> = {}): string {
   return renderBranchPanel({
     options: [{ name: "main", value: "main", selected: false, current: true }],
     head: { branch: null, hash: null },
+    remoteInfo: NO_REMOTE_INFO,
     filter: "",
     collapsedFolders: new Set(),
     groupsFirst: true,

@@ -216,6 +216,29 @@ describe("CommitsCore MIT webview host", () => {
     expect(reply?.commitDetails).toBeNull();
   });
 
+  it("reports what each branch tracks and where each remote points", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "loadBranches", showRemoteBranches: true, hard: false,
+    }));
+
+    completeGitAt(host, core, 0, "refs/heads/main\nrefs/remotes/origin/main\n");
+    completeGitAt(host, core, 1, "main\n");
+    completeGitAt(host, core, 2, "main\u001forigin/main\nwork\u001f\n");
+    completeGitAt(host, core, 3,
+      "origin\thttps://github.com/an-dr/commits (fetch)\norigin\tssh://git@github.com/an-dr/commits (push)\n");
+
+    expect(host.sent).toContainEqual(["main", expect.objectContaining({
+      command: "loadBranches",
+      upstreams: { main: "origin/main" },
+      remotes: { origin: "https://github.com/an-dr/commits" },
+    })]);
+  });
+
   it("answers commitComparison with the files that differ", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);

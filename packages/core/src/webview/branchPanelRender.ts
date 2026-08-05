@@ -1,4 +1,9 @@
-import type { BranchPanelHead, BranchPanelRenderModel, BranchPanelRenderOption } from "./branchPanel";
+import type {
+  BranchPanelHead,
+  BranchPanelRemoteInfo,
+  BranchPanelRenderModel,
+  BranchPanelRenderOption
+} from "./branchPanel";
 import { abbrevCommit } from "./utils/git";
 import { escapeHtml } from "./utils/html";
 
@@ -107,7 +112,30 @@ function itemTitle(option: BranchPanelRenderOption): string {
     : option.name;
 }
 
-function renderItem(option: BranchPanelRenderOption, name: string, indent: number): string {
+/**
+ * How a local branch names the upstream it tracks. A branch tracking the same
+ * name on a remote shows only the remote, which is what makes the common case
+ * short; anything else names the whole upstream ref.
+ */
+function trackingLabel(option: BranchPanelRenderOption, upstreams: BranchPanelRemoteInfo["upstreams"]): string {
+  if (option.value === "" || option.value.startsWith(REMOTE_PREFIX)) {
+    return "";
+  }
+  const upstream = upstreams[option.value];
+  if (upstream === undefined || upstream === "") {
+    return "";
+  }
+  const slash = upstream.lastIndexOf(`/${option.value}`);
+  const remote = slash > 0 ? upstream.slice(0, slash) : "";
+  return `= ${remote === "" ? upstream : remote}`;
+}
+
+function renderItem(
+  option: BranchPanelRenderOption,
+  name: string,
+  indent: number,
+  upstreams: BranchPanelRemoteInfo["upstreams"] = {}
+): string {
   const classes = ["branchPanelItem"];
   if (option.selected) {
     classes.push("selected");
@@ -115,10 +143,12 @@ function renderItem(option: BranchPanelRenderOption, name: string, indent: numbe
   if (option.current) {
     classes.push("currentBranch");
   }
+  const tracking = trackingLabel(option, upstreams);
   return `<div class="${classes.join(" ")}" data-value="${escapeHtml(option.value)}" title="${escapeHtml(itemTitle(option))}" style="padding-left:${4 + indent * 14}px">
     ${renderCheck(option.selected)}
     ${option.current ? '<span class="branchPanelCurrentMarker">▶</span>' : ""}
     <span class="branchPanelItemName">${escapeHtml(name)}</span>
+    ${tracking === "" ? "" : `<span class="branchPanelTracking">${escapeHtml(tracking)}</span>`}
   </div>`;
 }
 
@@ -150,12 +180,13 @@ function renderHeadRow(head: BranchPanelHead, current: BranchPanelRenderOption |
 function renderTree(
   nodes: readonly BranchTreeNode[],
   indent: number,
-  collapsed: ReadonlySet<string>
+  collapsed: ReadonlySet<string>,
+  upstreams: BranchPanelRemoteInfo["upstreams"]
 ): string {
   let html = "";
   for (const node of nodes) {
     if (node.type === "leaf") {
-      html += renderItem(node.option, node.displayName, indent);
+      html += renderItem(node.option, node.displayName, indent, upstreams);
       continue;
     }
     const isCollapsed = collapsed.has(node.path);
@@ -164,7 +195,7 @@ function renderTree(
       <span class="branchPanelFolderName">${escapeHtml(node.name)}</span>
     </div>`;
     if (!isCollapsed) {
-      html += renderTree(node.children, indent + 1, collapsed);
+      html += renderTree(node.children, indent + 1, collapsed, upstreams);
     }
   }
   return html;
@@ -174,7 +205,8 @@ function renderSection(
   label: string,
   sectionKey: string,
   options: readonly BranchPanelRenderOption[],
-  model: BranchPanelRenderModel
+  model: BranchPanelRenderModel,
+  detail = ""
 ): string {
   if (options.length === 0) {
     return "";
@@ -183,10 +215,13 @@ function renderSection(
   if (model.flattenSingleChildGroups) {
     tree = flattenSingleChildFolders(tree);
   }
-  return `<div class="branchPanelSectionHeader">${escapeHtml(label)} (${options.length})</div>${renderTree(
+  const url =
+    detail === "" ? "" : `<span class="branchPanelRemoteUrl">${escapeHtml(detail)}</span>`;
+  return `<div class="branchPanelSectionHeader">${escapeHtml(label)} (${options.length})${url}</div>${renderTree(
     tree,
     1,
-    model.collapsedFolders
+    model.collapsedFolders,
+    model.remoteInfo.upstreams
   )}`;
 }
 
@@ -212,7 +247,15 @@ function renderRemoteSections(
   }
   return Array.from(byRemote.keys())
     .toSorted((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }))
-    .map((remote) => renderSection(remote, `remote:${remote}`, byRemote.get(remote)!, model))
+    .map((remote) =>
+      renderSection(
+        remote,
+        `remote:${remote}`,
+        byRemote.get(remote)!,
+        model,
+        model.remoteInfo.remotes[remote] ?? ""
+      )
+    )
     .join("");
 }
 

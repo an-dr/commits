@@ -33,7 +33,16 @@ type QueryPayloads = {
   };
   loadBranches: {
     request: { showRemoteBranches: boolean; hard: boolean };
-    response: { branches: string[]; head: string | null; hard: boolean; isRepo: boolean };
+    response: {
+      branches: string[];
+      head: string | null;
+      hard: boolean;
+      isRepo: boolean;
+      /** Upstream of each local branch that tracks one, by branch name. */
+      upstreams?: { [branch: string]: string };
+      /** Fetch URL of each remote, by remote name. */
+      remotes?: { [remote: string]: string };
+    };
   };
   loadCommits: {
     request: {

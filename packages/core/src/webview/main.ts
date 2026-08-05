@@ -8,7 +8,7 @@ import type {
   GitResetMode
 } from "@an-dr/commits-core/backend/types";
 
-import { BranchPanel } from "./branchPanel";
+import { BranchPanel, NO_REMOTE_INFO, type BranchPanelRemoteInfo } from "./branchPanel";
 import { CommitSelection, readSelectionGesture } from "./commitSelection";
 import { hideContextMenuIfOpen, isContextMenuOpen, showContextMenu } from "./contextMenu";
 import {
@@ -227,12 +227,16 @@ class GitGraphView {
     branchOptions: string[],
     branchHead: string | null,
     hard: boolean,
-    isRepo: boolean
+    isRepo: boolean,
+    remoteInfo: BranchPanelRemoteInfo = NO_REMOTE_INFO
   ) {
     if (!isRepo) {
       this.triggerLoadBranchesCallback(false, isRepo);
       return;
     }
+    // Tracking and remote data arrive with the branches but are not part of
+    // what decides whether the list itself changed.
+    this.branchPanel.setRemoteInfo(remoteInfo);
     if (
       !hard &&
       arraysEqual(this.gitBranches, branchOptions, (a, b) => a === b) &&
@@ -1942,7 +1946,10 @@ window.addEventListener("message", (event) => {
       gitGraph.loadAvatar(msg.email, msg.image);
       break;
     case "loadBranches":
-      gitGraph.loadBranches(msg.branches, msg.head, msg.hard, msg.isRepo);
+      gitGraph.loadBranches(msg.branches, msg.head, msg.hard, msg.isRepo, {
+        upstreams: msg.upstreams ?? {},
+        remotes: msg.remotes ?? {}
+      });
       break;
     case "repoInProgress":
       gitGraph.renderRepoInProgress(msg.state);

@@ -28,9 +28,20 @@ export interface BranchPanelHead {
   hash: string | null;
 }
 
+/** What the host knows about where refs come from and where they go. */
+export interface BranchPanelRemoteInfo {
+  /** Upstream of each local branch that tracks one, by branch name. */
+  upstreams: Readonly<Record<string, string>>;
+  /** Fetch URL of each remote, by remote name. */
+  remotes: Readonly<Record<string, string>>;
+}
+
+export const NO_REMOTE_INFO: BranchPanelRemoteInfo = { upstreams: {}, remotes: {} };
+
 export interface BranchPanelRenderModel {
   options: readonly BranchPanelRenderOption[];
   head: BranchPanelHead;
+  remoteInfo: BranchPanelRemoteInfo;
   filter: string;
   collapsedFolders: ReadonlySet<string>;
   /** Sorts folders above plain refs; matches `branchPanel.groupsFirst`. */
@@ -58,6 +69,7 @@ export class BranchPanel {
   private readonly collapsedFolders = new Set<string>();
   private options: BranchPanelRenderOption[] = [];
   private head: BranchPanelHead = { branch: null, hash: null };
+  private remoteInfo: BranchPanelRemoteInfo = NO_REMOTE_INFO;
 
   constructor(
     state: Partial<BranchPanelState> | undefined,
@@ -96,6 +108,12 @@ export class BranchPanel {
       selected: chosen.indexOf(option.value) > -1,
       current: false
     }));
+    this.render();
+  }
+
+  /** Records tracking and remote data; a host that sends none keeps the plain panel. */
+  public setRemoteInfo(info: BranchPanelRemoteInfo) {
+    this.remoteInfo = info;
     this.render();
   }
 
@@ -218,6 +236,7 @@ export class BranchPanel {
     this.list.innerHTML = renderBranchPanel({
       options: this.options,
       head: this.head,
+      remoteInfo: this.remoteInfo,
       filter: this.filter,
       collapsedFolders: this.collapsedFolders,
       groupsFirst: viewState.branchPanelGroupsFirst,
