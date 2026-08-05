@@ -36,6 +36,13 @@ interface LoadBranchesRequest {
   readonly hard: boolean;
 }
 
+interface CommitComparisonRequest {
+  readonly command: "commitComparison";
+  readonly repo: string;
+  readonly fromHash: string;
+  readonly toHash: string;
+}
+
 interface FullDiffContentRequest {
   readonly command: "fullDiffContent";
   readonly repo: string;
@@ -56,6 +63,12 @@ const REVISION = /^[0-9a-f]{4,64}$/i;
  * added, where its missing parent would simply fail to resolve.
  */
 const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/**
+ * Shown when a selected pair holds something that is not a commit, which today
+ * means the synthetic uncommitted-changes row.
+ */
+const UNCOMPARABLE_REVISIONS = "These two rows cannot be compared in the standalone host yet.";
 
 /** Panel input for a file that cannot be read; the panel reports it as unloadable. */
 const UNREADABLE_FULL_DIFF = {
@@ -223,6 +236,42 @@ export class MitGraphBackend {
   }
 
   /**
+   * The files that differ between two commits, in the same shape a single
+   * commit's changes take, so the panel renders either from one code path.
+   *
+   * The panel waits for this reply, so a pair it cannot compare is reported as
+   * an error rather than left to look like a slow read.
+   */
+  loadComparison(
+    request: CommitComparisonRequest,
+    deliver: (response: QueryResponse) => void,
+  ): void {
+    if (request.repo === "" || !REVISION.test(request.fromHash) || !REVISION.test(request.toHash)) {
+      deliver(comparisonError(UNCOMPARABLE_REVISIONS));
+      return;
+    }
+    const shared = ["--no-color", "--no-ext-diff", "-M", "-r"];
+    this.batch(
+      request.repo,
+      {
+        names: ["diff", ...shared, "--name-status", request.fromHash, request.toHash],
+        stats: ["diff", ...shared, "--numstat", request.fromHash, request.toHash],
+      },
+      (results) => {
+        if (!succeeded(results.names)) {
+          deliver(comparisonError(failureText(results.names) || UNCOMPARABLE_REVISIONS));
+          return;
+        }
+        deliver({
+          command: "commitComparison",
+          fileChanges: parseFileChanges(decode(results.names.stdout), successText(results.stats)),
+          error: null,
+        } as QueryResponse);
+      },
+    );
+  }
+
+  /**
    * Reads one file's unified diff together with the full text of both
    * endpoints, which is what lets the docked panel show the unchanged
    * remainder of the file around the change.
@@ -347,7 +396,7 @@ function parseFileChanges(nameStatus: string, numStat: string): GitFileChange[] 
   for (const line of nonEmptyLines(numStat)) {
     const parts = line.split("\t");
     if (parts.length < 3) continue;
-    const path = parts[parts.length - 1];
+    const path = newPathOfCount(parts[parts.length - 1]);
     counts.set(path, {
       additions: parts[0] === "-" ? null : Number.parseInt(parts[0], 10),
       deletions: parts[1] === "-" ? null : Number.parseInt(parts[1], 10),
@@ -372,6 +421,26 @@ function parseFileChanges(nameStatus: string, numStat: string): GitFileChange[] 
     });
   }
   return changes;
+}
+
+/**
+ * New path of a numstat entry. A rename is printed as `old => new` or
+ * `dir/{old => new}`, and both reduce to the new path, which is how the
+ * name-status entries are keyed.
+ */
+function newPathOfCount(field: string): string {
+  return field.replace(/(.*)\{.* => (.*)\}/, "$1$2").replace(/.* => (.*)/, "$1");
+}
+
+/** Failure text of a Git read, preferring what Git itself said went wrong. */
+function failureText(result: GitResult | undefined): string {
+  if (result === undefined) return "";
+  const text = decode(result.stderr).trim() || decode(result.stdout).trim();
+  return text.split(/\r\n|\r|\n/)[0] ?? "";
+}
+
+function comparisonError(error: string): QueryResponse {
+  return { command: "commitComparison", fileChanges: [], error } as QueryResponse;
 }
 
 function fileChangeType(status: string): GitFileChangeType | null {

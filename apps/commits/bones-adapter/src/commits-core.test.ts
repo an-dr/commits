@@ -182,7 +182,9 @@ describe("CommitsCore MIT webview host", () => {
       ["abc1234", "par1 par2", "Ada", "ada@example.com", "1700000000", "Grace", "Subject line", "", "Body text"]
         .join("\u001f").replace("\u001fBody text", "\nBody text"));
     completeGitAt(host, core, 1, "M\tsrc/a.ts\nR100\told.ts\tnew.ts\nA\tadded.ts");
-    completeGitAt(host, core, 2, "3\t1\tsrc/a.ts\n5\t0\tnew.ts\n2\t0\tadded.ts");
+    // Git prints a rename's counts against the arrow form, which has to reduce
+    // to the new path or the rename would show no counts at all.
+    completeGitAt(host, core, 2, "3\t1\tsrc/a.ts\n5\t0\t{old.ts => new.ts}\n2\t0\tadded.ts");
 
     const reply = host.sent.map(([, message]) => message as { command: string; commitDetails?: unknown })
       .find((message) => message.command === "commitDetails");
@@ -212,6 +214,90 @@ describe("CommitsCore MIT webview host", () => {
     const reply = host.sent.map(([, message]) => message as { command: string; commitDetails?: unknown })
       .find((message) => message.command === "commitDetails");
     expect(reply?.commitDetails).toBeNull();
+  });
+
+  it("answers commitComparison with the files that differ", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "commitComparison", repo: "C:/repo", fromHash: "aaa1111", toHash: "bbb2222",
+    }));
+
+    expect(host.gitRequests[0].args).toEqual([
+      "diff", "--no-color", "--no-ext-diff", "-M", "-r", "--name-status", "aaa1111", "bbb2222",
+    ]);
+    expect(host.gitRequests[1].args).toContain("--numstat");
+    completeGitAt(host, core, 0, "M\tsrc/a.ts\nR100\told.ts\tnew.ts\n");
+    completeGitAt(host, core, 1, "3\t1\tsrc/a.ts\n5\t0\told.ts => new.ts\n");
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "commitComparison",
+      error: null,
+      fileChanges: [
+        { oldFilePath: "src/a.ts", newFilePath: "src/a.ts", type: "M", additions: 3, deletions: 1 },
+        { oldFilePath: "old.ts", newFilePath: "new.ts", type: "R", additions: 5, deletions: 0 },
+      ],
+    }]);
+  });
+
+  it("reports a comparison the host cannot make instead of staying silent", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "commitComparison", repo: "C:/repo", fromHash: "*", toHash: "bbb2222",
+    }));
+
+    expect(host.gitRequests).toHaveLength(0);
+    const reply = host.sent
+      .map(([, message]) => message as { command: string; error?: string | null })
+      .find((message) => message.command === "commitComparison");
+    expect(reply?.error).toContain("cannot be compared");
+  });
+
+  it("carries Git's own reason when a comparison fails", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "commitComparison", repo: "C:/repo", fromHash: "aaa1111", toHash: "bbb2222",
+    }));
+    failGitAt(host, core, 0, "fatal: bad object bbb2222");
+    completeGitAt(host, core, 1, "");
+
+    const reply = host.sent
+      .map(([, message]) => message as { command: string; error?: string | null })
+      .find((message) => message.command === "commitComparison");
+    expect(reply?.error).toBe("fatal: bad object bbb2222");
+  });
+
+  it("answers only the newest comparison", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "commitComparison", repo: "C:/repo", fromHash: "aaa1111", toHash: "bbb2222",
+    }));
+    core.receivePageJson(JSON.stringify({
+      command: "commitComparison", repo: "C:/repo", fromHash: "ccc3333", toHash: "ddd4444",
+    }));
+    for (const index of [2, 3]) completeGitAt(host, core, index, "M\tsecond.ts\n");
+    for (const index of [0, 1]) completeGitAt(host, core, index, "M\tfirst.ts\n");
+
+    const replies = host.sent
+      .map(([, message]) => message as { command: string; fileChanges?: Array<{ newFilePath: string }> })
+      .filter((message) => message.command === "commitComparison");
+    expect(replies).toHaveLength(1);
+    expect(replies[0].fileChanges?.[0].newFilePath).toBe("second.ts");
   });
 
   it("answers fullDiffContent with the file diff and both endpoints", () => {
@@ -480,6 +566,19 @@ function completeGitAt(
     exitCode,
     stdout: new TextEncoder().encode(stdout),
     stderr: new Uint8Array(),
+  });
+}
+
+/** Fails a request the way the native service reports a Git error. */
+function failGitAt(host: StubHost, core: CommitsCore, index: number, stderr: string): void {
+  const request = host.gitRequests[index];
+  if (request === undefined) throw new Error(`missing git request ${index}`);
+  core.receiveGitResult({
+    requestId: request.requestId,
+    status: "completed",
+    exitCode: 128,
+    stdout: new Uint8Array(),
+    stderr: new TextEncoder().encode(stderr),
   });
 }
 

@@ -10,13 +10,13 @@ import { MitGraphBackend } from "./graph-backend";
 type FullDiffResponse = Extract<QueryResponse, { command: "fullDiffContent" }>;
 
 /**
- * Runs the panel query with real Git, which is the only way to prove the
+ * Runs the panel queries with real Git, which is the only way to prove the
  * argument shaping resolves revisions and paths as intended.
  *
  * The repository is built here rather than reusing this checkout so every case
  * the panel can be asked for exists and is identical on every machine.
  */
-describe("MitGraphBackend full diff integration", () => {
+describe("MitGraphBackend read queries integration", () => {
   let repo: string;
   let root: string;
   let second: string;
@@ -134,6 +134,35 @@ describe("MitGraphBackend full diff integration", () => {
     expect(response.newContent).toBeNull();
   });
 
+  it("compares two commits and reads a file across that range", () => {
+    const comparison = drive((backend, deliver) =>
+      backend.loadComparison(
+        { command: "commitComparison", repo, fromHash: root, toHash: third },
+        deliver,
+      ),
+    ) as Extract<QueryResponse, { command: "commitComparison" }>;
+
+    expect(comparison.error).toBeNull();
+    expect(comparison.fileChanges).toEqual([
+      { oldFilePath: "kept.txt", newFilePath: "kept.txt", type: "D", additions: 0, deletions: 3 },
+      { oldFilePath: "moved.txt", newFilePath: "renamed.txt", type: "R", additions: 0, deletions: 0 },
+    ]);
+
+    // The file tree of a comparison sends both of its revisions, which is the
+    // path that skips parent resolution.
+    const response = loadFullDiff({
+      command: "fullDiffContent",
+      repo,
+      fromHash: root,
+      toHash: third,
+      oldFilePath: "kept.txt",
+      newFilePath: "kept.txt",
+      type: "D",
+    });
+    expect(response.oldContent).toBe("one\ntwo\nthree\n");
+    expect(response.newExists).toBe(false);
+  });
+
   it("answers a revision it cannot diff without asking Git", () => {
     const response = loadFullDiff({
       command: "fullDiffContent",
@@ -156,12 +185,14 @@ describe("MitGraphBackend full diff integration", () => {
   });
 });
 
-/** Drives the query to completion, running every request it schedules. */
-function loadFullDiff(request: Parameters<MitGraphBackend["loadFullDiff"]>[0]): FullDiffResponse {
+/** Drives one query to completion, running every request it schedules. */
+function drive(
+  start: (backend: MitGraphBackend, deliver: (response: QueryResponse) => void) => void,
+): QueryResponse {
   const requests: GitRun[] = [];
   const backend = new MitGraphBackend({ runGit: (scheduled) => requests.push(scheduled) });
-  const responses: FullDiffResponse[] = [];
-  backend.loadFullDiff(request, (response) => responses.push(response as FullDiffResponse));
+  const responses: QueryResponse[] = [];
+  start(backend, (response) => responses.push(response));
 
   // Receiving a result can schedule the next stage, so the queue is drained
   // rather than iterated once.
@@ -169,6 +200,10 @@ function loadFullDiff(request: Parameters<MitGraphBackend["loadFullDiff"]>[0]): 
 
   expect(responses).toHaveLength(1);
   return responses[0];
+}
+
+function loadFullDiff(request: Parameters<MitGraphBackend["loadFullDiff"]>[0]): FullDiffResponse {
+  return drive((backend, deliver) => backend.loadFullDiff(request, deliver)) as FullDiffResponse;
 }
 
 function git(cwd: string, args: string[]): string {

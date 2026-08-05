@@ -147,11 +147,12 @@ acceptance gates pass.
 - M2 complete: repository bootstrap, branch loading, refs, commit parents,
   HEAD, lanes, and uncommitted counts run through bounded correlated native
   Git requests. The release bundle contains no Node or `simple-git` runtime.
-- M3 partially complete: clipboard and external URL capabilities are bridged;
-  commit details and the docked full-file diff panel are served from bounded
-  correlated native Git reads, a parentless commit being diffed against the
-  empty tree. Two-commit comparison and the synthetic uncommitted-changes row
-  remain to be mapped.
+- M3 complete for committed history: clipboard and external URL capabilities are
+  bridged; commit details, two-commit comparison, and the docked full-file diff
+  panel are served from bounded correlated native Git reads, a parentless commit
+  being diffed against the empty tree. The synthetic uncommitted-changes row is
+  the one row these queries decline, because its new side is the working tree
+  and no host capability reads that yet.
 - M4 pending: mutating commands currently return an explicit unsupported
   status instead of reporting false success.
 - M5 production cutover complete: no production bundle import or emitted text

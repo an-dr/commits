@@ -36,6 +36,8 @@ export class CommitsCore {
   private nextOsRequestId = 50_000;
   /** Counts panel file reads so only the newest one answers. */
   private fullDiffSequence = 0;
+  /** Counts comparisons so only the newest selection answers. */
+  private comparisonSequence = 0;
 
   constructor(private readonly host: HostPort) {
     const storage = {
@@ -142,6 +144,23 @@ export class CommitsCore {
           );
         }
         return;
+      case "commitComparison": {
+        // Changing the selection supersedes the previous comparison the same
+        // way a second file click supersedes the first.
+        const sequence = ++this.comparisonSequence;
+        this.graph.loadComparison(
+          {
+            command: "commitComparison",
+            repo: this.currentRepository ?? "",
+            fromHash: asString(value.fromHash),
+            toHash: asString(value.toHash),
+          },
+          (response) => {
+            if (sequence === this.comparisonSequence) this.send(response);
+          },
+        );
+        return;
+      }
       case "fullDiffContent": {
         // The page names no file in its reply, so a slower earlier read would
         // land under the filename of the file clicked after it. Only the newest
