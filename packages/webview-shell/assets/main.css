@@ -529,7 +529,9 @@ body.filesPanelHidden #filesPanel {
 #commitTable th.committedCol {
   max-width: 190px;
 }
-#commitTable th.tableColHeader:nth-child(2) {
+/* The graph and message column reads as a list, so its header sits left while
+   the trailing columns stay centred over their values. */
+#commitTable th.tableColHeader:first-child {
   text-align: left;
 }
 #commitTable table,

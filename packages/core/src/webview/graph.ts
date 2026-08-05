@@ -420,11 +420,6 @@ export class Graph {
    * Pixel offset of each commit's own lane, so a row's text can begin just past
    * its own vertex instead of past the widest lane in the whole table.
    */
-  public getLaneOffsets(): number[] {
-    const grid = this.config.grid;
-    return this.vertices.map((vertex) => grid.offsetX + vertex.getNextPoint().x * grid.x);
-  }
-
   public getWidth() {
     let x = 0,
       i,

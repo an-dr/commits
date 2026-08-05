@@ -844,11 +844,12 @@ class GitGraphView {
   private renderTable() {
     const showCommitted = viewState.columnVisibility.Committed;
     const showId = viewState.columnVisibility.ID;
-    // The graph gutter and the message share one cell per row, so the header
-    // spans them with an unnamed column and the labelled one beside it.
-    const laneOffsets = this.graph.getLaneOffsets();
+    // The graph is drawn over the left of the Graph column, so every message
+    // starts past the widest lane instead of past its own. A per-row offset
+    // would leave the messages ragged.
+    const messageIndent = Math.max(this.graph.getWidth() + this.config.grid.offsetX, 0);
     let html =
-        `<tr id="tableColHeaders"><th id="tableHeaderGraphCol" class="tableColHeader"></th><th class="tableColHeader">${l10n.graph}</th>` +
+        `<tr id="tableColHeaders"><th class="tableColHeader">${l10n.graph}</th>` +
         (showCommitted ? `<th class="tableColHeader committedCol">${l10n.dev}</th>` : "") +
         (showId ? `<th class="tableColHeader idCol">${l10n.id}</th>` : "") +
         "</tr>",
@@ -906,8 +907,8 @@ class GitGraphView {
         i +
         '" data-color="' +
         this.graph.getVertexColour(i) +
-        '"><td colspan="2"><span class="description" style="padding-left:' +
-        Math.max((laneOffsets[i] ?? 0) - 4, 0) +
+        '"><td><span class="description" style="padding-left:' +
+        messageIndent +
         'px">' +
         (this.commits[i].hash === this.commitHead ? '<span class="commitHeadDot"></span>' : "") +
         refs +
@@ -1471,10 +1472,10 @@ class GitGraphView {
   private makeTableResizable() {
     let colHeadersElem = document.getElementById("tableColHeaders")!,
       cols = <HTMLCollectionOf<HTMLElement>>document.getElementsByClassName("tableColHeader");
-    // Every column carries an explicit width except the message column, which
-    // absorbs the slack. Deriving the list rather than hard-coding indices is
-    // what keeps this working as columns are hidden or the layout changes.
-    const sizedCols = Array.from(cols, (_col, index) => index).filter((index) => index !== 1);
+    // Every column carries an explicit width except the leading graph and
+    // message column, which absorbs the slack. Deriving the list rather than
+    // hard-coding indices is what keeps this working as columns are hidden.
+    const sizedCols = Array.from(cols, (_col, index) => index).filter((index) => index !== 0);
     let columnWidths = this.gitRepos[this.currentRepo].columnWidths,
       mouseX = -1,
       col = -1;
@@ -1489,9 +1490,7 @@ class GitGraphView {
         for (const [widthIndex, colIndex] of sizedCols.entries()) {
           cols[colIndex].style.width = columnWidths[widthIndex] + "px";
         }
-        cols[0].style.padding = "";
         this.tableElem.className = "fixedLayout";
-        this.graph.limitMaxWidth(columnWidths[0] + 16);
       }
     };
     const stopResizing = () => {
@@ -1513,15 +1512,13 @@ class GitGraphView {
         (i > 0 ? '<span class="resizeCol left" data-col="' + (i - 1) + '"></span>' : "") +
         (i < cols.length - 1 ? '<span class="resizeCol right" data-col="' + i + '"></span>' : "");
     }
+    // The graph shares its column with the messages, which are indented past
+    // it, so it is never narrowed to fit a column of its own.
+    this.graph.limitMaxWidth(-1);
     if (columnWidths !== null) {
       makeTableFixedLayout();
     } else {
       this.tableElem.className = "autoLayout";
-      this.graph.limitMaxWidth(-1);
-      cols[0].style.padding =
-        "0 " +
-        Math.round((Math.max(this.graph.getWidth() + 16, 64) - (cols[0].offsetWidth - 24)) / 2) +
-        "px";
     }
 
     addListenerToClass("resizeCol", "mousedown", (e) => {
@@ -1539,28 +1536,19 @@ class GitGraphView {
         let mouseDeltaX = mouseEvent.clientX - mouseX;
         switch (col) {
           case 0:
-            if (columnWidths[0] + mouseDeltaX < 40) {
-              mouseDeltaX = -columnWidths[0] + 40;
-            }
-            if (cols[1].clientWidth - mouseDeltaX < 64) {
-              mouseDeltaX = cols[1].clientWidth - 64;
-            }
-            columnWidths[0] += mouseDeltaX;
-            cols[0].style.width = columnWidths[0] + "px";
-            this.graph.limitMaxWidth(columnWidths[0] + 16);
-            break;
-          case 1:
-            if (columnWidths[1] === undefined || cols[2] === undefined) {
+            // The leading column absorbs the slack, so this boundary resizes
+            // only the fixed column beside it.
+            if (columnWidths[0] === undefined || cols[1] === undefined) {
               break;
             }
-            if (cols[1].clientWidth + mouseDeltaX < 64) {
-              mouseDeltaX = -cols[1].clientWidth + 64;
+            if (cols[0].clientWidth + mouseDeltaX < 64) {
+              mouseDeltaX = -cols[0].clientWidth + 64;
             }
-            if (columnWidths[1] - mouseDeltaX < 40) {
-              mouseDeltaX = columnWidths[1] - 40;
+            if (columnWidths[0] - mouseDeltaX < 40) {
+              mouseDeltaX = columnWidths[0] - 40;
             }
-            columnWidths[1] -= mouseDeltaX;
-            cols[2].style.width = columnWidths[1] + "px";
+            columnWidths[0] -= mouseDeltaX;
+            cols[1].style.width = columnWidths[0] + "px";
             break;
           default:
             // Dragging between two fixed columns trades width between them.
