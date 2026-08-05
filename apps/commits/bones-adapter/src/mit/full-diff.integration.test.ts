@@ -1,67 +1,160 @@
 import { execFileSync } from "node:child_process";
-import { describe, expect, it } from "vitest";
-import type { GitFileChangeType, QueryResponse } from "@an-dr/commits-core/backend/types";
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { QueryResponse } from "@an-dr/commits-core/backend/types";
 import type { GitResult, GitRun } from "@commits/ipc/native";
 import { MitGraphBackend } from "./graph-backend";
 
 type FullDiffResponse = Extract<QueryResponse, { command: "fullDiffContent" }>;
 
 /**
- * Runs the panel query against this repository with real Git, which is the only
- * way to prove the argument shaping resolves revisions and paths as intended.
+ * Runs the panel query with real Git, which is the only way to prove the
+ * argument shaping resolves revisions and paths as intended.
+ *
+ * The repository is built here rather than reusing this checkout so every case
+ * the panel can be asked for exists and is identical on every machine.
  */
 describe("MitGraphBackend full diff integration", () => {
-  it("reads a changed file of the newest commit with both endpoints", () => {
-    const hash = git(["rev-parse", "HEAD"]).trim();
-    const change = firstChange(hash, false);
+  let repo: string;
+  let root: string;
+  let second: string;
+  let third: string;
 
+  beforeAll(() => {
+    repo = mkdtempSync(join(tmpdir(), "commits-full-diff-"));
+    git(repo, ["init", "--quiet", "--initial-branch=main"]);
+    git(repo, ["config", "user.name", "Test"]);
+    git(repo, ["config", "user.email", "test@example.test"]);
+    // The endpoints are compared byte for byte, so the machine's line-ending
+    // conversion must not rewrite what Git stores.
+    git(repo, ["config", "core.autocrlf", "false"]);
+
+    write(repo, "kept.txt", "one\ntwo\nthree\n");
+    write(repo, "moved.txt", "moved one\nmoved two\nmoved three\nmoved four\n");
+    writeFileSync(join(repo, "icon.bin"), Buffer.from([0, 1, 2, 3, 0, 255]));
+    root = commit(repo, "first");
+
+    write(repo, "kept.txt", "one\nchanged\nthree\n");
+    git(repo, ["mv", "moved.txt", "renamed.txt"]);
+    second = commit(repo, "modify and rename");
+
+    unlinkSync(join(repo, "kept.txt"));
+    third = commit(repo, "delete");
+  });
+
+  // Windows can still hold a Git file briefly after the last command exits.
+  afterAll(() => rmSync(repo, { recursive: true, force: true, maxRetries: 3 }));
+
+  it("reads a modified file with the unchanged remainder of both endpoints", () => {
     const response = loadFullDiff({
       command: "fullDiffContent",
-      repo: process.cwd(),
-      fromHash: hash,
-      toHash: hash,
-      ...change,
+      repo,
+      fromHash: second,
+      toHash: second,
+      oldFilePath: "kept.txt",
+      newFilePath: "kept.txt",
+      type: "M",
     });
 
     expect(response.diff).toContain("@@");
-    expect(response.newExists).toBe(change.type !== "D");
-    expect(response.oldExists).toBe(change.type !== "A");
-    if (response.newExists) expect(response.newContent).toEqual(expect.any(String));
+    expect(response.oldContent).toBe("one\ntwo\nthree\n");
+    expect(response.newContent).toBe("one\nchanged\nthree\n");
+    expect(response.oldExists).toBe(true);
+    expect(response.newExists).toBe(true);
   });
 
-  it("reads the first commit, which has no parent to diff against", () => {
-    const root = nonEmptyLines(git(["rev-list", "--max-parents=0", "HEAD"])).pop()!;
-    const change = firstChange(root, true);
-
+  it("diffs the first commit against the empty tree", () => {
     const response = loadFullDiff({
       command: "fullDiffContent",
-      repo: process.cwd(),
+      repo,
       fromHash: root,
       toHash: root,
-      ...change,
+      oldFilePath: "kept.txt",
+      newFilePath: "kept.txt",
+      type: "A",
     });
 
     expect(response.diff).toContain("@@");
     expect(response.oldExists).toBe(false);
+    expect(response.newContent).toBe("one\ntwo\nthree\n");
+  });
+
+  it("reads a renamed file as one change under both of its paths", () => {
+    const response = loadFullDiff({
+      command: "fullDiffContent",
+      repo,
+      fromHash: second,
+      toHash: second,
+      oldFilePath: "moved.txt",
+      newFilePath: "renamed.txt",
+      type: "R",
+    });
+
+    // Rename detection keeps this one file section, which is what lets the
+    // panel line the two endpoints up instead of reading a delete and an add.
+    expect(response.diff).toContain("rename from moved.txt");
+    expect(response.diff!.match(/^diff --git/gm)).toHaveLength(1);
+    expect(response.oldContent).toBe(response.newContent);
+    expect(response.oldExists).toBe(true);
     expect(response.newExists).toBe(true);
   });
-});
 
-/** First changed file of a commit, as the view's file tree reports one. */
-function firstChange(
-  hash: string,
-  root: boolean,
-): { oldFilePath: string; newFilePath: string; type: GitFileChangeType } {
-  const args = ["diff-tree", "--no-commit-id", "--name-status", "-r", "-M"];
-  if (root) args.push("--root");
-  const parts = nonEmptyLines(git([...args, hash]))[0].split("\t");
-  const type = parts[0].charAt(0) as GitFileChangeType;
-  return {
-    oldFilePath: parts[1],
-    newFilePath: type === "R" ? parts[2] : parts[1],
-    type,
-  };
-}
+  it("reads a deleted file from its old side only", () => {
+    const response = loadFullDiff({
+      command: "fullDiffContent",
+      repo,
+      fromHash: third,
+      toHash: third,
+      oldFilePath: "kept.txt",
+      newFilePath: "kept.txt",
+      type: "D",
+    });
+
+    expect(response.diff).toContain("@@");
+    expect(response.oldContent).toBe("one\nchanged\nthree\n");
+    expect(response.newExists).toBe(false);
+    expect(response.newContent).toBeNull();
+  });
+
+  it("reports a binary file as having no readable endpoint", () => {
+    const response = loadFullDiff({
+      command: "fullDiffContent",
+      repo,
+      fromHash: root,
+      toHash: root,
+      oldFilePath: "icon.bin",
+      newFilePath: "icon.bin",
+      type: "A",
+    });
+
+    expect(response.diff).toContain("Binary");
+    expect(response.newExists).toBe(false);
+    expect(response.newContent).toBeNull();
+  });
+
+  it("answers a revision it cannot diff without asking Git", () => {
+    const response = loadFullDiff({
+      command: "fullDiffContent",
+      repo,
+      fromHash: "*",
+      toHash: "*",
+      oldFilePath: "kept.txt",
+      newFilePath: "kept.txt",
+      type: "M",
+    });
+
+    expect(response).toEqual({
+      command: "fullDiffContent",
+      diff: null,
+      oldContent: null,
+      newContent: null,
+      oldExists: false,
+      newExists: false,
+    });
+  });
+});
 
 /** Drives the query to completion, running every request it schedules. */
 function loadFullDiff(request: Parameters<MitGraphBackend["loadFullDiff"]>[0]): FullDiffResponse {
@@ -78,10 +171,22 @@ function loadFullDiff(request: Parameters<MitGraphBackend["loadFullDiff"]>[0]): 
   return responses[0];
 }
 
-function git(args: string[]): string {
-  return execFileSync("git", args, { cwd: process.cwd(), encoding: "utf8" });
+function git(cwd: string, args: string[]): string {
+  return execFileSync("git", args, { cwd, encoding: "utf8" });
 }
 
+function write(repo: string, name: string, content: string): void {
+  writeFileSync(join(repo, name), content);
+}
+
+/** Commits everything in the work tree and returns the new commit's hash. */
+function commit(repo: string, message: string): string {
+  git(repo, ["add", "--all"]);
+  git(repo, ["commit", "--quiet", "--message", message]);
+  return git(repo, ["rev-parse", "HEAD"]).trim();
+}
+
+/** Stands in for the native Git service, which the component cannot call here. */
 function runGit(request: GitRun): GitResult {
   try {
     return {
@@ -101,8 +206,4 @@ function runGit(request: GitRun): GitResult {
       stderr: result.stderr ?? new Uint8Array(),
     };
   }
-}
-
-function nonEmptyLines(value: string): string[] {
-  return value.split(/\r\n|\r|\n/).filter((line) => line.length > 0);
 }
