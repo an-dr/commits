@@ -10,7 +10,7 @@ import type {
 
 import type { GitWorkingTreeChange } from "@an-dr/commits-core/data-source/models";
 import { BranchPanel, NO_REMOTE_INFO, type BranchPanelRemoteInfo } from "./branchPanel";
-import { renderChangesPanel } from "./changesPanelRender";
+import { renderChangesFooter, renderChangesPanel } from "./changesPanelRender";
 import { CommitSelection, readSelectionGesture } from "./commitSelection";
 import { hideContextMenuIfOpen, isContextMenuOpen, showContextMenu } from "./contextMenu";
 import {
@@ -87,6 +87,9 @@ class GitGraphView {
   /** True while the panel shows the working tree rather than a revision. */
   private workingTreeOpen = false;
   private workingTree: GitWorkingTreeChange[] = [];
+  /** Kept across re-reads of the tree so typing is never lost to a refresh. */
+  private commitMessage = "";
+  private commitAmend = false;
   private scrollShadowElem: HTMLElement;
   private filesPanel: FilesPanel;
   private fullDiffPanel: FullDiffPanel;
@@ -1680,7 +1683,51 @@ class GitGraphView {
     }
     this.workingTree = changes;
     this.filesPanel.setContent(renderChangesPanel(changes, error));
+    this.filesPanel.setFooter(renderChangesFooter(this.commitMessage, this.commitAmend));
     this.registerChangesPanelListeners();
+    this.registerCommitListeners();
+  }
+
+  /**
+   * Wires the commit surface. The message lives on the view rather than in the
+   * textarea alone, so re-reading the tree after staging does not discard what
+   * the user has typed.
+   */
+  private registerCommitListeners() {
+    const message = document.getElementById("changesMessage");
+    const amend = document.getElementById("changesAmend");
+    const commit = document.getElementById("changesCommitBtn");
+    message?.addEventListener("input", () => {
+      this.commitMessage = (<HTMLTextAreaElement>message).value;
+    });
+    amend?.addEventListener("change", () => {
+      this.commitAmend = (<HTMLInputElement>amend).checked;
+    });
+    commit?.addEventListener("click", () => {
+      sendMessage({
+        command: "commitChanges",
+        repo: this.currentRepo!,
+        message: this.commitMessage,
+        amend: this.commitAmend
+      });
+    });
+  }
+
+  /**
+   * Closes out a commit. On success the message is cleared and the graph is
+   * re-read, so the new commit replaces the row the user was standing on.
+   */
+  public afterCommit(status: GitCommandStatus) {
+    if (status !== null) {
+      showErrorDialog(l10n.changesUnableToCommit, status, null);
+      return;
+    }
+    this.commitMessage = "";
+    this.commitAmend = false;
+    if (this.workingTreeOpen) {
+      sendMessage({ command: "workingTreeChanges", repo: this.currentRepo! });
+    }
+    this.refresh(true);
   }
 
   /**
@@ -1766,6 +1813,8 @@ class GitGraphView {
     this.filesPanel.setHeader(
       `<b>${l10n.filesPanelTitle}</b> &mdash; ${escapeHtml(abbrevCommit(hash))}`
     );
+    // A revision has nothing to commit, so the commit surface goes with it.
+    this.filesPanel.setFooter("");
     this.filesPanel.setContent(
       generateGitFileTreeHtml(fileTree, commitDetails.fileChanges) + "</table>"
     );
@@ -2107,6 +2156,9 @@ window.addEventListener("message", (event) => {
       break;
     case "discardFiles":
       gitGraph.afterWorkingTreeAction(msg.status, l10n.changesUnableToDiscard);
+      break;
+    case "commitChanges":
+      gitGraph.afterCommit(msg.status);
       break;
     case "mergeBranch":
       refreshGraphOrDisplayError(msg.status, l10n.unableToMergeBranch);

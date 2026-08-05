@@ -16,6 +16,12 @@ request gained the fields that carry them. `main.ts` also switches repository
 when the host names a different active one, and routes every repository change
 through one reset so selections never carry across repositories. ADR-008 records why.
 
+The working tree is a local addition too. `changesPanelRender.ts` is new, `main.ts`
+opens the uncommitted row as a changes panel and carries the commit surface, the
+`workingTreeChanges` query and the `stageFiles`, `unstageFiles`, `discardFiles`
+and `commitChanges` actions are new in the protocol, and `fullDiffContent` gained
+a `staged` flag naming which side of the index a file was clicked on.
+
 The branch panel also diverges in what it shows. `branchPanelRender.ts` renders a
 HEAD row carrying the checked-out revision, one section per remote named after
 that remote, disclosure rows for folders, a checkbox on every row, the remote

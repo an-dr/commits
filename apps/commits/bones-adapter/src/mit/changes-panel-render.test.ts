@@ -1,7 +1,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createLocalizedStrings } from "@an-dr/commits-webview-shell/l10n";
 import type { GitWorkingTreeChange } from "@an-dr/commits-core/data-source/models";
-import { renderChangesPanel } from "@an-dr/commits-core/webview/changesPanelRender";
+import {
+  renderChangesFooter,
+  renderChangesPanel,
+} from "@an-dr/commits-core/webview/changesPanelRender";
 
 /** The panel reads strings and file icons from the page globals. */
 beforeAll(() => {
@@ -89,6 +92,23 @@ describe("renderChangesPanel", () => {
     );
 
     expect(html.indexOf(">a.ts<")).toBeLessThan(html.indexOf(">b.ts<"));
+  });
+});
+
+describe("renderChangesFooter", () => {
+  it("keeps the message the user typed and the amend choice", () => {
+    const html = renderChangesFooter("half-written message", true);
+
+    expect(html).toContain("half-written message");
+    expect(html).toContain('id="changesAmend" type="checkbox" checked');
+    expect(html).toContain("Commit");
+  });
+
+  it("escapes a message that looks like markup", () => {
+    const html = renderChangesFooter("<script>alert(1)</script>", false);
+
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
   });
 });
 

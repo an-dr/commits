@@ -37,6 +37,10 @@ export interface LocalizedStrings {
   readonly changesDiscardFile: string;
   readonly changesDiscardConfirm: string;
   readonly changesDiscardUntrackedConfirm: string;
+  readonly changesMessagePlaceholder: string;
+  readonly changesAmend: string;
+  readonly changesCommit: string;
+  readonly changesUnableToCommit: string;
   readonly changesUnableToStage: string;
   readonly changesUnableToUnstage: string;
   readonly changesUnableToDiscard: string;

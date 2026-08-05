@@ -165,6 +165,16 @@ export class CommitsCore {
           );
         }
         return;
+      case "commitChanges":
+        this.workingTreeActions.commit(
+          this.currentRepository ?? "",
+          {
+            message: asString(value.message),
+            amend: value.amend === true,
+          },
+          (status) => this.send({ command: "commitChanges", status }),
+        );
+        return;
       case "stageFiles":
       case "unstageFiles":
       case "discardFiles": {

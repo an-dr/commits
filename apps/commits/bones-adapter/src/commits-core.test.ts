@@ -231,6 +231,40 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.sent).toContainEqual(["main", { command: "stageFiles", status: null }]);
   });
 
+  it("commits the staged changes with the message it was given", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "commitChanges", repo: "C:/repo", message: "  fix: the thing  ", amend: true,
+    }));
+
+    // No editor can open: the message is an argument and it is trimmed here.
+    expect(host.gitRequests[0].args).toEqual([
+      "commit", "--amend", "--message", "fix: the thing",
+    ]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "commitChanges", status: null }]);
+  });
+
+  it("refuses to commit without a message rather than opening an editor", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "commitChanges", repo: "C:/repo", message: "", amend: false,
+    }));
+
+    expect(host.gitRequests).toHaveLength(0);
+    expect(host.sent).toContainEqual([
+      "main", { command: "commitChanges", status: "A commit needs a message." },
+    ]);
+  });
+
   it("still refuses a Git action it does not implement", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);

@@ -19,6 +19,8 @@ type ActionPayloads = {
    * restored, because Git has no earlier version of it to restore.
    */
   discardFiles: { files: string[]; untracked: boolean };
+  /** Commits what is staged, or rewrites the last commit when amending. */
+  commitChanges: { message: string; amend: boolean };
   mergeBranch: { branchName: string; createNewCommit: boolean };
   mergeCommit: { commitHash: string; createNewCommit: boolean };
   pushTag: { tagName: string };

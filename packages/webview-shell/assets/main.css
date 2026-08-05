@@ -836,6 +836,35 @@ svg.fileIcon {
   padding: 10px;
   opacity: 0.75;
 }
+.changesFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+}
+#changesMessage {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  resize: vertical;
+  border: 1px solid var(--vscode-input-border, rgba(128, 128, 128, 0.5));
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+}
+.changesFooterRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.changesAmend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
 
 /* The folder and file icons are the tree's markers, and one step of indent per
    level is enough to read the nesting; the list defaults are far wider. */

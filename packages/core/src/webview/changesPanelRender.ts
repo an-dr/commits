@@ -89,6 +89,24 @@ function renderSection(label: string, changes: readonly GitWorkingTreeChange[]):
   );
 }
 
+/**
+ * The commit surface under the file list: a message, an amend toggle, and the
+ * button. Committing is offered whatever the tree holds, because Git refuses an
+ * empty commit itself and says why.
+ */
+export function renderChangesFooter(message: string, amend: boolean): string {
+  return (
+    `<div class="changesFooter">` +
+    `<textarea id="changesMessage" rows="2" spellcheck="true"` +
+    ` placeholder="${escapeHtml(l10n.changesMessagePlaceholder)}">${escapeHtml(message)}</textarea>` +
+    `<div class="changesFooterRow">` +
+    `<label class="changesAmend"><input id="changesAmend" type="checkbox"` +
+    `${amend ? " checked" : ""}> ${escapeHtml(l10n.changesAmend)}</label>` +
+    `<button id="changesCommitBtn" class="roundedBtn">${escapeHtml(l10n.changesCommit)}</button>` +
+    `</div></div>`
+  );
+}
+
 /** Builds the working-tree body: what is staged, then what is not. */
 export function renderChangesPanel(
   changes: readonly GitWorkingTreeChange[],

@@ -153,8 +153,11 @@ acceptance gates pass.
   being diffed against the empty tree. The synthetic uncommitted-changes row is
   the one row these queries decline, because its new side is the working tree
   and no host capability reads that yet.
-- M4 pending: mutating commands currently return an explicit unsupported
-  status instead of reporting false success.
+- M4 begun with the working tree: the uncommitted row opens a changes panel that
+  stages, unstages, discards and commits through bounded native Git commands,
+  and a repository-scoped host capability reads the working-tree side of a file
+  the panel diffs. Every other mutating command still returns an explicit
+  unsupported status instead of reporting false success.
 - M5 production cutover complete: no production bundle import or emitted text
   references `startPage`, `repositorySnapshot`, or the old card layout. Legacy
   source/tests remain until their dependent types are retired safely.

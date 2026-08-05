@@ -14,6 +14,12 @@ export type WorkingTreeAction =
       readonly untracked: boolean;
     };
 
+/** A commit of what is staged, which names no files of its own. */
+export interface CommitAction {
+  readonly message: string;
+  readonly amend: boolean;
+}
+
 /** Failure text of a Git run, preferring what Git itself said. */
 function failureText(result: GitResult): string {
   const text = new TextDecoder().decode(result.stderr).trim();
@@ -48,6 +54,34 @@ export class WorkingTreeActions {
       deliver("Nothing to do.");
       return;
     }
+    this.send(repo, [...argsFor(action), "--", ...files], deliver);
+  }
+
+  /**
+   * Commits what is staged.
+   *
+   * The message is passed as one argument rather than through an editor, so no
+   * editor is ever launched, and an empty message is refused here because Git
+   * would otherwise open one.
+   */
+  commit(repo: string, action: CommitAction, deliver: (status: string | null) => void): void {
+    const message = action.message.trim();
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    if (message === "") {
+      deliver("A commit needs a message.");
+      return;
+    }
+    this.send(
+      repo,
+      ["commit", ...(action.amend ? ["--amend"] : []), "--message", message],
+      deliver,
+    );
+  }
+
+  private send(repo: string, args: string[], deliver: (status: string | null) => void): void {
     const requestId = this.nextRequestId++;
     this.pending.set(requestId, (result) =>
       deliver(
@@ -56,12 +90,7 @@ export class WorkingTreeActions {
           : failureText(result) || "The Git command did not complete.",
       ),
     );
-    this.host.runGit({
-      requestId,
-      cwd: repo,
-      args: [...argsFor(action), "--", ...files],
-      timeoutMs: 30_000,
-    });
+    this.host.runGit({ requestId, cwd: repo, args, timeoutMs: 30_000 });
   }
 }
 
