@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GitResult, GitRun, NativeResult, OsAction } from "@commits/ipc/native";
 import { CommitsCore } from "./commits-core";
-import type { HostPort, LogLevel, PageSource, SettingsIoResult } from "./host/host-port";
+import type { CommitsRepoStatus, HostPort, LogLevel, PageSource, SettingsIoResult } from "./host/host-port";
 
 class StubHost implements HostPort {
   readonly closed: string[] = [];
@@ -17,6 +17,7 @@ class StubHost implements HostPort {
   settingsSaveError = "";
   paths: string[] = [];
   pageSource: PageSource = { kind: "url", value: "file:///commits/page.html" };
+  commitsRepoStatusValue: CommitsRepoStatus = { ok: true, exists: false, path: "C:/commits-repo", error: "" };
 
   closePanel(panel: string): void { this.closed.push(panel); }
   log(level: LogLevel, message: string): void { this.logs.push([level, message]); }
@@ -30,6 +31,7 @@ class StubHost implements HostPort {
     return { ok: true, value: new Uint8Array(), error: "" };
   }
   loadSavedState(): Uint8Array<ArrayBufferLike> { return this.savedState; }
+  commitsRepoStatus(): CommitsRepoStatus { return this.commitsRepoStatusValue; }
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void { this.savedState = value; }
   runGit(request: GitRun): void { this.gitRequests.push(request); }
   respondPrompt(id: string, value: string): void { this.promptReplies.push(`${id}:${value}`); }
@@ -63,6 +65,36 @@ describe("CommitsCore MIT webview host", () => {
       command: "loadRepos",
       repos: { "C:/repo": { columnWidths: null } },
       lastActiveRepo: "C:/repo",
+    }]);
+  });
+
+  it("reports the commits repo status once the view is ready", () => {
+    const host = new StubHost();
+    host.commitsRepoStatusValue = { ok: true, exists: true, path: "C:/home/.commits/repo", error: "" };
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneCommitsRepoStatus",
+      exists: true,
+      path: "C:/home/.commits/repo",
+    }]);
+  });
+
+  it("reports the commits repo as absent when the host cannot resolve it", () => {
+    const host = new StubHost();
+    host.commitsRepoStatusValue = { ok: false, exists: false, path: "", error: "no home directory" };
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneCommitsRepoStatus",
+      exists: false,
+      path: "",
     }]);
   });
 

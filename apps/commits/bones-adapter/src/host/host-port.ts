@@ -9,6 +9,13 @@ export interface SettingsIoResult {
   readonly error: string;
 }
 
+export interface CommitsRepoStatus {
+  readonly ok: boolean;
+  readonly exists: boolean;
+  readonly path: string;
+  readonly error: string;
+}
+
 /** Host capabilities used by product behavior on bones and VS Code. */
 export interface HostPort {
   closePanel(panel: string): void;
@@ -33,6 +40,8 @@ export interface HostPort {
   loadSettings(): SettingsIoResult;
   /** Atomically replaces the standalone user-facing settings document. */
   saveSettings(value: Uint8Array<ArrayBufferLike>): SettingsIoResult;
+  /** Whether the commits project's own clone (`~/.commits/repo`) exists, and its resolved path. */
+  commitsRepoStatus(): CommitsRepoStatus;
   /** Raw bytes persisted by bones in this component's file-backed save slot. */
   loadSavedState(): Uint8Array<ArrayBufferLike>;
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void;

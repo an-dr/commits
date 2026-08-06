@@ -40,6 +40,8 @@ export class CommitsCore {
   private settings: SettingsDocument = DEFAULT_SETTINGS;
   private settingsError = "";
   private currentRepository: string | null = null;
+  private commitsRepoPath: string | null = null;
+  private commitsRepoExists = false;
   private bootstrapped = false;
   private nextOsRequestId = 50_000;
   /** Counts panel file reads so only the newest one answers. */
@@ -114,6 +116,7 @@ export class CommitsCore {
         return;
       case "standaloneViewReady":
         this.sendCurrentRepositories();
+        this.sendCommitsRepoStatus();
         return;
       case "standaloneSaveSettings":
         this.saveSettings(value.requestId, value.settings);
@@ -324,6 +327,19 @@ export class CommitsCore {
     this.bootstrap();
   }
 
+  /**
+   * Tells the page whether ~/.commits/repo exists, so it can enable Open
+   * Commits Repo / Open Commits Repo Folder. Sent at boot and again after a
+   * clone changes the answer.
+   */
+  private sendCommitsRepoStatus(): void {
+    this.send({
+      command: "standaloneCommitsRepoStatus",
+      exists: this.commitsRepoExists,
+      path: this.commitsRepoPath ?? "",
+    });
+  }
+
   /** Re-announces repository availability without redoing discovery. */
   private sendCurrentRepositories(): void {
     if (this.repositories.all().length === 0) {
@@ -344,6 +360,13 @@ export class CommitsCore {
     } else {
       this.settingsError = loaded.error;
       this.host.log("warn", `could not load settings: ${loaded.error}`);
+    }
+    const commitsRepo = this.host.commitsRepoStatus();
+    if (commitsRepo.ok) {
+      this.commitsRepoPath = commitsRepo.path;
+      this.commitsRepoExists = commitsRepo.exists;
+    } else {
+      this.host.log("warn", `could not resolve the commits repo path: ${commitsRepo.error}`);
     }
     this.repositories.discover();
     if (this.state.lastActiveRepository !== null) {

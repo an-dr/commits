@@ -9,7 +9,7 @@ import {
   encodeOpenPanel,
   encodeSendJson,
 } from "@commits/ipc/web";
-import type { HostPort, LogLevel, PageSource, SettingsIoResult } from "./host-port";
+import type { CommitsRepoStatus, HostPort, LogLevel, PageSource, SettingsIoResult } from "./host-port";
 import { encodeGitRun, encodeOsRequest, type GitRun, type OsAction } from "@commits/ipc/native";
 
 export class BonesHostPort implements HostPort {
@@ -67,6 +67,26 @@ export class BonesHostPort implements HostPort {
 
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void {
     publish("persistence/save", value);
+  }
+
+  commitsRepoStatus(): CommitsRepoStatus {
+    try {
+      const response = send("commits-repo", new Uint8Array());
+      if (response[0] !== 0) {
+        const error = response.length > 1
+          ? new TextDecoder().decode(response.slice(1))
+          : "commits repo host returned an invalid response";
+        return { ok: false, exists: false, path: "", error };
+      }
+      return {
+        ok: true,
+        exists: response[1] === 1,
+        path: new TextDecoder().decode(response.slice(2)),
+        error: "",
+      };
+    } catch (error) {
+      return { ok: false, exists: false, path: "", error: String(error) };
+    }
   }
 
   runGit(request: GitRun): void {
