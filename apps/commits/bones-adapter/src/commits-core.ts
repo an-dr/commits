@@ -373,6 +373,12 @@ export class CommitsCore {
 
   /** Clones the commits project's own repository into ~/.commits/repo. */
   private cloneCommitsRepo(): void {
+    // A clone already in flight must not be started twice: a repeat click
+    // before the GitResult returns would otherwise spawn a second `git
+    // clone` into the same not-yet-populated destination.
+    if (this.pendingCloneRequestId !== null) {
+      return;
+    }
     if (this.commitsRepoExists) {
       this.sendCommitsRepoStatus(`Already cloned at ${this.commitsRepoPath ?? ""}`);
       return;

@@ -128,6 +128,28 @@ describe("CommitsCore MIT webview host", () => {
     }]);
   });
 
+  it("ignores a repeat clone request while one is already in flight", () => {
+    const host = new StubHost();
+    host.commitsRepoStatusValue =
+      { ok: true, exists: false, path: "C:/home/.commits/repo", parentPath: "C:/home/.commits", error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneCloneCommitsRepo" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneCloneCommitsRepo" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneCloneCommitsRepo" }));
+
+    expect(host.gitRequests).toHaveLength(1);
+
+    completeGitAt(host, core, 0, "");
+    core.receivePageJson(JSON.stringify({ command: "standaloneCloneCommitsRepo" }));
+
+    // Once the first clone has finished, a further click is the "already
+    // cloned" no-op path, not a second clone.
+    expect(host.gitRequests).toHaveLength(1);
+  });
+
   it("no-ops the clone with a message when the repo already exists", () => {
     const host = new StubHost();
     host.commitsRepoStatusValue =
