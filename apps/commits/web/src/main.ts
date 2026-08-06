@@ -13,16 +13,30 @@ import { createAppearanceController } from "./themes";
 const STATE_KEY = "commits.mit-webview.state";
 
 type StandaloneMessage =
-  | { command: "standaloneReady" | "standaloneViewReady" | "standaloneChooseRepository" }
+  | {
+      command:
+        | "standaloneReady"
+        | "standaloneViewReady"
+        | "standaloneChooseRepository"
+        | "standaloneCloneCommitsRepo"
+        | "standaloneOpenCommitsRepo"
+        | "standaloneOpenCommitsRepoFolder";
+    }
   | { command: "standaloneOpenRepository"; path: string }
   | { command: "standaloneSaveSettings"; requestId: number; settings: SettingsDocument };
 
 interface StandaloneResponse {
-  command: "standaloneRepositoryRequired" | "standaloneSettings" | "standaloneSettingsSaved";
+  command:
+    | "standaloneRepositoryRequired"
+    | "standaloneSettings"
+    | "standaloneSettingsSaved"
+    | "standaloneCommitsRepoStatus";
   recent?: readonly string[];
   settings?: SettingsDocument;
   error?: string;
   requestId?: number;
+  exists?: boolean;
+  message?: string;
 }
 
 declare global {
@@ -73,6 +87,8 @@ async function boot(): Promise<void> {
         activeSettings = data.settings ?? activeSettings;
         if (!data.error) appearance.update(activeSettings);
         settingsEditor.finishSave(activeSettings, data.error ?? "");
+      } else if (data.command === "standaloneCommitsRepoStatus") {
+        updateCommitsRepoStatus(data.exists === true, data.message ?? "");
       }
       window.dispatchEvent(new MessageEvent("message", { data }));
     } catch {
@@ -116,8 +132,13 @@ function menuBarHtml(): string {
       <button type="button" class="standaloneMenuTitle" aria-haspopup="true" aria-expanded="false">File</button>
       <ul class="standaloneMenuList" hidden>
         <li><button type="button" id="standaloneMenuOpenRepo">Open repo&hellip;</button></li>
+        <li class="standaloneMenuSeparator" role="separator"></li>
+        <li><button type="button" id="standaloneMenuCloneCommitsRepo">Clone Commits Repo</button></li>
+        <li><button type="button" id="standaloneMenuOpenCommitsRepo" disabled>Open Commits Repo</button></li>
+        <li><button type="button" id="standaloneMenuOpenCommitsRepoFolder" disabled>Open Commits Repo Folder</button></li>
       </ul>
     </div>
+    <span id="standaloneMenuStatus" aria-live="polite"></span>
     <button type="button" id="standaloneSettingsButton" disabled>Settings</button>
   </nav>`;
 }
@@ -144,10 +165,43 @@ function wireMenuBar(): void {
     setOpen(false);
     showRepositoryOverlay();
   });
+  document.getElementById("standaloneMenuCloneCommitsRepo")!.addEventListener("click", () => {
+    setOpen(false);
+    post({ command: "standaloneCloneCommitsRepo" });
+  });
+  document.getElementById("standaloneMenuOpenCommitsRepo")!.addEventListener("click", () => {
+    setOpen(false);
+    post({ command: "standaloneOpenCommitsRepo" });
+  });
+  document.getElementById("standaloneMenuOpenCommitsRepoFolder")!.addEventListener("click", () => {
+    setOpen(false);
+    post({ command: "standaloneOpenCommitsRepoFolder" });
+  });
   document.addEventListener("click", () => setOpen(false));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") setOpen(false);
   });
+}
+
+/**
+ * Enables Open Commits Repo / Open Commits Repo Folder once the clone
+ * exists, and shows transient feedback about the last clone/open/reveal
+ * outcome. The message clears itself so a stale "Cloning…" never lingers.
+ */
+let commitsRepoStatusTimer: number | null = null;
+function updateCommitsRepoStatus(exists: boolean, message: string): void {
+  const openButton = document.getElementById("standaloneMenuOpenCommitsRepo") as HTMLButtonElement | null;
+  const folderButton = document.getElementById("standaloneMenuOpenCommitsRepoFolder") as HTMLButtonElement | null;
+  if (openButton) openButton.disabled = !exists;
+  if (folderButton) folderButton.disabled = !exists;
+
+  const status = document.getElementById("standaloneMenuStatus");
+  if (!status) return;
+  status.textContent = message;
+  if (commitsRepoStatusTimer !== null) window.clearTimeout(commitsRepoStatusTimer);
+  commitsRepoStatusTimer = message
+    ? window.setTimeout(() => { status.textContent = ""; }, 6_000)
+    : null;
 }
 
 function repositoryOverlayHtml(): string {

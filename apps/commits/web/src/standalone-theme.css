@@ -372,6 +372,34 @@ body {
   background: var(--vscode-menu-selectionBackground);
 }
 
+.standaloneMenuList button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+
+.standaloneMenuSeparator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--vscode-menu-separatorBackground);
+}
+
+/* Fills the space between the File menu and Settings, so transient
+   clone/open/reveal feedback is visible without reopening the menu. */
+#standaloneMenuStatus {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  color: var(--vscode-menu-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
 /* Scrollbars: the platform default is heavy next to the graph, so they are
    drawn as slim overlays that pick up the theme. */
 * {
