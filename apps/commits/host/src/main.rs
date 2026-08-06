@@ -5,6 +5,7 @@
 mod diagnostics;
 mod page;
 mod settings;
+mod splash;
 
 use std::sync::mpsc::Receiver;
 
@@ -18,6 +19,8 @@ fn main() {
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (logger, failures) = diagnostics::install();
     report_a_failed_startup_extension(failures);
+    let page = page::PageModule::new(logger.clone());
+    let splash = splash::SplashModule::new(logger.clone());
     runner::Engine::new()
         .logger(logger)
         // `commits.wasm` is ~12 MB carrying an embedded JavaScript engine, so
@@ -32,10 +35,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .saves_dir("saves")
         .window("commits", 1100, 720)
         .web()
+        // Modules init in registration order, so these two come first: the
+        // page server has to be listening before the splash can ask it for a
+        // URL, and the loading page wants to be up before the slower modules
+        // and the component's own load run.
+        .module(page)
+        .module(splash)
         .module(commits_git::GitModule::default())
         .module(commits_watcher::WatcherModule::default())
         .module(commits_os::OsModule::default())
-        .module(page::PageModule::default())
         .module(settings::SettingsModule::default())
         .run()?;
     Ok(())

@@ -6,12 +6,21 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bus::{Envelope, Handler, Module, ModuleContext};
+use logging::Logger;
 
 /// Bus endpoint name the component addresses with a direct `send`.
 pub const ENDPOINT: &str = "page";
 
 /// File served to the webview, resolved next to the executable.
 const PAGE_FILE: &str = "page.html";
+/// Second route, for the loading page shown while the component starts.
+const LOADING_FILE: &str = "loading.html";
+
+/// Request byte asking for the loading page instead of the graph page.
+///
+/// The component sends an empty payload, so the graph page stays the default
+/// and its request needs no change.
+pub const LOADING_REQUEST: u8 = 1;
 
 /// Resolves the standalone webview page on demand.
 ///
@@ -21,6 +30,8 @@ const PAGE_FILE: &str = "page.html";
 /// runtime instead of embedding it.
 pub struct PageModule {
     url: Option<String>,
+    loading_url: Option<String>,
+    logger: Option<Logger>,
     shutdown: Arc<AtomicBool>,
 }
 
@@ -28,12 +39,21 @@ impl Default for PageModule {
     fn default() -> Self {
         Self {
             url: None,
+            loading_url: None,
+            logger: None,
             shutdown: Arc::new(AtomicBool::new(false)),
         }
     }
 }
 
 impl PageModule {
+    pub fn new(logger: Logger) -> Self {
+        Self {
+            logger: Some(logger),
+            ..Self::default()
+        }
+    }
+
     /// Resolves the page file beside the running executable.
     fn resolve_page_path() -> Option<PathBuf> {
         let executable = std::env::current_exe().ok()?;
@@ -61,19 +81,29 @@ impl Module for PageModule {
             .local_addr()
             .map_err(|error| format!("reading page server address: {error}"))?;
         self.url = Some(format!("http://{address}/{PAGE_FILE}"));
+        self.loading_url = Some(format!("http://{address}/{LOADING_FILE}"));
 
         let shutdown = Arc::clone(&self.shutdown);
         std::thread::Builder::new()
             .name("commits-page-server".to_string())
             .spawn(move || serve(listener, path, shutdown))
             .map_err(|error| format!("starting page server: {error}"))?;
+        // Marks the end of window and webview creation in the log: everything
+        // before this line is the engine getting a window on screen.
+        if let Some(logger) = &self.logger {
+            logger.info(ENDPOINT, &format!("page server listening on {address}"));
+        }
         Ok(())
     }
 
     /// Answers a page request with a local URL. Keeping the page bytes out of
     /// the interpreted WASM boundary makes startup effectively constant-size.
-    fn respond(&mut self, _sender: &str, _payload: &[u8]) -> Option<Vec<u8>> {
-        Some(self.url.as_deref().unwrap_or_default().as_bytes().to_vec())
+    fn respond(&mut self, _sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
+        let url = match payload.first() {
+            Some(&LOADING_REQUEST) => self.loading_url.as_deref(),
+            _ => self.url.as_deref(),
+        };
+        Some(url.unwrap_or_default().as_bytes().to_vec())
     }
 
     fn shutdown(&mut self) {
@@ -98,8 +128,9 @@ fn respond_http(stream: &mut TcpStream, page_path: &Path) {
     let Ok(read) = stream.read(&mut request) else {
         return;
     };
-    let is_page = request[..read].starts_with(format!("GET /{PAGE_FILE} ").as_bytes());
-    let (status, content_type, body) = if is_page {
+    let request = &request[..read];
+    let wants = |file: &str| request.starts_with(format!("GET /{file} ").as_bytes());
+    let (status, content_type, body) = if wants(PAGE_FILE) {
         match std::fs::read(page_path) {
             Ok(page) => ("200 OK", "text/html; charset=utf-8", page),
             Err(_) => (
@@ -108,6 +139,15 @@ fn respond_http(stream: &mut TcpStream, page_path: &Path) {
                 b"Page not found".to_vec(),
             ),
         }
+    } else if wants(LOADING_FILE) {
+        // Compiled in rather than read from disk: this is the one page that
+        // has to answer while the main thread is busy loading the component,
+        // so it cannot depend on a build step having produced a file.
+        (
+            "200 OK",
+            "text/html; charset=utf-8",
+            crate::splash::LOADING_PAGE.as_bytes().to_vec(),
+        )
     } else {
         (
             "404 Not Found",
@@ -121,4 +161,48 @@ fn respond_http(stream: &mut TcpStream, page_path: &Path) {
     );
     let _ = stream.write_all(header.as_bytes());
     let _ = stream.write_all(&body);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Module, PageModule, LOADING_REQUEST};
+
+    fn served() -> PageModule {
+        PageModule {
+            url: Some("http://127.0.0.1:1/page.html".to_string()),
+            loading_url: Some("http://127.0.0.1:1/loading.html".to_string()),
+            ..PageModule::default()
+        }
+    }
+
+    #[test]
+    fn an_empty_request_still_answers_with_the_graph_page() {
+        // The component sends no payload, so this is the path that must keep
+        // working now that a second route shares the endpoint.
+        let answer = served().respond("commits", &[]).unwrap();
+
+        assert_eq!(
+            String::from_utf8(answer).unwrap(),
+            "http://127.0.0.1:1/page.html"
+        );
+    }
+
+    #[test]
+    fn the_loading_request_answers_with_the_loading_page() {
+        let answer = served().respond("splash", &[LOADING_REQUEST]).unwrap();
+
+        assert_eq!(
+            String::from_utf8(answer).unwrap(),
+            "http://127.0.0.1:1/loading.html"
+        );
+    }
+
+    #[test]
+    fn before_the_server_is_listening_the_answer_is_empty_not_a_broken_url() {
+        let answer = PageModule::default()
+            .respond("splash", &[LOADING_REQUEST])
+            .unwrap();
+
+        assert!(answer.is_empty());
+    }
 }
