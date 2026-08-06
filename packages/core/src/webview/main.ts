@@ -33,7 +33,7 @@ import { observeExternalUrls } from "./observers/urlEvents";
 import { RepoInProgressBanner } from "./repoInProgressBanner";
 import { Toolbar } from "./toolbar";
 import { renderAuthorVisualHtml } from "./utils/avatarVisuals";
-import { formatRelativeDate, formatShortDate, pad2 } from "./utils/date";
+import { formatIsoDate, formatShortDate, formatShortTime, isSameLocalDay, pad2 } from "./utils/date";
 import { addListenerToClass, insertAfter } from "./utils/dom";
 import { resolveFileIcon } from "./utils/fileIcons";
 import { abbrevCommit, arraysEqual, ELLIPSIS } from "./utils/git";
@@ -874,7 +874,8 @@ class GitGraphView {
     for (i = 0; i < this.commits.length; i++) {
       let refs = "",
         message = escapeHtml(this.commits[i].message),
-        date = getCommitDate(this.commits[i].date),
+        dateTitle = getCommitTitleDate(this.commits[i].date),
+        dateCompact = getCompactCommitDate(this.commits[i].date),
         j,
         refName,
         refActive,
@@ -937,7 +938,7 @@ class GitGraphView {
         "</span></td>" +
         (showCommitted
           ? '<td class="committedCol text" title="' +
-            escapeHtml(this.commits[i].author + " • " + date.title) +
+            escapeHtml(this.commits[i].author + " • " + dateTitle) +
             '">' +
             renderAuthorVisualHtml(
               this.config,
@@ -948,7 +949,7 @@ class GitGraphView {
                 : null
             ) +
             '<span class="committedMeta"><span class="committedDate">' +
-            escapeHtml(date.value) +
+            escapeHtml(dateCompact) +
             "</span></span></td>"
           : "") +
         (showId
@@ -964,7 +965,7 @@ class GitGraphView {
     this.footerElem.innerHTML = this.moreCommitsAvailable
       ? '<div id="loadMoreCommitsBtn" class="roundedBtn">' + l10n.loadMore + "</div>"
       : "";
-    this.makeTableResizable();
+    this.applyTableLayout();
     // Rendering replaces every row, so an active filter has to be re-applied
     // or a refresh or "load more" would silently reveal filtered-out commits.
     if (this.commitFilterText !== "") {
@@ -1438,7 +1439,8 @@ class GitGraphView {
     });
   }
   private renderUncommitedChanges() {
-    let date = getCommitDate(this.commits[0].date);
+    let dateTitle = getCommitTitleDate(this.commits[0].date);
+    let dateCompact = getCompactCommitDate(this.commits[0].date);
     document.getElementsByClassName("unsavedChanges")[0].innerHTML =
       '<td><span class="description"><b>' +
       escapeHtml(this.commits[0].message) +
@@ -1451,9 +1453,9 @@ class GitGraphView {
       // with the rest of the table.
       (viewState.columnVisibility.Committed
         ? '<td class="committedCol text" title="' +
-          escapeHtml(date.title) +
+          escapeHtml(dateTitle) +
           '"><span class="committedMeta"><span class="committedDate">' +
-          escapeHtml(date.value) +
+          escapeHtml(dateCompact) +
           "</span></span></td>"
         : "") +
       (viewState.columnVisibility.ID ? '<td class="idCol text" title="*">*</td>' : "");
@@ -1500,112 +1502,13 @@ class GitGraphView {
     return colours.length === 0 ? "" : colours[this.graph.getVertexColour(index) % colours.length];
   }
 
-  private makeTableResizable() {
-    let colHeadersElem = document.getElementById("tableColHeaders")!,
-      cols = <HTMLCollectionOf<HTMLElement>>document.getElementsByClassName("tableColHeader");
-    // Every column carries an explicit width except the leading graph and
-    // message column, which absorbs the slack. Deriving the list rather than
-    // hard-coding indices is what keeps this working as columns are hidden.
-    const sizedCols = Array.from(cols, (_col, index) => index).filter((index) => index !== 0);
-    let columnWidths = this.gitRepos[this.currentRepo].columnWidths,
-      mouseX = -1,
-      col = -1;
-    if (columnWidths !== null && columnWidths.length !== sizedCols.length) {
-      // Widths saved against a different set of columns cannot be applied to
-      // this one; falling back to auto layout re-measures them.
-      columnWidths = null;
-    }
-
-    const makeTableFixedLayout = () => {
-      if (columnWidths !== null) {
-        for (const [widthIndex, colIndex] of sizedCols.entries()) {
-          cols[colIndex].style.width = columnWidths[widthIndex] + "px";
-        }
-        this.tableElem.className = "fixedLayout";
-      }
-    };
-    const stopResizing = () => {
-      if (col > -1 && columnWidths !== null) {
-        col = -1;
-        mouseX = -1;
-        colHeadersElem.classList.remove("resizing");
-        this.gitRepos[this.currentRepo].columnWidths = columnWidths;
-        sendMessage({
-          command: "saveRepoState",
-          repo: this.currentRepo,
-          state: this.gitRepos[this.currentRepo]
-        });
-      }
-    };
-
-    for (let i = 0; i < cols.length; i++) {
-      cols[i].innerHTML +=
-        (i > 0 ? '<span class="resizeCol left" data-col="' + (i - 1) + '"></span>' : "") +
-        (i < cols.length - 1 ? '<span class="resizeCol right" data-col="' + i + '"></span>' : "");
-    }
-    // The graph shares its column with the messages, which are indented past
-    // it, so it is never narrowed to fit a column of its own.
+  /**
+   * Column widths are fixed by the stylesheet and never user-resizable: the
+   * graph/message column still absorbs whatever space the fixed columns
+   * beside it do not need, so it is never narrowed to fit a column of its own.
+   */
+  private applyTableLayout() {
     this.graph.limitMaxWidth(-1);
-    if (columnWidths !== null) {
-      makeTableFixedLayout();
-    } else {
-      this.tableElem.className = "autoLayout";
-    }
-
-    addListenerToClass("resizeCol", "mousedown", (e) => {
-      col = parseInt((<HTMLElement>e.target).dataset.col!);
-      mouseX = (<MouseEvent>e).clientX;
-      if (columnWidths === null) {
-        columnWidths = sizedCols.map((colIndex) => cols[colIndex].clientWidth - 24);
-        makeTableFixedLayout();
-      }
-      colHeadersElem.classList.add("resizing");
-    });
-    colHeadersElem.addEventListener("mousemove", (e) => {
-      if (col > -1 && columnWidths !== null) {
-        let mouseEvent = <MouseEvent>e;
-        let mouseDeltaX = mouseEvent.clientX - mouseX;
-        switch (col) {
-          case 0:
-            // The leading column absorbs the slack, so this boundary resizes
-            // only the fixed column beside it.
-            if (columnWidths[0] === undefined || cols[1] === undefined) {
-              break;
-            }
-            if (cols[0].clientWidth + mouseDeltaX < 64) {
-              mouseDeltaX = -cols[0].clientWidth + 64;
-            }
-            if (columnWidths[0] - mouseDeltaX < 40) {
-              mouseDeltaX = columnWidths[0] - 40;
-            }
-            columnWidths[0] -= mouseDeltaX;
-            cols[1].style.width = columnWidths[0] + "px";
-            break;
-          default:
-            // Dragging between two fixed columns trades width between them.
-            if (
-              columnWidths[col - 1] === undefined ||
-              columnWidths[col] === undefined ||
-              cols[col + 1] === undefined
-            ) {
-              break;
-            }
-            if (columnWidths[col - 1] + mouseDeltaX < 40) {
-              mouseDeltaX = -columnWidths[col - 1] + 40;
-            }
-            if (columnWidths[col] - mouseDeltaX < 40) {
-              mouseDeltaX = columnWidths[col] - 40;
-            }
-            columnWidths[col - 1] += mouseDeltaX;
-            columnWidths[col] -= mouseDeltaX;
-            cols[col].style.width = columnWidths[col - 1] + "px";
-            cols[col + 1].style.width = columnWidths[col] + "px";
-        }
-        mouseX = mouseEvent.clientX;
-      }
-    });
-    colHeadersElem.addEventListener("mouseup", stopResizing);
-    colHeadersElem.addEventListener("mouseleave", stopResizing);
   }
 
   /* Observers */
@@ -2214,24 +2117,25 @@ function refreshGraphOrDisplayError(status: GitCommandStatus, errorMessage: stri
 }
 
 /* Dates */
-function getCommitDate(dateVal: number) {
-  let date = new Date(dateVal * 1000),
-    value;
+/** Full date and time for the committedCol tooltip, independent of the compact display. */
+function getCommitTitleDate(dateVal: number): string {
+  const date = new Date(dateVal * 1000);
+  const dateStr = formatShortDate(date, viewState.locale);
+  const timeStr = pad2(date.getHours()) + ":" + pad2(date.getMinutes());
+  return dateStr + " " + timeStr;
+}
 
-  let dateStr = formatShortDate(date, viewState.locale);
-  let timeStr = pad2(date.getHours()) + ":" + pad2(date.getMinutes());
-
-  switch (viewState.dateFormat) {
-    case "Date Only":
-      value = dateStr;
-      break;
-    case "Relative":
-      value = formatRelativeDate(date, new Date(), viewState.locale);
-      break;
-    default:
-      value = dateStr + " " + timeStr;
-  }
-  return { title: dateStr + " " + timeStr, value: value };
+/**
+ * The Dev column's fixed-width display: a commit made today shows a locale-
+ * and setting-aware time, so same-day activity reads at a glance; anything
+ * older shows an unambiguous, always-10-character ISO date instead, so the
+ * column's width never depends on which row is showing.
+ */
+function getCompactCommitDate(dateVal: number): string {
+  const date = new Date(dateVal * 1000);
+  return isSameLocalDay(date, new Date())
+    ? formatShortTime(date, viewState.locale, viewState.timeFormat)
+    : formatIsoDate(date);
 }
 
 /* Utils */

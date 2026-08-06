@@ -193,12 +193,10 @@ body.compactUi #commitTable th {
 body.compactUi #commitTable .avatar.normal {
   width: 16px;
   height: 16px;
-  margin-top: 2px;
 }
 body.compactUi #commitTable .avatar.small {
   width: 13px;
   height: 13px;
-  margin-top: 3px;
 }
 body.compactUi .gitRef,
 body.compactUi .gitRefName {
@@ -228,12 +226,10 @@ body.extraCompactUi #commitTable th {
 body.extraCompactUi #commitTable .avatar.normal {
   width: 14px;
   height: 14px;
-  margin-top: 2px;
 }
 body.extraCompactUi #commitTable .avatar.small {
   width: 12px;
   height: 12px;
-  margin-top: 3px;
 }
 body.extraCompactUi .gitRef,
 body.extraCompactUi .gitRefName {
@@ -267,6 +263,11 @@ body.unableToLoad p {
   /* Only the sidebar overlaps the scroller; #view is already inset on the
      right by the files panel. */
   margin-left: var(--branch-panel-width);
+  /* Lets the Dev/ID columns fold by the space actually available to the
+     table, not the viewport, which the branch and files panels already eat
+     into. */
+  container-type: inline-size;
+  container-name: graphContent;
 }
 
 /* Repository in-progress banner */
@@ -542,9 +543,17 @@ body.filesPanelHidden #filesPanel {
   width: 100%;
   max-width: 0;
 }
+/* Fixed, programmatic widths: wide enough for the compact date/time or an
+   avatar, never user-resizable, and never dependent on a row's own content. */
 #commitTable td.committedCol,
 #commitTable th.committedCol {
-  max-width: 190px;
+  width: 128px;
+  max-width: 128px;
+}
+#commitTable td.idCol,
+#commitTable th.idCol {
+  width: 84px;
+  max-width: 84px;
 }
 /* The graph and message column reads as a list, so its header sits left while
    the trailing columns stay centred over their values. */
@@ -592,38 +601,28 @@ body.filesPanelHidden #filesPanel {
   background: var(--vscode-editor-background);
 }
 
-#commitTable.fixedLayout table {
-  table-layout: fixed;
-}
-#commitTable.autoLayout td:first-child,
-#commitTable.autoLayout th:nth-child(2) {
-  width: 100%;
-  max-width: 0;
-}
-#commitTable.autoLayout td:nth-child(4),
-#commitTable.autoLayout th:nth-child(4) {
-  max-width: 124px;
-}
-#tableColHeaders.resizing th {
-  cursor: col-resize;
-}
 .tableColHeader {
   position: relative;
 }
-.resizeCol {
-  position: absolute;
-  top: 0px;
-  height: 100%;
-  display: block;
-  width: 6px;
-  cursor: col-resize;
+
+/* Folding under width pressure: the Dev column drops its date/time text and
+   shrinks to just the avatar first; the ID column disappears next. Widths
+   are still fixed by the rules above, never user-resizable. */
+@container graphContent (max-width: 560px) {
+  #commitTable .committedMeta {
+    display: none;
+  }
+  #commitTable td.committedCol,
+  #commitTable th.committedCol {
+    width: 34px;
+    max-width: 34px;
+  }
 }
-.resizeCol.left {
-  left: 0px;
-  border-left: 1px solid rgba(128, 128, 128, 0.25);
-}
-.resizeCol.right {
-  right: 0px;
+@container graphContent (max-width: 420px) {
+  #commitTable td.idCol,
+  #commitTable th.idCol {
+    display: none;
+  }
 }
 
 /* Commit Details View */
@@ -950,21 +949,22 @@ svg.fileIcon {
   cursor: help;
 }
 
+/* Centered on the row rather than nudged down from the top, so it scales
+   cleanly with row height across every density level instead of needing a
+   hand-tuned margin per size. */
 #commitTable .avatar {
   display: inline-flex;
   overflow: hidden;
-  vertical-align: top;
+  vertical-align: middle;
   margin-right: 4px;
 }
 #commitTable .avatar.normal {
   width: 18px;
   height: 18px;
-  margin-top: 3px;
 }
 #commitTable .avatar.small {
   width: 14px;
   height: 14px;
-  margin-top: 5px;
 }
 /* A placeholder awaiting a fetched image occupies no space until it arrives. */
 #commitTable .avatar.empty {
@@ -1035,7 +1035,7 @@ svg.fileIcon {
 }
 #commitTable td.committedCol .committedMeta {
   display: inline-block;
-  vertical-align: top;
+  vertical-align: middle;
   white-space: nowrap;
   max-width: 100%;
   overflow: hidden;
@@ -1044,7 +1044,7 @@ svg.fileIcon {
 }
 #commitTable td.committedCol .committedDate {
   display: inline-block;
-  vertical-align: top;
+  vertical-align: middle;
   margin-right: 2px;
 }
 #commitTable td.committedCol .avatar.normal + .committedMeta {
