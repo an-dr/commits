@@ -652,9 +652,16 @@ body.filesPanelHidden #filesPanel {
   background-color: rgba(128, 128, 128, 0.25);
 }
 /* Picked out for comparison. Distinct from the open-details highlight, since
-   a commit can be selected without being open. */
-#commitTable tr.commit.selected td {
+   a commit can be selected without being open. The uncommitted row shares the
+   same treatment: open working-tree changes reads as selected too. */
+#commitTable tr.commit.selected td,
+#commitTable tr.unsavedChanges.selected td {
   background-color: var(--vscode-list-inactiveSelectionBackground, rgba(128, 128, 128, 0.22));
+}
+/* One accent line at the row's left edge, not one per column: only the first
+   cell carries it, so it does not repeat at every column boundary. */
+#commitTable tr.commit.selected td:first-child,
+#commitTable tr.unsavedChanges.selected td:first-child {
   box-shadow: inset 2px 0 0 var(--vscode-focusBorder);
 }
 #commitTable tr.commit.commitDetailsOpen:hover td {

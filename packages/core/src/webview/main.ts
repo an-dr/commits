@@ -331,6 +331,11 @@ class GitGraphView {
     for (const row of Array.from(document.querySelectorAll<HTMLElement>("tr.commit"))) {
       row.classList.toggle("selected", this.selection.has(row.dataset.hash ?? ""));
     }
+    // Not a commit, so it carries no hash the selection set could match: its
+    // own open/closed state is what "selected" means for this row.
+    document
+      .querySelector<HTMLElement>(".unsavedChanges")
+      ?.classList.toggle("selected", this.workingTreeOpen);
     const hashes = this.commits.map((commit) => commit.hash);
     const comparison = this.selection.getComparison(hashes);
     this.comparison = comparison;
@@ -1257,6 +1262,7 @@ class GitGraphView {
       const gesture = readSelectionGesture(<MouseEvent>e);
       const hashes = this.commits.map((commit) => commit.hash);
       this.selection.apply(gesture, hashes.indexOf(hash), hashes);
+      this.workingTreeOpen = false;
       this.renderSelection();
 
       // Clicking picks commits out; it never opens one. Opening is the double
@@ -1667,9 +1673,9 @@ class GitGraphView {
     this.selection.clear();
     this.comparison = null;
     this.previewHash = null;
+    this.workingTreeOpen = true;
     this.renderSelection();
     this.hideCommitDetails();
-    this.workingTreeOpen = true;
     this.filesPanel.setHeader(`<b>${l10n.changesPanelTitle}</b>`);
     this.filesPanel.setContentLoading();
     this.filesPanel.show();
