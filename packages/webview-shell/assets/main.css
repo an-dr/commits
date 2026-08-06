@@ -667,15 +667,17 @@ body.filesPanelHidden #filesPanel {
 #commitTable tr.commit.commitDetailsOpen:hover td {
   background-color: rgba(128, 128, 128, 0.35);
 }
-/* Spans the row now that the changed files live only in the side panel;
-   the inset on the right leaves room for the close button. */
+/* Spans the row now that the changed files live only in the side panel; the
+   left padding clears the graph lanes still drawn behind it, so text starts
+   where commit messages do instead of colliding with the lines, and the
+   inset on the right leaves room for the close button. */
 #commitDetailsSummary {
   position: absolute;
   left: 0;
   top: 0;
   bottom: 2px;
-  right: 32px;
-  padding: 10px;
+  right: 36px;
+  padding: 14px 14px 14px var(--message-indent, 14px);
   box-sizing: border-box;
   overflow-x: hidden;
   overflow-y: auto;
@@ -685,38 +687,52 @@ body.filesPanelHidden #filesPanel {
   user-select: text;
 }
 .commitDetailsSummaryTop {
-  display: inline-table;
-  width: 100%;
-}
-.commitDetailsSummaryTopRow {
-  display: table-row;
-}
-.commitDetailsSummaryKeyValues,
-.commitDetailsSummaryAvatar {
-  display: table-cell;
-  vertical-align: top;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
 }
 .commitDetailsSummaryKeyValues {
-  max-width: 0px;
-  overflow-x: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
-.commitDetailsSummaryTop.withAvatar .commitDetailsSummaryKeyValues {
-  padding-right: 10px;
+.commitDetailsSummaryRow {
+  display: flex;
+  gap: 8px;
+  line-height: 18px;
+}
+.commitDetailsSummaryLabel {
+  flex: 0 0 auto;
+  min-width: 84px;
+  opacity: 0.65;
+  font-weight: 600;
+}
+.commitDetailsSummaryValue {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 .commitDetailsSummaryAvatar {
-  width: 54px;
+  flex: 0 0 auto;
 }
 .commitDetailsSummaryAvatar > img {
+  display: block;
   width: 54px;
   border-radius: 4px;
 }
+.commitDetailsSummaryBody {
+  margin-top: 14px;
+  white-space: normal;
+}
 #commitDetailsClose {
   position: absolute;
-  right: 4px;
-  top: 4px;
+  right: 6px;
+  top: 6px;
   width: 24px;
   height: 24px;
+  border-radius: 4px;
   cursor: pointer;
 }
 #commitDetailsClose svg {
@@ -725,10 +741,11 @@ body.filesPanelHidden #filesPanel {
   fill: var(--vscode-editor-foreground);
   fill-opacity: 0.6;
 }
+#commitDetailsClose:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
 #commitDetailsClose:hover svg {
-  stroke: var(--vscode-editor-foreground);
-  stroke-width: 1;
-  stroke-opacity: 0.2;
+  fill-opacity: 0.9;
 }
 svg.openFolderIcon,
 svg.closedFolderIcon,

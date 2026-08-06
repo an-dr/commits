@@ -862,6 +862,9 @@ class GitGraphView {
     // starts past the widest lane instead of past its own. A per-row offset
     // would leave the messages ragged.
     const messageIndent = Math.max(this.graph.getWidth() + this.config.grid.offsetX, 0);
+    // Read by #commitDetailsSummary so the expanded panel's text starts where
+    // messages do, clear of the lanes still drawn behind it.
+    this.tableElem.style.setProperty("--message-indent", messageIndent + "px");
     let html =
         `<tr id="tableColHeaders"><th class="tableColHeader">${l10n.graph}</th>` +
         (showCommitted ? `<th class="tableColHeader committedCol">${l10n.dev}</th>` : "") +
@@ -1885,31 +1888,34 @@ class GitGraphView {
     let newElem = document.createElement("tr"),
       html = `<td colspan="${columnCount}"><div id="commitDetailsSummary">`;
     html +=
-      '<span class="commitDetailsSummaryTop' +
+      '<div class="commitDetailsSummaryTop' +
       (typeof this.avatars[commitDetails.email] === "string" ? " withAvatar" : "") +
-      '"><span class="commitDetailsSummaryTopRow"><span class="commitDetailsSummaryKeyValues">';
-    html += detailRowHtml(l10n.detailCommit, escapeHtml(commitDetails.hash)) + "<br>";
-    html += detailRowHtml(l10n.detailParents, commitDetails.parents.join(", ")) + "<br>";
-    html +=
-      detailRowHtml(
-        l10n.detailAuthor,
-        escapeHtml(commitDetails.author) +
-          ' &lt;<a href="mailto:' +
-          encodeURIComponent(commitDetails.email) +
-          '">' +
-          escapeHtml(commitDetails.email) +
-          "</a>&gt;"
-      ) + "<br>";
-    html += detailRowHtml(l10n.detailDate, new Date(commitDetails.date * 1000).toString()) + "<br>";
-    html += detailRowHtml(l10n.detailCommitter, escapeHtml(commitDetails.committer)) + "</span>";
+      '"><div class="commitDetailsSummaryKeyValues">';
+    html += detailRowHtml(l10n.detailCommit, escapeHtml(commitDetails.hash));
+    html += detailRowHtml(l10n.detailParents, commitDetails.parents.join(", "));
+    html += detailRowHtml(
+      l10n.detailAuthor,
+      escapeHtml(commitDetails.author) +
+        ' &lt;<a href="mailto:' +
+        encodeURIComponent(commitDetails.email) +
+        '">' +
+        escapeHtml(commitDetails.email) +
+        "</a>&gt;"
+    );
+    html += detailRowHtml(l10n.detailDate, new Date(commitDetails.date * 1000).toString());
+    html += detailRowHtml(l10n.detailCommitter, escapeHtml(commitDetails.committer));
+    html += "</div>";
     if (typeof this.avatars[commitDetails.email] === "string") {
       html +=
-        '<span class="commitDetailsSummaryAvatar"><img src="' +
+        '<div class="commitDetailsSummaryAvatar"><img src="' +
         this.avatars[commitDetails.email] +
-        '"></span>';
+        '"></div>';
     }
-    html += "</span></span><br><br>";
-    html += escapeHtml(commitDetails.body).replace(/\n/g, "<br>") + "</div>";
+    html += "</div>";
+    html +=
+      '<div class="commitDetailsSummaryBody">' +
+      escapeHtml(commitDetails.body).replace(/\n/g, "<br>") +
+      "</div></div>";
     // The changed files live in the side panel only. Rendering the same tree
     // inline as well gave two copies of one list, and the inline copy is the
     // one with no room for it.
@@ -2236,7 +2242,14 @@ function getCommitDate(dateVal: number) {
  */
 function detailRowHtml(template: string, valueHtml: string) {
   const parts = template.split("{0}");
-  return "<b>" + parts[0] + "</b>" + valueHtml + (parts[1] ?? "");
+  return (
+    '<div class="commitDetailsSummaryRow"><span class="commitDetailsSummaryLabel">' +
+    parts[0] +
+    '</span><span class="commitDetailsSummaryValue">' +
+    valueHtml +
+    (parts[1] ?? "") +
+    "</span></div>"
+  );
 }
 
 function generateGitFileTree(gitFiles: GitFileChange[]) {
