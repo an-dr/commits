@@ -25,6 +25,9 @@ impl OsBackend for StubBackend {
             .then_some(())
             .ok_or("unsafe URL".into())
     }
+    fn open_directory(&self, path: &str) -> Result<(), String> {
+        path.starts_with("C:/").then_some(()).ok_or("not a directory".into())
+    }
     fn pick_file(&self, _title: &str) -> Result<Option<String>, String> {
         Ok(Some("C:/chosen.txt".into()))
     }
@@ -60,6 +63,8 @@ fn publishes_results_for_every_capability() {
         (4, 3, "file"),
         (5, 4, "folder"),
         (6, 2, "file:///private"),
+        (7, 6, "C:/repo"),
+        (8, 6, "not-a-directory"),
     ] {
         module.handle(&Envelope {
             topic: REQUEST_TOPIC.into(),
@@ -75,12 +80,12 @@ fn publishes_results_for_every_capability() {
         });
     }
     let deadline = Instant::now() + Duration::from_secs(3);
-    while results.lock().unwrap().len() < 6 && Instant::now() < deadline {
+    while results.lock().unwrap().len() < 8 && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
         bus.dispatch();
     }
     let results = results.lock().unwrap();
-    assert_eq!(results.len(), 6);
+    assert_eq!(results.len(), 8);
     assert!(results
         .iter()
         .any(|result| result.request_id == 1 && result.accepted));
@@ -92,6 +97,12 @@ fn publishes_results_for_every_capability() {
     assert!(results
         .iter()
         .any(|result| result.request_id == 6 && result.error == "unsafe URL"));
+    assert!(results
+        .iter()
+        .any(|result| result.request_id == 7 && result.accepted));
+    assert!(results
+        .iter()
+        .any(|result| result.request_id == 8 && result.error == "not a directory"));
 }
 
 /// The read is confined to one repository, and an unreadable entry inside it is

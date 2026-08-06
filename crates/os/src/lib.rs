@@ -19,6 +19,9 @@ pub trait OsBackend: Send + Sync {
     fn read_clipboard(&self) -> Result<String, String>;
     fn write_clipboard(&self, value: &str) -> Result<(), String>;
     fn open_url(&self, value: &str) -> Result<(), String>;
+    /// Reveals a directory in the OS's native file manager (Explorer, Finder,
+    /// or the desktop's configured file manager on Linux).
+    fn open_directory(&self, path: &str) -> Result<(), String>;
     fn pick_file(&self, title: &str) -> Result<Option<String>, String>;
     fn pick_folder(&self, title: &str) -> Result<Option<String>, String>;
     /// Reads a text file inside one repository.
@@ -51,6 +54,12 @@ impl OsBackend for SystemOsBackend {
             return Err("unsupported external URL scheme".into());
         }
         open::that(value).map_err(|error| error.to_string())
+    }
+    fn open_directory(&self, path: &str) -> Result<(), String> {
+        if !std::path::Path::new(path).is_dir() {
+            return Err(format!("{path} is not a directory"));
+        }
+        open::that(path).map_err(|error| error.to_string())
     }
     fn pick_file(&self, title: &str) -> Result<Option<String>, String> {
         Ok(rfd::FileDialog::new()
@@ -196,6 +205,9 @@ fn execute(backend: &dyn OsBackend, request: &OsRequest) -> NativeResult {
         3 => backend.pick_file(&request.value),
         4 => backend.pick_folder(&request.value),
         5 => backend.read_file(&request.value),
+        6 => backend
+            .open_directory(&request.value)
+            .map(|_| Some(String::new())),
         _ => Err("unknown OS action".into()),
     };
     match outcome {

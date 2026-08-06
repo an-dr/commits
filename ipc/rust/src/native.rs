@@ -189,7 +189,7 @@ impl OsRequest {
             action: reader.u8()?,
             value: reader.string()?,
         };
-        if request.action > 5 {
+        if request.action > 6 {
             return Err(WireError::from("unknown os action"));
         }
         reader.finish()?;
@@ -274,7 +274,7 @@ mod tests {
     fn rejects_unknown_tags_and_trailing_bytes() {
         assert!(GitRequest::decode(&[9]).is_err());
         assert!(WatchRequest::decode(&[1, 0, 0, 0, 2, 0, 0]).is_err());
-        assert!(OsRequest::decode(&[1, 0, 0, 0, 6, 0, 0]).is_err());
+        assert!(OsRequest::decode(&[1, 0, 0, 0, 7, 0, 0]).is_err());
 
         let mut cancel = vec![1, 7, 0, 0, 0];
         cancel.push(1);
