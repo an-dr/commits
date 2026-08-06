@@ -1,8 +1,9 @@
 /* Body */
 /*
- * The tab fills the viewport and never scrolls itself: #view is the one
- * scrolling box, so the top bar can stay pinned above the commit table while
- * the sidebar and the docked panels sit outside the scroll entirely.
+ * The tab fills the viewport and never scrolls itself: #view is a fixed,
+ * non-scrolling frame arranged as a column, so the top bar and banner never
+ * move. #graphScroll is the one scrolling box, holding only the commit graph
+ * and table; the sidebar and the docked panels sit outside it entirely.
  */
 body {
   position: fixed;
@@ -21,22 +22,30 @@ body {
   left: 0;
   right: var(--files-panel-width, 0px);
   bottom: var(--full-diff-height, 0px);
-  overflow-x: hidden;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   background: var(--vscode-editor-background);
 }
 #view:focus {
   outline: none;
 }
-/* Pinned inside the scroller, so it stays put while the table scrolls. */
 #topBar {
-  position: sticky;
-  top: 0;
   z-index: 15;
   display: flex;
   align-items: stretch;
+  flex: 0 0 auto;
   background: var(--vscode-editor-background);
   border-bottom: 1px solid rgba(128, 128, 128, 0.5);
+}
+/* The one scrolling box: its own scrollbar, its own overscroll, contained so
+   neither reaches the frozen chrome above it. */
+#graphScroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 body.unableToLoad {
   margin: 0 20px;
@@ -575,6 +584,12 @@ body.filesPanelHidden #filesPanel {
   border-bottom: 1px solid rgba(128, 128, 128, 0.5);
   line-height: 18px;
   padding: 6px 12px;
+  /* Frozen while #graphScroll scrolls the rows beneath it; z-index puts it
+     above the graph SVG's own lanes, which paint at z-index 2. */
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--vscode-editor-background);
 }
 
 #commitTable.fixedLayout table {
