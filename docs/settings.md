@@ -40,6 +40,11 @@ columns, branch-panel layout, refresh shortcut, current-branch behavior, and
 dialog behavior. Settings for VS Code-only surfaces—SCM buttons, status bar,
 inline blame, tab icon, logging, repository search, and date selection in the
 extension host—are stored compatibly but have no standalone surface yet.
+`dateFormat`'s "Date Only" and "Relative" options are one such case in
+practice: the value still round-trips through `core`, but neither the Dev
+column's visible text nor its tooltip depends on it any more. The column
+always shows the fixed today-or-ISO-date format below, since a column of
+constant width cannot also show a variable-length string like a relative age.
 
 ## Appearance
 

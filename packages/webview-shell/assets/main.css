@@ -741,16 +741,16 @@ body.filesPanelHidden #filesPanel {
 #commitDetailsClose:hover svg {
   fill-opacity: 0.9;
 }
+/* Sized for the flex rows (.gitFile, .gitFolder, .changesFile) that center
+   their children; no margin-top or vertical-align nudge is needed here. */
 svg.openFolderIcon,
 svg.closedFolderIcon,
 svg.fileIcon {
   width: 13px;
   height: 13px;
-  margin-top: 2.5px;
   fill: var(--vscode-editor-foreground);
   fill-opacity: 0.6;
   margin-right: 8px;
-  vertical-align: top;
 }
 /* Working tree panel */
 .changesSectionHeader {
