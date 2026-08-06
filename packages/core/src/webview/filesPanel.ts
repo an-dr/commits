@@ -15,7 +15,6 @@ export const DEFAULT_FILES_PANEL_WIDTH = 280;
  */
 export class FilesPanel {
   private readonly panel: HTMLElement;
-  private readonly headerElem: HTMLElement;
   private readonly contentElem: HTMLElement;
   private readonly footerElem: HTMLElement;
   private panelHidden: boolean = true;
@@ -32,10 +31,6 @@ export class FilesPanel {
     resizeHandle.id = "filesPanelResizeHandle";
     this.panel.appendChild(resizeHandle);
     this.setupResize(resizeHandle);
-
-    this.headerElem = document.createElement("div");
-    this.headerElem.id = "filesPanelHeader";
-    this.panel.appendChild(this.headerElem);
 
     this.contentElem = document.createElement("div");
     this.contentElem.id = "filesPanelContent";
@@ -132,11 +127,6 @@ export class FilesPanel {
     this.contentElem.scrollTop = this.scrollTop;
   }
 
-  public setHeader(html: string) {
-    this.headerElem.innerHTML = html;
-    this.syncContentEdges();
-  }
-
   public setFooter(html: string) {
     this.footerElem.innerHTML = html;
     this.syncContentEdges();
@@ -153,7 +143,6 @@ export class FilesPanel {
   /** Returns the panel to its no-commit-selected state. */
   public clear() {
     this.scrollTop = 0;
-    this.headerElem.innerHTML = "";
     this.footerElem.innerHTML = "";
     this.syncContentEdges();
     this.showPlaceholder();
@@ -164,13 +153,12 @@ export class FilesPanel {
   }
 
   /**
-   * Insets the scrolling area by the header and footer heights, which vary
-   * with their content and so cannot be fixed in the stylesheet.
+   * Insets the scrolling area by the footer height, which varies with its
+   * content and so cannot be fixed in the stylesheet. There is no header any
+   * more: content starts flush with the panel's top edge.
    */
   private syncContentEdges() {
-    const header = this.headerElem.offsetHeight;
     const footer = this.footerElem.offsetHeight;
-    this.contentElem.style.top = header > 0 ? header + "px" : "";
     this.contentElem.style.bottom = footer > 0 ? footer + "px" : "";
   }
 }

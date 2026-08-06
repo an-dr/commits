@@ -343,9 +343,6 @@ class GitGraphView {
       return;
     }
     this.hideCommitDetails();
-    this.filesPanel.setHeader(
-      `<b>${l10n.comparisonTitle}</b> &mdash; ${escapeHtml(abbrevCommit(comparison.from))} … ${escapeHtml(abbrevCommit(comparison.to))}`
-    );
     this.filesPanel.setContentLoading();
     this.filesPanel.show();
     sendMessage({
@@ -1582,7 +1579,6 @@ class GitGraphView {
     this.workingTreeOpen = true;
     this.renderSelection();
     this.hideCommitDetails();
-    this.filesPanel.setHeader(`<b>${l10n.changesPanelTitle}</b>`);
     this.filesPanel.setContentLoading();
     this.filesPanel.show();
     sendMessage({ command: "workingTreeChanges", repo: this.currentRepo! });
@@ -1722,9 +1718,6 @@ class GitGraphView {
 
   /** Fills the side panel with one revision's changed files. */
   private fillFilesPanel(commitDetails: GitCommitDetails, fileTree: GitFolder, hash: string) {
-    this.filesPanel.setHeader(
-      `<b>${l10n.filesPanelTitle}</b> &mdash; ${escapeHtml(abbrevCommit(hash))}`
-    );
     // A revision has nothing to commit, so the commit surface goes with it.
     this.filesPanel.setFooter("");
     this.filesPanel.setContent(

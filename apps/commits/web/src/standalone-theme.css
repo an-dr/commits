@@ -314,7 +314,8 @@ body {
 }
 
 #branchPanelSidebar,
-#branchPanelResizeHandle {
+#branchPanelResizeHandle,
+#filesPanel {
   top: calc(var(--top-bar-height) + var(--standalone-menu-height));
 }
 

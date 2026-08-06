@@ -442,10 +442,12 @@ body.fullDiffPanelHidden #fullDiffPanel {
   content: " ";
 }
 
-/* Changed-files panel */
+/* Changed-files panel: begins below the toolbar, like the branch sidebar,
+   rather than reaching up alongside it. It has no header bar of its own --
+   content starts flush with the panel's top edge. */
 #filesPanel {
   position: fixed;
-  top: 0;
+  top: var(--top-bar-height);
   right: 0;
   bottom: var(--full-diff-height, 0px);
   width: var(--files-panel-inline-width, 280px);
@@ -467,22 +469,16 @@ body.filesPanelHidden #filesPanel {
   cursor: col-resize;
   z-index: 2;
 }
-#filesPanelHeader,
 #filesPanelFooter {
   position: absolute;
   left: 0;
   right: 0;
+  bottom: 0;
   padding: 4px 8px;
   font-size: 12px;
   overflow: hidden;
 }
-#filesPanelHeader {
-  top: 0;
-}
-#filesPanelFooter {
-  bottom: 0;
-}
-/* Inset by the header and footer heights, which the panel sets inline. */
+/* Inset by the footer height, which the panel sets inline. */
 #filesPanelContent {
   position: absolute;
   top: 0;
