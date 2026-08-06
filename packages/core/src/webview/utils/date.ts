@@ -63,3 +63,43 @@ export function formatRelativeDate(date: Date, now: Date, locale: string): strin
 export function pad2(i: number) {
   return i > 9 ? i : "0" + i;
 }
+
+/** Hour cycle for {@link formatShortTime}. "system" leaves it to the locale. */
+export type TimeFormat = "system" | "12h" | "24h";
+
+/** Time formatters are keyed by locale and hour cycle together. */
+const timeFormatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function getTimeFormatter(locale: string, timeFormat: TimeFormat): Intl.DateTimeFormat {
+  const key = locale + "|" + timeFormat;
+  let formatter = timeFormatterCache.get(key);
+  if (!formatter) {
+    const hour12 = timeFormat === "system" ? undefined : timeFormat === "12h";
+    try {
+      formatter = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", hour12 });
+    } catch {
+      formatter = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12 });
+    }
+    timeFormatterCache.set(key, formatter);
+  }
+  return formatter;
+}
+
+/** Format the time of day for a commit made today, honoring the 12h/24h setting. */
+export function formatShortTime(date: Date, locale: string, timeFormat: TimeFormat): string {
+  return getTimeFormatter(locale, timeFormat).format(date);
+}
+
+/** Unambiguous, fixed-width ISO date, used where a column's width must stay constant. */
+export function formatIsoDate(date: Date): string {
+  return date.getFullYear() + "-" + pad2(date.getMonth() + 1) + "-" + pad2(date.getDate());
+}
+
+/** Whether two dates fall on the same local calendar day. */
+export function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}

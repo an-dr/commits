@@ -20,7 +20,8 @@ The document separates portable extension settings from desktop appearance:
   "app": {
     "mode": "system",
     "lightTheme": "paper",
-    "darkTheme": "graphite"
+    "darkTheme": "graphite",
+    "timeFormat": "system"
   }
 }
 ```
@@ -45,6 +46,13 @@ extension host—are stored compatibly but have no standalone surface yet.
 `app.mode` is `system`, `light`, or `dark`. System mode follows operating-system
 changes live. `lightTheme` and `darkTheme` are always stored separately, so
 switching modes never discards either choice.
+
+`app.timeFormat` is `system`, `12h`, or `24h`, and controls the hour cycle used
+by the compact commit-date column: `system` resolves the 12/24-hour convention
+from the display locale (`Intl.DateTimeFormat`'s default), while `12h`/`24h`
+force one regardless of locale. This is a desktop-only display preference with
+no equivalent in the MIT extension's settings, which is why it lives in `app`
+rather than `core`.
 
 | Light presets | Dark presets |
 | --- | --- |

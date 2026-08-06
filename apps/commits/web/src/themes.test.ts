@@ -11,7 +11,7 @@ describe("standalone appearance", () => {
   it("follows system mode without losing either selected theme", () => {
     const settings = {
       ...DEFAULT_SETTINGS,
-      app: { mode: "system" as const, lightTheme: "solarized-light", darkTheme: "midnight" },
+      app: { ...DEFAULT_SETTINGS.app, mode: "system" as const, lightTheme: "solarized-light", darkTheme: "midnight" },
     };
     expect(resolveAppearance(settings, false).id).toBe("solarized-light");
     expect(resolveAppearance(settings, true).id).toBe("midnight");

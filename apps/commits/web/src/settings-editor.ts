@@ -16,6 +16,11 @@ export class SettingsEditor {
   private readonly mode = createSelect([["system", "Follow system"], ["light", "Light"], ["dark", "Dark"]]);
   private readonly lightTheme = createSelect(LIGHT_THEMES.map(({ id, name }) => [id, name]));
   private readonly darkTheme = createSelect(DARK_THEMES.map(({ id, name }) => [id, name]));
+  private readonly timeFormat = createSelect([
+    ["system", "Follow system"],
+    ["12h", "12-hour (AM/PM)"],
+    ["24h", "24-hour"],
+  ]);
   private settings: SettingsDocument | null = null;
 
   constructor(private readonly save: (settings: SettingsDocument) => void) {
@@ -60,6 +65,7 @@ export class SettingsEditor {
       createAppearanceField("Mode", this.mode),
       createAppearanceField("Light theme", this.lightTheme),
       createAppearanceField("Dark theme", this.darkTheme),
+      createAppearanceField("Commit time format", this.timeFormat),
     );
     for (const definition of CORE_SETTING_DEFINITIONS) fields.append(this.createField(definition));
     const footer = document.createElement("footer");
@@ -147,6 +153,7 @@ export class SettingsEditor {
     this.mode.value = settings.app.mode;
     this.lightTheme.value = LIGHT_THEMES.some(({ id }) => id === settings.app.lightTheme) ? settings.app.lightTheme : LIGHT_THEMES[0].id;
     this.darkTheme.value = DARK_THEMES.some(({ id }) => id === settings.app.darkTheme) ? settings.app.darkTheme : DARK_THEMES[0].id;
+    this.timeFormat.value = settings.app.timeFormat;
     for (const definition of CORE_SETTING_DEFINITIONS) {
       const control = this.controls.get(definition.key)!;
       const value = settings.core[definition.key];
@@ -198,6 +205,7 @@ export class SettingsEditor {
         mode: this.mode.value as SettingsDocument["app"]["mode"],
         lightTheme: this.lightTheme.value,
         darkTheme: this.darkTheme.value,
+        timeFormat: this.timeFormat.value as SettingsDocument["app"]["timeFormat"],
       },
     };
   }

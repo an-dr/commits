@@ -19,6 +19,8 @@ export type GitGraphViewState = {
   avatarSize: "Normal" | "Small";
   avatarShape: "Circle" | "Square";
   dateFormat: DateFormat;
+  /** Hour cycle for the compact commit-date column; "system" follows the display locale. */
+  timeFormat: "system" | "12h" | "24h";
   fetchAvatars: boolean;
   fileIcons: Record<string, string>;
   uiDensity: "Big" | "Normal" | "Compact";

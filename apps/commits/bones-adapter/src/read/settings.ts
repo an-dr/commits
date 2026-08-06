@@ -61,11 +61,14 @@ export const CORE_SETTING_DEFINITIONS: readonly CoreSettingDefinition[] = [
 ];
 
 export type DisplayMode = "system" | "light" | "dark";
+/** Hour cycle for the compact commit-time display. "system" reads the OS/browser locale. */
+export type TimeFormat = "system" | "12h" | "24h";
 
 export type AppSettings = Readonly<Record<string, unknown>> & {
   readonly mode: DisplayMode;
   readonly lightTheme: string;
   readonly darkTheme: string;
+  readonly timeFormat: TimeFormat;
 };
 
 export interface SettingsDocument {
@@ -82,6 +85,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   mode: "system",
   lightTheme: "paper",
   darkTheme: "graphite",
+  timeFormat: "system",
 };
 
 export const DEFAULT_SETTINGS: SettingsDocument = {
@@ -114,6 +118,7 @@ export function validateSettings(candidate: unknown): SettingsDocument {
       : cloneValue(definition.defaultValue);
   }
   const mode = value.app.mode;
+  const timeFormat = value.app.timeFormat;
   return {
     version: 2,
     core,
@@ -122,6 +127,7 @@ export function validateSettings(candidate: unknown): SettingsDocument {
       mode: mode === "light" || mode === "dark" || mode === "system" ? mode : "system",
       lightTheme: typeof value.app.lightTheme === "string" ? value.app.lightTheme : "paper",
       darkTheme: typeof value.app.darkTheme === "string" ? value.app.darkTheme : "graphite",
+      timeFormat: timeFormat === "12h" || timeFormat === "24h" ? timeFormat : "system",
     },
   };
 }

@@ -16,6 +16,7 @@ export function createViewState(settings: SettingsDocument = DEFAULT_SETTINGS): 
     avatarSize: value("repository.commits.avatar.size"),
     avatarShape: value("repository.commits.avatar.shape"),
     dateFormat: value("dateFormat"),
+    timeFormat: settings.app.timeFormat,
     fetchAvatars: value("fetchAvatars"),
     fileIcons: {},
     uiDensity: value("uiDensity"),
