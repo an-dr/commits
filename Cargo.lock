@@ -565,6 +565,7 @@ dependencies = [
  "runner",
  "tempfile",
  "wasm-extensions",
+ "wasmtime",
 ]
 
 [[package]]
