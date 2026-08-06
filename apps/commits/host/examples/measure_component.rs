@@ -6,12 +6,15 @@ use bones_messages::web::PageMessage;
 use bones_messages::{EncodeMessage, Message};
 use bus::{BudgetLimits, Bus, EndpointBudget, Envelope, Handler, Registry, Respond};
 use logging::Logger;
-use wasm_extensions::host::{new_engine, DisplayInfo, Host};
+use wasm_extensions::host::{new_engine, DisplayInfo, ExtensionTimeouts, Host};
 
 const MESSAGE_COUNT: usize = 1_000;
-/// Well past any plausible cold start, so a slow machine reports a large
-/// number here instead of trapping and reporting none.
-const MEASUREMENT_LOAD_TIMEOUT: Duration = Duration::from_secs(120);
+/// Well past any plausible cold start or message handling, so a slow machine
+/// reports a large number here instead of trapping and reporting none.
+const MEASUREMENT_TIMEOUTS: ExtensionTimeouts = ExtensionTimeouts {
+    load: Duration::from_secs(120),
+    call: Duration::from_secs(120),
+};
 
 struct WebResponder;
 
@@ -42,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         EndpointBudget::new(BudgetLimits::default()),
         // Generous on purpose: this run exists to measure the cold start, so
         // the budget must not cap the number it is trying to report.
-        MEASUREMENT_LOAD_TIMEOUT,
+        MEASUREMENT_TIMEOUTS,
     )?;
     let cold_start = started.elapsed();
 

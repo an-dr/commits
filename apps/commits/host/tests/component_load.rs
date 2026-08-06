@@ -4,13 +4,16 @@ use std::time::Duration;
 
 use bus::{BudgetLimits, Bus, EndpointBudget, Registry, Respond};
 use logging::Logger;
-use wasm_extensions::host::{new_engine, DisplayInfo, Host};
+use wasm_extensions::host::{new_engine, DisplayInfo, ExtensionTimeouts, Host};
 
-/// The budget `apps/commits/host/src/main.rs` gives the engine. Loading here
-/// under the same allowance is the point of the test: the default of one
-/// second is not enough for a component this size (BUG-002), so a test that
-/// quietly used a different number would not be exercising what ships.
-const LOAD_TIMEOUT: Duration = Duration::from_secs(30);
+/// The budgets `apps/commits/host/src/main.rs` gives the engine. Loading here
+/// under the same allowances is the point of the test: the defaults are not
+/// enough for a component this size (BUG-002, BUG-003), so a test that quietly
+/// used different numbers would not be exercising what ships.
+const TIMEOUTS: ExtensionTimeouts = ExtensionTimeouts {
+    load: Duration::from_secs(30),
+    call: Duration::from_secs(20),
+};
 
 struct WebResponder;
 
@@ -51,7 +54,7 @@ fn generated_components_load_and_initialize_in_bones() {
             Arc::new(AtomicBool::new(false)),
             DisplayInfo::default(),
             EndpointBudget::new(BudgetLimits::default()),
-            LOAD_TIMEOUT,
+            TIMEOUTS,
         )
         .unwrap();
         assert!(!host.is_faulted());

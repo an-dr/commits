@@ -30,6 +30,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         // build all spend it without the component doing anything wrong, and
         // overrunning it traps `init` rather than retrying (BUG-002).
         .extension_load_timeout(std::time::Duration::from_secs(30))
+        // Opening a repository reads and shapes its whole history inside a
+        // single `on-message`, which the engine's 50ms per-call default
+        // treats as a runaway: the extension traps, is quarantined, and the
+        // panel goes black mid-session. The work is real, so it gets a real
+        // budget -- still bounded, because a call this long does block the
+        // window (BUG-003).
+        .extension_call_timeout(std::time::Duration::from_secs(20))
         .extensions_dir("extensions")
         .startup_extension("commits")
         .saves_dir("saves")
