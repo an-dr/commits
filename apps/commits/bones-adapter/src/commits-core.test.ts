@@ -17,7 +17,8 @@ class StubHost implements HostPort {
   settingsSaveError = "";
   paths: string[] = [];
   pageSource: PageSource = { kind: "url", value: "file:///commits/page.html" };
-  commitsRepoStatusValue: CommitsRepoStatus = { ok: true, exists: false, path: "C:/commits-repo", error: "" };
+  commitsRepoStatusValue: CommitsRepoStatus =
+    { ok: true, exists: false, path: "C:/commits/repo", parentPath: "C:/commits", error: "" };
 
   closePanel(panel: string): void { this.closed.push(panel); }
   log(level: LogLevel, message: string): void { this.logs.push([level, message]); }
@@ -70,7 +71,8 @@ describe("CommitsCore MIT webview host", () => {
 
   it("reports the commits repo status once the view is ready", () => {
     const host = new StubHost();
-    host.commitsRepoStatusValue = { ok: true, exists: true, path: "C:/home/.commits/repo", error: "" };
+    host.commitsRepoStatusValue =
+      { ok: true, exists: true, path: "C:/home/.commits/repo", parentPath: "C:/home/.commits", error: "" };
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
@@ -80,12 +82,13 @@ describe("CommitsCore MIT webview host", () => {
       command: "standaloneCommitsRepoStatus",
       exists: true,
       path: "C:/home/.commits/repo",
+      message: "",
     }]);
   });
 
   it("reports the commits repo as absent when the host cannot resolve it", () => {
     const host = new StubHost();
-    host.commitsRepoStatusValue = { ok: false, exists: false, path: "", error: "no home directory" };
+    host.commitsRepoStatusValue = { ok: false, exists: false, path: "", parentPath: "", error: "no home directory" };
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
@@ -95,7 +98,131 @@ describe("CommitsCore MIT webview host", () => {
       command: "standaloneCommitsRepoStatus",
       exists: false,
       path: "",
+      message: "",
     }]);
+  });
+
+  it("clones the commits repo into the reported path when it does not exist yet", () => {
+    const host = new StubHost();
+    host.commitsRepoStatusValue =
+      { ok: true, exists: false, path: "C:/home/.commits/repo", parentPath: "C:/home/.commits", error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneCloneCommitsRepo" }));
+
+    expect(host.gitRequests).toHaveLength(1);
+    expect(host.gitRequests[0].cwd).toBe("C:/home/.commits");
+    expect(host.gitRequests[0].args).toEqual([
+      "clone", "https://github.com/an-dr/commits.git", "C:/home/.commits/repo",
+    ]);
+
+    completeGitAt(host, core, 0, "");
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneCommitsRepoStatus",
+      exists: true,
+      path: "C:/home/.commits/repo",
+      message: "Cloned to C:/home/.commits/repo",
+    }]);
+  });
+
+  it("no-ops the clone with a message when the repo already exists", () => {
+    const host = new StubHost();
+    host.commitsRepoStatusValue =
+      { ok: true, exists: true, path: "C:/home/.commits/repo", parentPath: "C:/home/.commits", error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneCloneCommitsRepo" }));
+
+    expect(host.gitRequests).toHaveLength(0);
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneCommitsRepoStatus",
+      exists: true,
+      path: "C:/home/.commits/repo",
+      message: "Already cloned at C:/home/.commits/repo",
+    }]);
+  });
+
+  it("reports a failed clone with git's own error", () => {
+    const host = new StubHost();
+    host.commitsRepoStatusValue =
+      { ok: true, exists: false, path: "C:/home/.commits/repo", parentPath: "C:/home/.commits", error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneCloneCommitsRepo" }));
+
+    failGitAt(host, core, 0, "fatal: unable to access the remote\n");
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneCommitsRepoStatus",
+      exists: false,
+      path: "C:/home/.commits/repo",
+      message: "Clone failed: fatal: unable to access the remote",
+    }]);
+  });
+
+  it("opens the commits repo once it exists", () => {
+    const host = new StubHost();
+    host.commitsRepoStatusValue =
+      { ok: true, exists: true, path: "C:/home/.commits/repo", parentPath: "C:/home/.commits", error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenCommitsRepo" }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "loadRepos",
+      repos: { "C:/home/.commits/repo": { columnWidths: null } },
+      lastActiveRepo: "C:/home/.commits/repo",
+    }]);
+  });
+
+  it("does nothing when asked to open the commits repo before it is cloned", () => {
+    const host = new StubHost();
+    host.commitsRepoStatusValue =
+      { ok: true, exists: false, path: "C:/home/.commits/repo", parentPath: "C:/home/.commits", error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenCommitsRepo" }));
+
+    expect(host.sent.some(([, message]) => (message as { command?: string }).command === "loadRepos"))
+      .toBe(false);
+  });
+
+  it("reveals the commits repo folder once it exists", () => {
+    const host = new StubHost();
+    host.commitsRepoStatusValue =
+      { ok: true, exists: true, path: "C:/home/.commits/repo", parentPath: "C:/home/.commits", error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenCommitsRepoFolder" }));
+
+    expect(host.osRequests).toContainEqual({
+      requestId: 50_000, action: "reveal-directory", value: "C:/home/.commits/repo",
+    });
+  });
+
+  it("does nothing when asked to reveal the commits repo folder before it is cloned", () => {
+    const host = new StubHost();
+    host.commitsRepoStatusValue =
+      { ok: true, exists: false, path: "C:/home/.commits/repo", parentPath: "C:/home/.commits", error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenCommitsRepoFolder" }));
+
+    expect(host.osRequests).toHaveLength(0);
   });
 
   it("loads settings before repository messages and acknowledges atomic saves", () => {

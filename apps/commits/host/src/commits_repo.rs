@@ -12,12 +12,15 @@ const FAILURE: u8 = 1;
 const ABSENT: u8 = 0;
 const PRESENT: u8 = 1;
 
-/// Answers with whether `~/.commits/repo` exists and its absolute path.
+/// Answers with whether `~/.commits/repo` exists, its absolute path, and its
+/// parent directory (`~/.commits`).
 ///
-/// The path itself is resolved once here, the same way `SettingsModule`
-/// resolves `~/.commits/settings.json`, so the sandboxed component never
-/// needs its own access to the home directory: it clones, opens, and reveals
-/// the path this module reports rather than computing one itself.
+/// The paths are resolved once here, the same way `SettingsModule` resolves
+/// `~/.commits/settings.json`, so the sandboxed component never needs its own
+/// access to the home directory: it clones, opens, and reveals the path this
+/// module reports rather than computing one itself. The parent is reported
+/// too because a `git clone` needs a working directory that already exists to
+/// spawn into, and `~/.commits` may not exist yet on a fresh install.
 pub struct CommitsRepoModule {
     path: Option<PathBuf>,
 }
@@ -51,13 +54,22 @@ impl Module for CommitsRepoModule {
         ENDPOINT
     }
 
+    /// Best-effort: a clone into `~/.commits/repo` needs `~/.commits` to
+    /// already exist to spawn `git` into, so it is created once up front
+    /// rather than on every status query. If this fails, the later clone
+    /// attempt surfaces a clearer error from `git` itself.
     fn init(&mut self, _context: &mut ModuleContext) -> Result<(), String> {
-        self.resolve_path().map(|_| ())
+        let path = self.resolve_path()?;
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        Ok(())
     }
 
-    /// Reports existence and path in one round trip: the component needs both
-    /// before it can enable Open/Reveal, or decide whether Clone would clone
-    /// into an already-populated folder.
+    /// Reports existence, path, and parent in one round trip: the component
+    /// needs the path before it can enable Open/Reveal or decide whether
+    /// Clone would clone into an already-populated folder, and the parent as
+    /// the working directory to spawn `git clone` into.
     fn respond(&mut self, sender: &str, _payload: &[u8]) -> Option<Vec<u8>> {
         if sender != OWNER {
             return Some(encode_failure("the commits repo path is private to the commits component"));
@@ -65,17 +77,20 @@ impl Module for CommitsRepoModule {
         Some(match self.resolve_path() {
             Ok(path) => {
                 let present = if path.exists() { PRESENT } else { ABSENT };
-                encode_success(present, &path.to_string_lossy())
+                let parent = path.parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+                encode_success(present, &parent, &path.to_string_lossy())
             }
             Err(error) => encode_failure(&error),
         })
     }
 }
 
-fn encode_success(present: u8, path: &str) -> Vec<u8> {
-    let mut response = Vec::with_capacity(path.len() + 2);
+fn encode_success(present: u8, parent: &str, path: &str) -> Vec<u8> {
+    let mut response = Vec::with_capacity(parent.len() + path.len() + 3);
     response.push(SUCCESS);
     response.push(present);
+    response.extend(parent.as_bytes());
+    response.push(b'\n');
     response.extend(path.as_bytes());
     response
 }
@@ -91,20 +106,25 @@ fn encode_failure(message: &str) -> Vec<u8> {
 mod tests {
     use super::{CommitsRepoModule, Module, ABSENT, FAILURE, PRESENT, SUCCESS};
 
+    fn decode_success(response: &[u8]) -> (u8, String, String) {
+        assert_eq!(response[0], SUCCESS);
+        let present = response[1];
+        let text = String::from_utf8(response[2..].to_vec()).unwrap();
+        let (parent, path) = text.split_once('\n').unwrap();
+        (present, parent.to_string(), path.to_string())
+    }
+
     #[test]
     fn reports_absent_for_a_folder_that_does_not_exist_yet() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("repo");
         let mut module = CommitsRepoModule::new(&path);
 
-        let response = module.respond("commits", &[]).unwrap();
+        let (present, parent, reported_path) = decode_success(&module.respond("commits", &[]).unwrap());
 
-        assert_eq!(response[0], SUCCESS);
-        assert_eq!(response[1], ABSENT);
-        assert_eq!(
-            String::from_utf8(response[2..].to_vec()).unwrap(),
-            path.to_string_lossy()
-        );
+        assert_eq!(present, ABSENT);
+        assert_eq!(parent, directory.path().to_string_lossy());
+        assert_eq!(reported_path, path.to_string_lossy());
     }
 
     #[test]
@@ -114,10 +134,21 @@ mod tests {
         std::fs::create_dir_all(&path).unwrap();
         let mut module = CommitsRepoModule::new(&path);
 
-        let response = module.respond("commits", &[]).unwrap();
+        let (present, ..) = decode_success(&module.respond("commits", &[]).unwrap());
 
-        assert_eq!(response[0], SUCCESS);
-        assert_eq!(response[1], PRESENT);
+        assert_eq!(present, PRESENT);
+    }
+
+    #[test]
+    fn creates_the_parent_directory_on_init_so_a_clone_has_somewhere_to_spawn_into() {
+        let directory = tempfile::tempdir().unwrap();
+        let parent = directory.path().join("nested/.commits");
+        let mut module = CommitsRepoModule::new(parent.join("repo"));
+
+        assert!(!parent.exists());
+        Module::init(&mut module, &mut bus::ModuleContext::new(&mut bus::ServiceRegistry::new())).unwrap();
+
+        assert!(parent.is_dir());
     }
 
     #[test]

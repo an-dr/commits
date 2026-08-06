@@ -12,7 +12,10 @@ export interface SettingsIoResult {
 export interface CommitsRepoStatus {
   readonly ok: boolean;
   readonly exists: boolean;
+  /** Absolute path to the clone, e.g. `~/.commits/repo`. */
   readonly path: string;
+  /** Absolute path to `path`'s parent (`~/.commits`), which a clone spawns `git` into. */
+  readonly parentPath: string;
   readonly error: string;
 }
 

@@ -70,22 +70,27 @@ export class BonesHostPort implements HostPort {
   }
 
   commitsRepoStatus(): CommitsRepoStatus {
+    const failed = (error: string): CommitsRepoStatus =>
+      ({ ok: false, exists: false, path: "", parentPath: "", error });
     try {
       const response = send("commits-repo", new Uint8Array());
       if (response[0] !== 0) {
-        const error = response.length > 1
+        return failed(response.length > 1
           ? new TextDecoder().decode(response.slice(1))
-          : "commits repo host returned an invalid response";
-        return { ok: false, exists: false, path: "", error };
+          : "commits repo host returned an invalid response");
       }
+      const text = new TextDecoder().decode(response.slice(2));
+      const separator = text.indexOf("\n");
+      if (separator < 0) return failed("commits repo host returned a malformed path");
       return {
         ok: true,
         exists: response[1] === 1,
-        path: new TextDecoder().decode(response.slice(2)),
+        parentPath: text.slice(0, separator),
+        path: text.slice(separator + 1),
         error: "",
       };
     } catch (error) {
-      return { ok: false, exists: false, path: "", error: String(error) };
+      return failed(String(error));
     }
   }
 

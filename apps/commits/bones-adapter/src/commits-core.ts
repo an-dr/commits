@@ -16,17 +16,24 @@ import { DEFAULT_SETTINGS, parseSettings, validateSettings, type SettingsDocumen
 
 const PANEL = "main";
 
+/** The commits project's own repository, cloned locally for Commits Repo menu actions. */
+const COMMITS_REPO_REMOTE_URL = "https://github.com/an-dr/commits.git";
+
 type StandaloneRequest =
   | { readonly command: "standaloneReady" }
   | { readonly command: "standaloneViewReady" }
   | { readonly command: "standaloneChooseRepository" }
   | { readonly command: "standaloneOpenRepository"; readonly path: string }
-  | { readonly command: "standaloneSaveSettings"; readonly requestId: number; readonly settings: unknown };
+  | { readonly command: "standaloneSaveSettings"; readonly requestId: number; readonly settings: unknown }
+  | { readonly command: "standaloneCloneCommitsRepo" }
+  | { readonly command: "standaloneOpenCommitsRepo" }
+  | { readonly command: "standaloneOpenCommitsRepoFolder" };
 
 type PendingOs =
   | { readonly kind: "chooseRepository" }
   | { readonly kind: "copy"; readonly type: string }
   | { readonly kind: "openExternalUrl" }
+  | { readonly kind: "revealCommitsRepoFolder" }
   | { readonly kind: "readFile"; readonly deliver: (content: string | null) => void };
 
 /** Bones owner of the unchanged MIT webview's host protocol. */
@@ -41,9 +48,12 @@ export class CommitsCore {
   private settingsError = "";
   private currentRepository: string | null = null;
   private commitsRepoPath: string | null = null;
+  private commitsRepoParentPath: string | null = null;
   private commitsRepoExists = false;
+  private pendingCloneRequestId: number | null = null;
   private bootstrapped = false;
   private nextOsRequestId = 50_000;
+  private nextGitRequestId = 60_000;
   /** Counts panel file reads so only the newest one answers. */
   private fullDiffSequence = 0;
   /** Counts comparisons so only the newest selection answers. */
@@ -126,6 +136,15 @@ export class CommitsCore {
         return;
       case "standaloneOpenRepository":
         if (typeof value.path === "string") this.openRepository(value.path);
+        return;
+      case "standaloneCloneCommitsRepo":
+        this.cloneCommitsRepo();
+        return;
+      case "standaloneOpenCommitsRepo":
+        this.openCommitsRepo();
+        return;
+      case "standaloneOpenCommitsRepoFolder":
+        this.revealCommitsRepoFolder();
         return;
       case "loadRepos":
         this.sendRepos();
@@ -293,12 +312,21 @@ export class CommitsCore {
       else if (result.error) this.host.log("warn", result.error);
     } else if (pending.kind === "copy") {
       this.send({ command: "copyToClipboard", type: pending.type, success: result.accepted });
+    } else if (pending.kind === "revealCommitsRepoFolder") {
+      if (!result.accepted) {
+        this.sendCommitsRepoStatus(`Could not open the folder: ${result.error || "unknown error"}`);
+      }
     } else {
       this.send({ command: "openExternalUrl", error: result.accepted ? null : result.error || "Unable to open URL" });
     }
   }
 
   receiveGitResult(result: GitResult): void {
+    if (result.requestId === this.pendingCloneRequestId) {
+      this.pendingCloneRequestId = null;
+      this.finishCloneCommitsRepo(result);
+      return;
+    }
     this.graph.receive(result);
     this.workingTreeActions.receive(result);
   }
@@ -330,14 +358,62 @@ export class CommitsCore {
   /**
    * Tells the page whether ~/.commits/repo exists, so it can enable Open
    * Commits Repo / Open Commits Repo Folder. Sent at boot and again after a
-   * clone changes the answer.
+   * clone changes the answer. `message` carries transient feedback about
+   * what just happened (cloned, already cloned, or failed); it is empty for
+   * the boot-time announcement, which reports state rather than an event.
    */
-  private sendCommitsRepoStatus(): void {
+  private sendCommitsRepoStatus(message = ""): void {
     this.send({
       command: "standaloneCommitsRepoStatus",
       exists: this.commitsRepoExists,
       path: this.commitsRepoPath ?? "",
+      message,
     });
+  }
+
+  /** Clones the commits project's own repository into ~/.commits/repo. */
+  private cloneCommitsRepo(): void {
+    if (this.commitsRepoExists) {
+      this.sendCommitsRepoStatus(`Already cloned at ${this.commitsRepoPath ?? ""}`);
+      return;
+    }
+    if (this.commitsRepoPath === null || this.commitsRepoParentPath === null) {
+      this.sendCommitsRepoStatus("Could not resolve the commits repo path");
+      return;
+    }
+    const requestId = this.nextGitRequestId++;
+    this.pendingCloneRequestId = requestId;
+    this.sendCommitsRepoStatus("Cloning…");
+    this.host.runGit({
+      requestId,
+      cwd: this.commitsRepoParentPath,
+      args: ["clone", COMMITS_REPO_REMOTE_URL, this.commitsRepoPath],
+      timeoutMs: 120_000,
+    });
+  }
+
+  /** Reacts to the clone's GitResult: updates state and tells the page what happened. */
+  private finishCloneCommitsRepo(result: GitResult): void {
+    if (result.status === "completed" && result.exitCode === 0) {
+      this.commitsRepoExists = true;
+      this.sendCommitsRepoStatus(`Cloned to ${this.commitsRepoPath ?? ""}`);
+      return;
+    }
+    this.sendCommitsRepoStatus(`Clone failed: ${summarizeGitFailure(result)}`);
+  }
+
+  /** Opens ~/.commits/repo the same way any other repository is opened. */
+  private openCommitsRepo(): void {
+    if (!this.commitsRepoExists || this.commitsRepoPath === null) return;
+    this.openRepository(this.commitsRepoPath);
+  }
+
+  /** Reveals ~/.commits/repo in the OS's native file manager. */
+  private revealCommitsRepoFolder(): void {
+    if (!this.commitsRepoExists || this.commitsRepoPath === null) return;
+    const requestId = this.nextOsRequestId++;
+    this.pendingOs.set(requestId, { kind: "revealCommitsRepoFolder" });
+    this.host.requestOs(requestId, "reveal-directory", this.commitsRepoPath);
   }
 
   /** Re-announces repository availability without redoing discovery. */
@@ -364,6 +440,7 @@ export class CommitsCore {
     const commitsRepo = this.host.commitsRepoStatus();
     if (commitsRepo.ok) {
       this.commitsRepoPath = commitsRepo.path;
+      this.commitsRepoParentPath = commitsRepo.parentPath;
       this.commitsRepoExists = commitsRepo.exists;
     } else {
       this.host.log("warn", `could not resolve the commits repo path: ${commitsRepo.error}`);
@@ -430,6 +507,15 @@ export class CommitsCore {
 /** Puts a path at the head of the recent list, bounded and deduplicated. */
 function withMostRecent(recent: readonly string[], path: string): readonly string[] {
   return [path, ...recent.filter((entry) => entry !== path)].slice(0, MAX_RECENT_REPOSITORIES);
+}
+
+/** A short, human-readable reason a git run failed, for a one-line status message. */
+function summarizeGitFailure(result: GitResult): string {
+  const stderr = new TextDecoder().decode(result.stderr).trim();
+  const firstLine = stderr.split("\n").find((line) => line.trim() !== "");
+  if (firstLine) return firstLine.trim();
+  if (result.status === "cancelled") return "cancelled";
+  return `git exited with code ${result.exitCode}`;
 }
 
 function asString(value: unknown): string {
