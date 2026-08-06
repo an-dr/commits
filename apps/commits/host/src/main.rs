@@ -2,6 +2,7 @@
 // the window. Debug builds keep the console, which is where their logs go.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod commits_repo;
 mod diagnostics;
 mod page;
 mod settings;
@@ -52,6 +53,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(commits_watcher::WatcherModule::default())
         .module(commits_os::OsModule::default())
         .module(settings::SettingsModule::default())
+        .module(commits_repo::CommitsRepoModule::default())
         .run()?;
     Ok(())
 }
