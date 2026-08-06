@@ -9,8 +9,9 @@ const toolbarIcon = (body: string) =>
 export const toolbarIcons = {
   /** Circular arrow: refresh. */
   refresh: toolbarIcon('<path d="M13.5 7a5.5 5.5 0 1 0-1.4 4.3"/><path d="M13.5 3v4h-4"/>'),
-  /** Arrow curving back to a bar: discard local changes. */
-  discard: toolbarIcon('<path d="M2.5 8a5.5 5.5 0 1 1 1.4 3.7"/><path d="M2.5 12V8h4"/>'),
+  /** Counter-clockwise arrow: reset to HEAD, discarding local changes. Mirrors
+   *  refresh's own arc and arrowhead so the two read as the same weight. */
+  discard: toolbarIcon('<path d="M2.5 7a5.5 5.5 0 1 1 1.4 4.3"/><path d="M2.5 3v4h4"/>'),
   /** Downward arrow onto a line: pull. */
   arrowDown: toolbarIcon(
     '<path d="M8 2v8"/><path d="M4.5 6.5 8 10l3.5-3.5"/><path d="M3 13.5h10"/>'

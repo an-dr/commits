@@ -105,9 +105,8 @@ body.branchPanelHidden #branchPanelSidebar {
 .branchPanelFolder:hover {
   background: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.12));
 }
-.branchPanelItem.selected {
-  background: var(--vscode-list-activeSelectionBackground, rgba(128, 128, 128, 0.2));
-}
+/* The checkmark alone signals a checked branch; a row background on top of it
+   was too bright against a sidebar of otherwise plain rows. */
 .branchPanelCheck {
   display: inline-flex;
   align-items: center;
