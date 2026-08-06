@@ -36,6 +36,21 @@ the extension's original list, and the shared CSS in
 `packages/webview-shell/assets/main.css` moved with it, so both hosts get the
 same panel.
 
+The "ui improvements" iteration diverges further, all inside
+`packages/core/src/webview`. Column widths are fixed by the stylesheet rather
+than user-resizable: `main.ts` no longer implements drag-to-resize, and the
+`GitRepoState.columnWidths` field it used to write is untouched dead protocol
+surface now, left as-is rather than removed from the imported type. The Dev
+column's visible text is a new compact today-or-date display
+(`getCompactCommitDate`) that always wins over the `dateFormat` setting's
+"Date Only"/"Relative" modes for that one column; `dateFormat` itself is still
+accepted and stored for `core` round-tripping (see `docs/settings.md`), but
+`formatRelativeDate`, `getRelativeFormatter`, and `RELATIVE_UNITS` were removed
+from `utils/date.ts` once that was their only caller. `filesPanel.ts` lost its
+header bar (`setHeader`, `headerElem`) entirely, so the panel has no title text
+above the file list any more. None of this is upstreamable as-is; re-importing
+would need to decide whether these behaviors move with it.
+
 Every other file remains as imported, and the MIT grant and notice are
 unchanged; MIT permits modification. What is lost is reproducibility: the
 snapshot can no longer be verified by hashing against
