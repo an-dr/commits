@@ -561,6 +561,7 @@ dependencies = [
  "commits-watcher",
  "dirs",
  "logging",
+ "rfd",
  "runner",
  "tempfile",
  "wasm-extensions",

@@ -23,6 +23,7 @@ commits-os = { path = "../../../crates/os" }
 commits-watcher = { path = "../../../crates/watcher" }
 dirs = "6.0.0"
 logging = { path = "../../../vendor/bones/core/logging" }
+rfd = "0.15"
 runner = { path = "../../../vendor/bones/core/runner", features = ["web"] }
 tempfile = "3.27.0"
 wasm-extensions = { path = "../../../vendor/bones/core/wasm-extensions" }

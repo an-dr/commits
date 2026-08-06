@@ -1,6 +1,6 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use bones_messages::web::PageMessage;
 use bones_messages::{EncodeMessage, Message};
@@ -9,6 +9,9 @@ use logging::Logger;
 use wasm_extensions::host::{new_engine, DisplayInfo, Host};
 
 const MESSAGE_COUNT: usize = 1_000;
+/// Well past any plausible cold start, so a slow machine reports a large
+/// number here instead of trapping and reporting none.
+const MEASUREMENT_LOAD_TIMEOUT: Duration = Duration::from_secs(120);
 
 struct WebResponder;
 
@@ -37,6 +40,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(AtomicBool::new(false)),
         DisplayInfo::default(),
         EndpointBudget::new(BudgetLimits::default()),
+        // Generous on purpose: this run exists to measure the cold start, so
+        // the budget must not cap the number it is trying to report.
+        MEASUREMENT_LOAD_TIMEOUT,
     )?;
     let cold_start = started.elapsed();
 
