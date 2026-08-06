@@ -913,8 +913,29 @@ svg.fileIcon {
 .gitFolderContents.hidden {
   display: none;
 }
+/* A flex row rather than inline content: a long name gets an ellipsis
+   instead of wrapping, which used to leave the icon stranded on its own
+   line above the name it belongs to. */
+.gitFolder,
+.gitFile {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
 .gitFolder {
   cursor: pointer;
+}
+.gitFolderIcon,
+.gitFileIcon {
+  flex: 0 0 auto;
+}
+.gitFolderName,
+.gitFileName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .gitFile {
   color: var(--vscode-gitDecoration-modifiedResourceForeground);
@@ -930,6 +951,7 @@ svg.fileIcon {
 }
 .gitFileAddDel,
 .gitFileRename {
+  flex: 0 0 auto;
   color: var(--vscode-editor-foreground);
   margin-left: 8px;
 }

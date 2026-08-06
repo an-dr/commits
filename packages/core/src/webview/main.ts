@@ -2248,8 +2248,9 @@ function generateGitFileTreeHtml(folder: GitFolder, gitFiles: GitFileChange[]) {
           : "") +
         '><span class="gitFileIcon">' +
         (resolveFileIcon(viewState.fileIcons, folder.contents[keys[i]].name) ?? svgIcons.file) +
-        "</span>" +
+        '</span><span class="gitFileName">' +
         escapeHtml(folder.contents[keys[i]].name) +
+        "</span>" +
         (gitFile.type === "R"
           ? ' <span class="gitFileRename" title="' +
             escapeHtml(
@@ -2259,30 +2260,40 @@ function generateGitFileTreeHtml(folder: GitFolder, gitFiles: GitFileChange[]) {
             ) +
             '">R</span>'
           : "") +
-        (gitFile.type !== "A" &&
-        gitFile.type !== "D" &&
-        gitFile.additions !== null &&
-        gitFile.deletions !== null
-          ? '<span class="gitFileAddDel">(<span class="gitFileAdditions" title="' +
-            (gitFile.additions !== 1 ? l10n.tooltipAdditions : l10n.tooltipAddition).replace(
-              "{0}",
-              String(gitFile.additions)
-            ) +
-            '">+' +
-            gitFile.additions +
-            '</span>|<span class="gitFileDeletions" title="' +
-            (gitFile.deletions !== 1 ? l10n.tooltipDeletions : l10n.tooltipDeletion).replace(
-              "{0}",
-              String(gitFile.deletions)
-            ) +
-            '">-' +
-            gitFile.deletions +
-            "</span>)</span>"
-          : "") +
+        renderGitFileAddDel(gitFile) +
         "</li>";
     }
   }
   return html + "</ul>";
+}
+/**
+ * The change count beside a file's name: a binary file (additions/deletions
+ * null) shows nothing, an added or deleted file shows only the side that
+ * applies to it, and anything else shows both.
+ */
+function renderGitFileAddDel(gitFile: GitFileChange): string {
+  if (gitFile.additions === null || gitFile.deletions === null) {
+    return "";
+  }
+  const additionsTitle = (gitFile.additions !== 1
+    ? l10n.tooltipAdditions
+    : l10n.tooltipAddition
+  ).replace("{0}", String(gitFile.additions));
+  const deletionsTitle = (gitFile.deletions !== 1
+    ? l10n.tooltipDeletions
+    : l10n.tooltipDeletion
+  ).replace("{0}", String(gitFile.deletions));
+  const additionsHtml =
+    '<span class="gitFileAdditions" title="' + additionsTitle + '">+' + gitFile.additions + "</span>";
+  const deletionsHtml =
+    '<span class="gitFileDeletions" title="' + deletionsTitle + '">-' + gitFile.deletions + "</span>";
+  if (gitFile.type === "A") {
+    return '<span class="gitFileAddDel">(' + additionsHtml + ")</span>";
+  }
+  if (gitFile.type === "D") {
+    return '<span class="gitFileAddDel">(' + deletionsHtml + ")</span>";
+  }
+  return '<span class="gitFileAddDel">(' + additionsHtml + "|" + deletionsHtml + ")</span>";
 }
 function alterGitFileTree(folder: GitFolder, folderPath: string, open: boolean) {
   let path = folderPath.split("/"),
