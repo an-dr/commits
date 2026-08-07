@@ -547,7 +547,12 @@ export class CommitsCore {
     } else {
       this.host.log("warn", `could not resolve install status: ${installStatus.error}`);
     }
-    this.sendInstallStatus();
+    // Fires once, the first start after an Update or Install actually took
+    // effect -- installStatus.justUpdated is already one-shot on the host
+    // side, regardless of which of the two produced the new version.
+    this.sendInstallStatus(
+      installStatus.ok && installStatus.justUpdated ? `Updated to version ${installStatus.version}` : "",
+    );
   }
 
   /** Runs once at boot when a manifest URL is configured; see `bootstrap`. */

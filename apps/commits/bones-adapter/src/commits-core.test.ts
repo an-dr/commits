@@ -20,7 +20,7 @@ class StubHost implements HostPort {
   pageSource: PageSource = { kind: "url", value: "file:///commits/page.html" };
   commitsRepoStatusValue: CommitsRepoStatus =
     { ok: true, exists: false, path: "C:/commits/repo", parentPath: "C:/commits", error: "" };
-  installStatusValue: InstallStatus = { ok: true, installed: true, version: "0.2.0", error: "" };
+  installStatusValue: InstallStatus = { ok: true, installed: true, justUpdated: false, version: "0.2.0", error: "" };
 
   closePanel(panel: string): void { this.closed.push(panel); }
   log(level: LogLevel, message: string): void { this.logs.push([level, message]); }
@@ -354,7 +354,7 @@ describe("CommitsCore MIT webview host", () => {
 
   it("reports install status and version at boot, independent of any manifest URL", () => {
     const host = new StubHost();
-    host.installStatusValue = { ok: true, installed: false, version: "0.2.0", error: "" };
+    host.installStatusValue = { ok: true, installed: false, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
@@ -364,9 +364,21 @@ describe("CommitsCore MIT webview host", () => {
     }]);
   });
 
+  it("announces a just-applied update once at boot, regardless of installed state", () => {
+    const host = new StubHost();
+    host.installStatusValue = { ok: true, installed: true, justUpdated: true, version: "0.2.0", error: "" };
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneInstallStatus", status: "hidden", version: "0.2.0", message: "Updated to version 0.2.0",
+    }]);
+  });
+
   it("stages the running build on standaloneInstall and reports readiness once an existing launcher will apply it", () => {
     const host = new StubHost();
-    host.installStatusValue = { ok: true, installed: false, version: "0.2.0", error: "" };
+    host.installStatusValue = { ok: true, installed: false, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
@@ -389,7 +401,7 @@ describe("CommitsCore MIT webview host", () => {
 
   it("reports completion directly when nothing was installed and the files landed in place", () => {
     const host = new StubHost();
-    host.installStatusValue = { ok: true, installed: false, version: "0.2.0", error: "" };
+    host.installStatusValue = { ok: true, installed: false, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
@@ -416,7 +428,7 @@ describe("CommitsCore MIT webview host", () => {
 
   it("reports a failed install without losing the not-installed state", () => {
     const host = new StubHost();
-    host.installStatusValue = { ok: true, installed: false, version: "0.2.0", error: "" };
+    host.installStatusValue = { ok: true, installed: false, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));

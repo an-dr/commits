@@ -186,11 +186,18 @@ fn is_install_dir(current: &Path) -> bool {
     current == install_dir
 }
 
-/// `[SUCCESS, installed_byte, ...version_utf8]` -- the version trails
-/// unprefixed, as the last field, matching `commits-repo`'s own
-/// rest-is-the-final-string convention.
+/// `[SUCCESS, installed_byte, just_updated_byte, ...version_utf8]` -- the
+/// version trails unprefixed, as the last field, matching `commits-repo`'s
+/// own rest-is-the-final-string convention.
+///
+/// `just_updated` records this version to `state_dir()` as a side effect --
+/// treated as "not just updated" on a write failure (e.g. an unresolvable
+/// home directory) rather than surfaced as an error, since the entire
+/// purpose is a one-time confirmation banner, not something worth failing
+/// the whole status query over.
 fn encode_install_status() -> Vec<u8> {
-    let mut response = vec![SUCCESS, u8::from(is_installed())];
+    let just_updated = commits_upgrader::record_version_and_check_update(CURRENT_VERSION).unwrap_or(false);
+    let mut response = vec![SUCCESS, u8::from(is_installed()), u8::from(just_updated)];
     response.extend(CURRENT_VERSION.as_bytes());
     response
 }
@@ -489,12 +496,33 @@ mod tests {
 
     #[test]
     fn respond_answers_the_trusted_sender_with_install_status_and_version() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path()) };
         let mut module = UpdaterModule::default();
 
         let response = module.respond(OWNER, &[]).unwrap();
 
+        unsafe { std::env::remove_var("COMMITS_UPDATER_DIR") };
         assert_eq!(response[0], SUCCESS);
         assert!(response[1] == 0 || response[1] == 1);
-        assert_eq!(std::str::from_utf8(&response[2..]).unwrap(), CURRENT_VERSION);
+        assert!(response[2] == 0 || response[2] == 1);
+        assert_eq!(std::str::from_utf8(&response[3..]).unwrap(), CURRENT_VERSION);
+    }
+
+    #[test]
+    fn respond_reports_just_updated_exactly_once_after_the_version_changes() {
+        let state_dir = tempfile::tempdir().unwrap();
+        std::fs::write(state_dir.path().join("version"), "0.0.1").unwrap();
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path()) };
+        let mut module = UpdaterModule::default();
+
+        let first = module.respond(OWNER, &[]).unwrap();
+        let second = module.respond(OWNER, &[]).unwrap();
+
+        unsafe { std::env::remove_var("COMMITS_UPDATER_DIR") };
+        assert_eq!(first[2], 1, "the first response after a version change reports it");
+        assert_eq!(second[2], 0, "a later response at the same version does not report it again");
     }
 }

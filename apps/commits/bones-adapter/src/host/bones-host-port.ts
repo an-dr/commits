@@ -116,7 +116,7 @@ export class BonesHostPort implements HostPort {
   }
 
   installStatus(): InstallStatus {
-    const failed = (error: string): InstallStatus => ({ ok: false, installed: false, version: "", error });
+    const failed = (error: string): InstallStatus => ({ ok: false, installed: false, justUpdated: false, version: "", error });
     try {
       const response = send("updater", new Uint8Array());
       if (response[0] !== 0) {
@@ -124,7 +124,13 @@ export class BonesHostPort implements HostPort {
           ? new TextDecoder().decode(response.slice(1))
           : "updater host returned an invalid response");
       }
-      return { ok: true, installed: response[1] === 1, version: new TextDecoder().decode(response.slice(2)), error: "" };
+      return {
+        ok: true,
+        installed: response[1] === 1,
+        justUpdated: response[2] === 1,
+        version: new TextDecoder().decode(response.slice(3)),
+        error: "",
+      };
     } catch (error) {
       return failed(String(error));
     }

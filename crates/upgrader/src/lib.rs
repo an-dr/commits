@@ -119,6 +119,24 @@ pub fn default_install_dir() -> Option<std::path::PathBuf> {
     dirs::home_dir().map(|home| home.join(".commits").join("app"))
 }
 
+/// Compares `current` against the version last recorded in `state_dir()`,
+/// records `current` for next time, and returns whether this is the first
+/// start reporting a version different from the one last recorded -- the
+/// signal a caller uses to show a one-time "just updated" notice. A missing
+/// record (first run ever on this machine) is not a change: there is
+/// nothing to announce yet, only something to start recording.
+pub fn record_version_and_check_update(current: &str) -> Result<bool, String> {
+    let path = state_dir()
+        .ok_or_else(|| String::from("could not resolve the update state directory"))?
+        .join("version");
+    let previous = std::fs::read_to_string(&path).ok();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    std::fs::write(&path, current).map_err(|error| error.to_string())?;
+    Ok(previous.is_some_and(|value| value.trim() != current))
+}
+
 /// The launcher's own filename -- the single source of truth shared by the
 /// launcher binary itself (to exclude itself from apply/restore) and the
 /// running app (to tell whether `default_install_dir()` already has one,

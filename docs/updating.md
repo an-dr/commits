@@ -71,14 +71,21 @@ applied until the app (via `commits.exe`) is started again.
 
 "Install" appears in the app menu instead, whenever this run's own directory
 is *not* `~/.commits/app` — a dev build, or a build launched ad hoc rather
-than through the installed `commits.exe`. Clicking it copies this run's own
-directory straight into `updater/update/`, the same slot a downloaded update
-occupies, needing no manifest URL or network access at all. The label then
-switches to "Restart to install"; an already-installed `~/.commits/app/commits.exe`
-picks the copy up and applies it the next time it starts, exactly like a
-downloaded update. If nothing is installed there yet at all, staging still
-succeeds, but nothing will apply it until something is (see
-[`scripts/install.ps1`](../scripts/install.ps1) for that first step).
+than through the installed `commits.exe`. It needs no manifest URL or
+network access at all, and does one of two things depending on whether
+`~/.commits/app` already has a launcher in it:
+
+- **Already installed** (some version is there): copies this run's own
+  directory into `updater/update/`, the same slot a downloaded update
+  occupies. The label switches to "Restart to install"; the existing
+  `~/.commits/app/commits.exe` picks the copy up and applies it — backup and
+  health-check included — the next time it starts.
+- **Nothing installed yet**: there is no launcher yet to ever apply a staged
+  update, so the files go directly into `~/.commits/app` instead. This
+  already-completes the install; the entry disappears rather than prompting
+  a restart. Run `~/.commits/app/commits.exe` (or use
+  [`scripts/install.ps1`](../scripts/install.ps1), which also sets up
+  shortcuts) to actually start it.
 
 ## Apply and rollback
 
@@ -98,6 +105,15 @@ A step that only sees standard output/error (no window) is a launch that
 failed before startup could even begin; check `~/.commits` for a log path
 reported by the failed-startup dialog if `commits-app.exe` itself started
 but never became healthy.
+
+## Confirming an update took effect
+
+The app records its own version in `updater/version` on every start, and
+compares it against what it last recorded. The first start after that
+comparison changes — a version that differs from last time, however it got
+there (a downloaded update or a direct Install) — shows "Updated to version
+X" once next to the menu button. A first run ever on a machine (no prior
+version recorded) does not trigger this; there is nothing to compare yet.
 
 ## Checking behavior locally
 
