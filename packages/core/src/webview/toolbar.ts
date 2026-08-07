@@ -88,7 +88,35 @@ export class Toolbar {
       event.stopPropagation();
       showContextMenu(event, button.overflowActions(), elem!);
     });
-    window.addEventListener("resize", () => this.applyLayout());
+    this.observeContainerWidth();
+  }
+
+  /**
+   * `applyLayout()` used to re-run only on a real OS window resize, but the
+   * files panel and the branch panel both change how much width `#controls`
+   * actually has via CSS variables, with no window resize involved -- the
+   * toolbar's fitted button set went stale, and buttons crowded or shifted
+   * instead of folding into the more menu. A `ResizeObserver` on `#controls`
+   * itself catches every case uniformly (window resize included) rather than
+   * only the ones some other code remembers to call `refresh()` for.
+   *
+   * Safe from the feedback loop a naive version of this can fall into
+   * (compare `--top-bar-height`'s own fix): `applyLayout()` only toggles
+   * `display: none` on individual buttons, which cannot change `#controls`'
+   * own width -- that width comes from its flex parent, not its content.
+   * The width comparison below is a second, independent guard regardless.
+   */
+  private observeContainerWidth() {
+    let lastWidth = -1;
+    const sync = () => {
+      const width = Math.round(this.controls.getBoundingClientRect().width);
+      if (width === lastWidth) {
+        return;
+      }
+      lastWidth = width;
+      this.applyLayout();
+    };
+    new ResizeObserver(sync).observe(this.controls);
   }
 
   /** Installs the button set, replacing any previous one. */

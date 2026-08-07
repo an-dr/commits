@@ -159,6 +159,7 @@ class GitGraphView {
     this.observeWindowSizeChanges();
     this.observeWebviewStyleChanges();
     this.observeWebviewScroll();
+    this.observeTopBarHeight();
 
     this.renderShowLoading();
     if (prevState) {
@@ -1530,6 +1531,42 @@ class GitGraphView {
         this.repoDropdown.refresh();
       }
     }).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+  }
+  /**
+   * `#branchPanelSidebar`, `#findWidget`, and `#filesPanel` all pin themselves
+   * below `#topBar` via `--top-bar-height`, a CSS variable that only ever had
+   * a hardcoded 35px guess -- nothing kept it in sync with the bar's real
+   * rendered height. Anything that makes the bar taller than that guess (a
+   * webfont glyph metric, a DPI rounding difference, a future wider row) then
+   * paints over the sidebar instead of pushing it down, since the bar sits at
+   * a higher z-index. A `ResizeObserver` keeps the variable true to the DOM
+   * instead of a number nobody re-measures.
+   *
+   * Nothing inside `#topBar` may size itself from `--top-bar-height` (see the
+   * comment above `#sidebarTop` in main.css) -- that would make the height
+   * this reads depend on the variable it writes, and a real run of exactly
+   * that ran away to thousands of pixels within a few callbacks. Rounded and
+   * compared against the last value regardless, as a second, independent
+   * guard: `getBoundingClientRect()` can return fractionally different
+   * results across reads that describe the same visual layout, and writing
+   * one of those on every callback would re-trigger the observer forever.
+   */
+  private observeTopBarHeight() {
+    const topBar = document.getElementById("topBar");
+    if (topBar === null) {
+      return;
+    }
+    let lastHeight = -1;
+    const sync = () => {
+      const height = Math.round(topBar.getBoundingClientRect().height);
+      if (height === lastHeight) {
+        return;
+      }
+      lastHeight = height;
+      document.body.style.setProperty("--top-bar-height", `${height}px`);
+    };
+    sync();
+    new ResizeObserver(sync).observe(topBar);
   }
   private observeWebviewScroll() {
     let active = window.scrollY > 0;

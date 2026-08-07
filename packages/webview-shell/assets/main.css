@@ -1166,12 +1166,16 @@ body.vscode-light .gitRef {
 }
 
 /* Top bar: the repo dropdown sits over the sidebar, the controls over the
-   commit table, so the two columns line up down the whole view. */
+   commit table, so the two columns line up down the whole view. Neither sets
+   its own height from --top-bar-height: #topBar's `align-items: stretch`
+   already equalizes them from their natural content height, and #topBar's
+   own rendered height (what JS measures to *write* --top-bar-height) must
+   never depend on that same variable, or the two chase each other -- a real
+   run of this ran away to thousands of pixels within a few resize callbacks. */
 #sidebarTop {
   flex: 0 0 var(--branch-panel-width, 0px);
   box-sizing: border-box;
   width: var(--branch-panel-width, 0px);
-  height: var(--top-bar-height);
   border-right: 1px solid rgba(128, 128, 128, 0.5);
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
   z-index: 20;
@@ -1194,7 +1198,6 @@ body.branchPanelHidden #sidebarTop {
   align-items: center;
   gap: 6px;
   box-sizing: border-box;
-  min-height: var(--top-bar-height);
   padding: 4px 8px;
   line-height: 32px;
   font-weight: 700;
