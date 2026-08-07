@@ -134,6 +134,20 @@ impl OsBackend for SystemOsBackend {
     }
 }
 
+/// Splits a `fetch_url` result of the form `"{content-type};base64,{data}"`
+/// back into its content type and raw bytes. A shared helper rather than
+/// each `fetch_url` consumer re-implementing the same split-and-decode, since
+/// the action is intentionally generic and meant to grow more callers.
+pub fn decode_fetch_result(value: &str) -> Result<(String, Vec<u8>), String> {
+    let (content_type, encoded) = value
+        .split_once(";base64,")
+        .ok_or_else(|| String::from("fetch_url result is not in the expected content-type;base64,data form"))?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|error| error.to_string())?;
+    Ok((content_type.to_string(), bytes))
+}
+
 /// Reads `path` only when it resolves inside `repository`.
 ///
 /// The path arrives over the page boundary, so containment is checked against

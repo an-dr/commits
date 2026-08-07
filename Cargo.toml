@@ -4,6 +4,7 @@ members = [
     "apps/commits/host",
     "crates/git",
     "crates/os",
+    "crates/upgrader",
     "crates/watcher",
     "ipc/rust",
 ]

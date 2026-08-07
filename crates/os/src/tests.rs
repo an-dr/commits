@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use base64::Engine;
 use bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use commits_ipc::native::{NativeResult, OsRequest};
 
@@ -145,4 +146,18 @@ fn reads_only_text_files_inside_the_repository() {
 
     std::fs::remove_dir_all(&root).ok();
     std::fs::remove_file(&outside).ok();
+}
+
+#[test]
+fn decodes_a_fetch_result_back_into_content_type_and_bytes() {
+    let value = format!(
+        "image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(b"hello")
+    );
+    let (content_type, bytes) = crate::decode_fetch_result(&value).unwrap();
+    assert_eq!(content_type, "image/png");
+    assert_eq!(bytes, b"hello");
+
+    assert!(crate::decode_fetch_result("not-the-right-shape").is_err());
+    assert!(crate::decode_fetch_result("image/png;base64,not valid base64!!").is_err());
 }

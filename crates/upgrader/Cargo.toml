@@ -1,0 +1,17 @@
+# Named "upgrader" rather than "updater" on purpose: Windows' legacy
+# installer-detection heuristic auto-requires elevation for any executable
+# whose filename contains "update" (also "install"/"setup"/"patch"), which
+# broke even running `cargo test` for this crate. Do not rename it back.
+[package]
+name = "commits-upgrader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+commits-os = { path = "../os" }
+serde_json = "1.0"
+sha2 = "0.10"
+
+[dev-dependencies]
+base64 = "0.22"
+tempfile = "3.20"

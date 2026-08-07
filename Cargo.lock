@@ -600,6 +600,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "commits-upgrader"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "commits-os",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "commits-watcher"
 version = "0.1.0"
 dependencies = [
