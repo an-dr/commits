@@ -5,7 +5,9 @@ use commits_os::OsBackend;
 use sha2::{Digest, Sha256};
 
 mod stage;
+mod supervise;
 pub use stage::{apply, restore_backup, stage as stage_update};
+pub use supervise::wait_for_marker;
 
 /// A hosted update announcement: the newest available version, where to
 /// download it, and an optional integrity check. Checksum is optional

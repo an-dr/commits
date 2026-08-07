@@ -42,7 +42,19 @@ pub fn stage(archive_bytes: &[u8], update_dir: &Path) -> Result<(), String> {
 /// `update_dir` and `backup_dir` must sit outside `install_dir`: if either
 /// were nested inside it (e.g. `install/update/`), backing up `install_dir`
 /// would try to copy the backup or update folder into itself.
-pub fn apply(install_dir: &Path, update_dir: &Path, backup_dir: &Path) -> Result<(), String> {
+///
+/// `running_exe_names` are top-level filenames skipped in both directions
+/// (e.g. the launcher's own executable): a real test of this caught
+/// `restore_backup` permanently failing (no amount of retrying helps) when
+/// it tried to copy the launcher's own backed-up exe over itself while it
+/// was still running -- Windows can never allow that, backup and restore
+/// need to leave that one file alone entirely.
+pub fn apply(
+    install_dir: &Path,
+    update_dir: &Path,
+    backup_dir: &Path,
+    running_exe_names: &[&str],
+) -> Result<(), String> {
     if !update_dir.is_dir() {
         return Err(String::from("no update is staged"));
     }
@@ -53,19 +65,24 @@ pub fn apply(install_dir: &Path, update_dir: &Path, backup_dir: &Path) -> Result
     }
     clear_dir(backup_dir)?;
     fs::create_dir_all(backup_dir).map_err(|error| error.to_string())?;
-    copy_dir_contents(install_dir, backup_dir)?;
-    copy_dir_contents(update_dir, install_dir)?;
+    copy_dir_contents(install_dir, backup_dir, running_exe_names)?;
+    copy_dir_contents(update_dir, install_dir, running_exe_names)?;
     clear_dir(update_dir)?;
     Ok(())
 }
 
 /// Reverses `apply`: copies `backup_dir`'s contents back over `install_dir`.
-/// Used when the newly applied version fails its health check.
-pub fn restore_backup(install_dir: &Path, backup_dir: &Path) -> Result<(), String> {
+/// Used when the newly applied version fails its health check. See `apply`
+/// for why `running_exe_names` must be passed the same way here too.
+pub fn restore_backup(
+    install_dir: &Path,
+    backup_dir: &Path,
+    running_exe_names: &[&str],
+) -> Result<(), String> {
     if !backup_dir.is_dir() {
         return Err(String::from("no backup is available to restore"));
     }
-    copy_dir_contents(backup_dir, install_dir)
+    copy_dir_contents(backup_dir, install_dir, running_exe_names)
 }
 
 /// Whether `candidate` is `ancestor` itself or nested inside it. Falls back
@@ -87,18 +104,24 @@ fn clear_dir(path: &Path) -> Result<(), String> {
 }
 
 /// Copies every file under `from` to the same relative location under `to`,
-/// overwriting whatever is already there and creating `to` if needed.
-fn copy_dir_contents(from: &Path, to: &Path) -> Result<(), String> {
+/// overwriting whatever is already there and creating `to` if needed. A
+/// name in `skip` (matched case-insensitively against the entry's own file
+/// name, at any depth) is left untouched in `to` rather than copied.
+fn copy_dir_contents(from: &Path, to: &Path, skip: &[&str]) -> Result<(), String> {
     fs::create_dir_all(to).map_err(|error| error.to_string())?;
     if !from.is_dir() {
         return Ok(());
     }
     for entry in fs::read_dir(from).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
-        let target = to.join(entry.file_name());
+        let name = entry.file_name();
+        if skip.iter().any(|skipped| name.eq_ignore_ascii_case(skipped)) {
+            continue;
+        }
+        let target = to.join(&name);
         let file_type = entry.file_type().map_err(|error| error.to_string())?;
         if file_type.is_dir() {
-            copy_dir_contents(&entry.path(), &target)?;
+            copy_dir_contents(&entry.path(), &target, skip)?;
         } else {
             fs::copy(entry.path(), &target).map_err(|error| error.to_string())?;
         }
@@ -158,7 +181,7 @@ mod tests {
         fs::write(install_dir.join("app.exe"), b"old version").unwrap();
         stage(&zip_bytes(&[("app.exe", b"new version")]), &update_dir).unwrap();
 
-        apply(&install_dir, &update_dir, &backup_dir).unwrap();
+        apply(&install_dir, &update_dir, &backup_dir, &[]).unwrap();
 
         assert_eq!(fs::read(install_dir.join("app.exe")).unwrap(), b"new version");
         assert_eq!(fs::read(backup_dir.join("app.exe")).unwrap(), b"old version");
@@ -177,7 +200,7 @@ mod tests {
         stage(&zip_bytes(&[("app.exe", b"new")]), &nested_update_dir).unwrap();
         let backup_dir = dir.path().join("backup");
 
-        let result = apply(&install_dir, &nested_update_dir, &backup_dir);
+        let result = apply(&install_dir, &nested_update_dir, &backup_dir, &[]);
 
         assert!(result.is_err());
     }
@@ -190,7 +213,7 @@ mod tests {
         let backup_dir = dir.path().join("backup");
         fs::create_dir_all(&install_dir).unwrap();
 
-        assert!(apply(&install_dir, &update_dir, &backup_dir).is_err());
+        assert!(apply(&install_dir, &update_dir, &backup_dir, &[]).is_err());
     }
 
     #[test]
@@ -202,11 +225,37 @@ mod tests {
         fs::create_dir_all(&install_dir).unwrap();
         fs::write(install_dir.join("app.exe"), b"good version").unwrap();
         stage(&zip_bytes(&[("app.exe", b"bad version")]), &update_dir).unwrap();
-        apply(&install_dir, &update_dir, &backup_dir).unwrap();
+        apply(&install_dir, &update_dir, &backup_dir, &[]).unwrap();
         assert_eq!(fs::read(install_dir.join("app.exe")).unwrap(), b"bad version");
 
-        restore_backup(&install_dir, &backup_dir).unwrap();
+        restore_backup(&install_dir, &backup_dir, &[]).unwrap();
 
         assert_eq!(fs::read(install_dir.join("app.exe")).unwrap(), b"good version");
+    }
+
+    #[test]
+    fn running_exe_names_are_left_untouched_by_apply_and_restore_backup() {
+        // A real end-to-end test of this caught restore_backup permanently
+        // failing (no retry duration helped) when it tried to overwrite the
+        // launcher's own exe with its own backed-up copy while the launcher
+        // process was still running it -- Windows can never allow that.
+        let dir = tempfile::tempdir().unwrap();
+        let install_dir = dir.path().join("install");
+        let update_dir = dir.path().join("update");
+        let backup_dir = dir.path().join("backup");
+        fs::create_dir_all(&install_dir).unwrap();
+        fs::write(install_dir.join("app.exe"), b"old app").unwrap();
+        fs::write(install_dir.join("launcher.exe"), b"the running launcher").unwrap();
+        stage(&zip_bytes(&[("app.exe", b"new app")]), &update_dir).unwrap();
+
+        apply(&install_dir, &update_dir, &backup_dir, &["launcher.exe"]).unwrap();
+        assert_eq!(fs::read(install_dir.join("app.exe")).unwrap(), b"new app");
+        assert_eq!(fs::read(install_dir.join("launcher.exe")).unwrap(), b"the running launcher");
+        assert!(!backup_dir.join("launcher.exe").exists());
+
+        fs::write(install_dir.join("app.exe"), b"corrupted by a bad update").unwrap();
+        restore_backup(&install_dir, &backup_dir, &["launcher.exe"]).unwrap();
+        assert_eq!(fs::read(install_dir.join("app.exe")).unwrap(), b"old app");
+        assert_eq!(fs::read(install_dir.join("launcher.exe")).unwrap(), b"the running launcher");
     }
 }

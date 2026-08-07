@@ -561,6 +561,7 @@ dependencies = [
  "bus",
  "commits-git",
  "commits-os",
+ "commits-upgrader",
  "commits-watcher",
  "dirs",
  "logging",

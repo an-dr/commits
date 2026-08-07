@@ -19,7 +19,7 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (logger, failures) = diagnostics::install();
-    report_a_failed_startup_extension(failures);
+    watch_startup_health(failures);
     let page = page::PageModule::new(logger.clone());
     let splash = splash::SplashModule::new(logger.clone());
     runner::Engine::new()
@@ -58,7 +58,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Turns a failed startup extension into something the user can act on.
+/// Turns a failed startup extension into something the user can act on, and
+/// tells `commits-launcher` (if that is what started this process) that
+/// startup succeeded.
 ///
 /// The engine treats an extension that cannot attach as non-fatal: it logs the
 /// error and keeps ticking. Nothing then opens the panel, so the window stays
@@ -68,16 +70,35 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 /// because a blank window looks like a broken build rather than a retryable
 /// timeout.
 ///
+/// A launcher supervising this process for a self-update needs to know
+/// startup actually succeeded, not just that this line of code ran, so the
+/// health marker (`COMMITS_HEALTH_MARKER`) is written only after this same
+/// grace period passes with no failure on `failures` -- the one channel that
+/// already knows about the blank-window failure mode above. Launched
+/// directly (the ordinary case today), `COMMITS_HEALTH_MARKER` is unset and
+/// this is a no-op past the existing failure-reporting behavior.
+///
 /// Waits on its own thread: the report has to arrive while the engine is still
 /// running its loop, not after it returns.
-fn report_a_failed_startup_extension(failures: Receiver<String>) {
+fn watch_startup_health(failures: Receiver<String>) {
+    // Longer than `extension_load_timeout` (30s, set in `run()` below) so a
+    // genuine cold-load failure has time to arrive on `failures` before this
+    // would otherwise conclude the app is healthy. Discovered empirically:
+    // an initial 5s grace period made the launcher roll back a perfectly
+    // good, merely slow-to-load install.
+    const STARTUP_GRACE_PERIOD: std::time::Duration = std::time::Duration::from_secs(35);
     let spawned = std::thread::Builder::new()
         .name("commits-startup-report".to_string())
         .spawn(move || {
-            // Errs only when the engine shuts down without failing, which is
-            // the ordinary path and needs no report.
-            let Ok(message) = failures.recv() else {
-                return;
+            let message = match failures.recv_timeout(STARTUP_GRACE_PERIOD) {
+                Ok(message) => message,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    write_health_marker();
+                    return;
+                }
+                // The engine shut down without failing -- the ordinary path,
+                // needing no report and no marker (the app is exiting anyway).
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
             };
             let log = diagnostics::log_path()
                 .map(|path| path.display().to_string())
@@ -97,5 +118,19 @@ fn report_a_failed_startup_extension(failures: Receiver<String>) {
         });
     if let Err(error) = spawned {
         eprintln!("could not watch for a failed startup extension: {error}");
+    }
+}
+
+/// Writes an empty file at `COMMITS_HEALTH_MARKER`, if set. A write failure
+/// (missing parent directory, no permission) is logged, not fatal: the
+/// worst outcome is `commits-launcher` treating a genuinely healthy start as
+/// failed and rolling back to the previous version, never the app itself
+/// misbehaving.
+fn write_health_marker() {
+    let Ok(path) = std::env::var("COMMITS_HEALTH_MARKER") else {
+        return;
+    };
+    if let Err(error) = std::fs::write(&path, []) {
+        eprintln!("could not write the health marker at {path}: {error}");
     }
 }
