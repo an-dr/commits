@@ -13,15 +13,12 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use commits_upgrader::LAUNCHER_EXE_NAME;
+
 #[cfg(windows)]
 const MAIN_EXE_NAME: &str = "commits-app.exe";
 #[cfg(not(windows))]
 const MAIN_EXE_NAME: &str = "commits-app";
-
-#[cfg(windows)]
-const LAUNCHER_EXE_NAME: &str = "commits.exe";
-#[cfg(not(windows))]
-const LAUNCHER_EXE_NAME: &str = "commits";
 
 /// How long the launcher waits for the health marker before concluding the
 /// new version failed to start. Comfortably longer than the app's own

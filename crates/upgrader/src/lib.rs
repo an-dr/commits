@@ -119,6 +119,16 @@ pub fn default_install_dir() -> Option<std::path::PathBuf> {
     dirs::home_dir().map(|home| home.join(".commits").join("app"))
 }
 
+/// The launcher's own filename -- the single source of truth shared by the
+/// launcher binary itself (to exclude itself from apply/restore) and the
+/// running app (to tell whether `default_install_dir()` already has one,
+/// deciding whether Install can stage as an update or must place files
+/// directly).
+#[cfg(windows)]
+pub const LAUNCHER_EXE_NAME: &str = "commits.exe";
+#[cfg(not(windows))]
+pub const LAUNCHER_EXE_NAME: &str = "commits";
+
 /// Whether `data`'s SHA-256 digest matches `expected_hex` (case-insensitive).
 pub fn verify_checksum(data: &[u8], expected_hex: &str) -> bool {
     let mut hasher = Sha256::new();

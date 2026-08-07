@@ -61,11 +61,14 @@ export class CommitsCore {
   /** Set once `check` finds a version newer than this build's own. */
   private updateAvailableVersion: string | null = null;
   /**
-   * Whether this run's own directory is the canonical install location.
-   * Defaults to `true` so the Install entry stays hidden until `bootstrap`
-   * proves otherwise, rather than flashing on for every boot.
+   * Drives the Install menu entry: `hidden` (this run is already installed;
+   * the default, so the entry stays hidden until `bootstrap` proves
+   * otherwise rather than flashing on for every boot), `ready` (not
+   * installed, nothing staged), `staged` (an existing launcher will apply
+   * this on its next start), or `done` (placed directly at the install
+   * location -- already fully installed, nothing left to apply).
    */
-  private installed = true;
+  private installStatusKind: "hidden" | "ready" | "staged" | "done" = "hidden";
   private bootstrapped = false;
   private nextOsRequestId = 50_000;
   private nextGitRequestId = 60_000;
@@ -393,10 +396,15 @@ export class CommitsCore {
     }
     if (result.requestId === this.pendingInstallRequestId) {
       this.pendingInstallRequestId = null;
-      if (result.ok) {
-        this.sendInstallStatus(true, "Installed — restart commits.exe to apply.");
+      if (result.ok && result.fresh) {
+        this.installStatusKind = "done";
+        this.sendInstallStatus("Installed to ~/.commits/app — launch commits.exe to use it.");
+      } else if (result.ok) {
+        this.installStatusKind = "staged";
+        this.sendInstallStatus("Installed — restart commits.exe to apply.");
       } else {
-        this.sendInstallStatus(false, `Install failed: ${result.error || "unknown error"}`);
+        this.installStatusKind = "ready";
+        this.sendInstallStatus(`Install failed: ${result.error || "unknown error"}`);
       }
     }
   }
@@ -532,7 +540,7 @@ export class CommitsCore {
     if (this.settings.app.updateManifestUrl) this.checkForUpdate();
     const installStatus = this.host.installStatus();
     if (installStatus.ok) {
-      this.installed = installStatus.installed;
+      this.installStatusKind = installStatus.installed ? "hidden" : "ready";
     } else {
       this.host.log("warn", `could not resolve install status: ${installStatus.error}`);
     }
@@ -571,15 +579,15 @@ export class CommitsCore {
    * whether self-update via a hosted manifest is configured -- unlike
    * `checkForUpdate`/`startUpdate`, this needs no network at all. */
   private startInstall(): void {
-    if (this.installed || this.pendingInstallRequestId !== null) return;
+    if (this.installStatusKind !== "ready" || this.pendingInstallRequestId !== null) return;
     const requestId = this.nextUpdateRequestId++;
     this.pendingInstallRequestId = requestId;
-    this.sendInstallStatus(false, "Installing…");
+    this.sendInstallStatus("Installing…");
     this.host.requestUpdate(requestId, "install", "");
   }
 
-  private sendInstallStatus(staged = false, message = ""): void {
-    this.send({ command: "standaloneInstallStatus", installed: this.installed, staged, message });
+  private sendInstallStatus(message = ""): void {
+    this.send({ command: "standaloneInstallStatus", status: this.installStatusKind, message });
   }
 
   private saveSettings(requestId: unknown, candidate: unknown): void {

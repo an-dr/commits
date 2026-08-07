@@ -272,12 +272,16 @@ impl UpdaterRequest {
 
 /// Outcome of an [`UpdaterRequest`]. `available` and `version` describe the
 /// manifest's own version regardless of `action`, so a `Stage` result also
-/// tells the caller what it just staged.
+/// tells the caller what it just staged. `fresh` matters only for `Install`:
+/// whether the files landed directly at the install location (nothing was
+/// installed yet, so there is nothing left to do) rather than staged for an
+/// existing launcher to apply on its next start.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdaterResult {
     pub request_id: u32,
     pub ok: bool,
     pub available: bool,
+    pub fresh: bool,
     pub version: String,
     pub error: String,
 }
@@ -288,6 +292,7 @@ impl UpdaterResult {
             .u32(self.request_id)
             .u8(u8::from(self.ok))
             .u8(u8::from(self.available))
+            .u8(u8::from(self.fresh))
             .string(&self.version)?
             .string(&self.error)?
             .finish())
@@ -298,10 +303,12 @@ impl UpdaterResult {
         let request_id = reader.u32()?;
         let ok = decode_bool(reader.u8()?)?;
         let available = decode_bool(reader.u8()?)?;
+        let fresh = decode_bool(reader.u8()?)?;
         let result = Self {
             request_id,
             ok,
             available,
+            fresh,
             version: reader.string()?,
             error: reader.string()?,
         };
@@ -378,10 +385,21 @@ mod tests {
             request_id: 3,
             ok: true,
             available: true,
+            fresh: false,
             version: "1.2.0".into(),
             error: String::new(),
         };
         assert_eq!(UpdaterResult::decode(&staged.encode().unwrap()).unwrap(), staged);
+
+        let installed_fresh = UpdaterResult {
+            request_id: 4,
+            ok: true,
+            available: true,
+            fresh: true,
+            version: String::new(),
+            error: String::new(),
+        };
+        assert_eq!(UpdaterResult::decode(&installed_fresh.encode().unwrap()).unwrap(), installed_fresh);
     }
 
     #[test]

@@ -35,23 +35,24 @@ pub fn stage(archive_bytes: &[u8], update_dir: &Path) -> Result<(), String> {
 }
 
 /// Copies `source_dir` (the running executable's own directory) into
-/// `update_dir`, for the Install menu action: a build not launched from the
-/// canonical install location has nothing on disk yet for a launcher to
-/// apply, so staging a copy of what is already running -- rather than a
-/// freshly downloaded asset -- lets the next launcher run install it, same
-/// as a downloaded update would be applied.
+/// `target_dir`, for the Install menu action. The caller picks `target_dir`
+/// depending on whether anything is installed yet: with an existing
+/// launcher to protect it, `target_dir` is the update-staging directory, the
+/// same as a downloaded update would use; with nothing installed yet (no
+/// launcher present to ever apply a staged update), `target_dir` is the
+/// install directory itself, placing the files directly.
 ///
-/// `update_dir` must not be nested inside `source_dir`: copying `source_dir`
+/// `target_dir` must not be nested inside `source_dir`: copying `source_dir`
 /// into a subdirectory of itself would otherwise try to copy that
 /// subdirectory into itself.
-pub fn stage_current_install(source_dir: &Path, update_dir: &Path) -> Result<(), String> {
-    if is_inside(update_dir, source_dir) {
+pub fn stage_current_install(source_dir: &Path, target_dir: &Path) -> Result<(), String> {
+    if is_inside(target_dir, source_dir) {
         return Err(String::from(
-            "update_dir must not be nested inside the running install's own directory",
+            "target_dir must not be nested inside the running install's own directory",
         ));
     }
-    clear_dir(update_dir)?;
-    copy_dir_contents(source_dir, update_dir, &[])
+    clear_dir(target_dir)?;
+    copy_dir_contents(source_dir, target_dir, &[])
 }
 
 /// Backs up `install_dir` into `backup_dir`, then copies the staged

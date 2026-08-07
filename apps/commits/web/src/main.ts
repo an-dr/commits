@@ -45,8 +45,7 @@ interface StandaloneResponse {
   available?: boolean;
   version?: string;
   ready?: boolean;
-  installed?: boolean;
-  staged?: boolean;
+  status?: "hidden" | "ready" | "staged" | "done";
 }
 
 declare global {
@@ -103,7 +102,7 @@ async function boot(): Promise<void> {
       } else if (data.command === "standaloneUpdateStatus") {
         updateUpdateStatus(data.available === true, data.version ?? "", data.ready === true, data.message ?? "");
       } else if (data.command === "standaloneInstallStatus") {
-        updateInstallStatus(data.installed === true, data.staged === true, data.message ?? "");
+        updateInstallStatus(data.status ?? "hidden", data.message ?? "");
       }
       window.dispatchEvent(new MessageEvent("message", { data }));
     } catch {
@@ -249,14 +248,17 @@ function updateUpdateStatus(available: boolean, version: string, ready: boolean,
 /**
  * Shows the Install entry once boot determines this run is not the one
  * installed at the canonical location, and reports transient feedback about
- * a staging attempt. Once `staged`, the label switches to prompting a
- * restart, the same as the Update entry once its download is staged.
+ * an install attempt. `staged` (an existing launcher will apply this on its
+ * next start) switches the label to prompting a restart, the same as the
+ * Update entry once its download is staged. `done` (placed directly at the
+ * install location -- nothing was installed there before, so nothing is
+ * pending) hides the entry again: there is nothing further this run can do.
  */
-function updateInstallStatus(installed: boolean, staged: boolean, message: string): void {
+function updateInstallStatus(status: "hidden" | "ready" | "staged" | "done", message: string): void {
   const button = document.getElementById("standaloneMenuInstall") as HTMLButtonElement | null;
   if (button) {
-    button.hidden = installed;
-    button.textContent = staged ? "Restart to install" : "Install";
+    button.hidden = status === "hidden" || status === "done";
+    button.textContent = status === "staged" ? "Restart to install" : "Install";
   }
   showMenuStatus(message);
 }

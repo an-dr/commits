@@ -292,6 +292,7 @@ describe("CommitsCore MIT webview host", () => {
       requestId: host.updateRequests[0].requestId,
       ok: true,
       available: true,
+      fresh: false,
       version: "9.9.9",
       error: "",
     });
@@ -318,6 +319,7 @@ describe("CommitsCore MIT webview host", () => {
       requestId: host.updateRequests[0].requestId,
       ok: true,
       available: true,
+      fresh: false,
       version: "9.9.9",
       error: "",
     });
@@ -329,7 +331,7 @@ describe("CommitsCore MIT webview host", () => {
       requestId: 70_001, action: "stage", manifestUrl: "https://example.com/manifest.json",
     });
 
-    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: true, version: "9.9.9", error: "" });
+    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: true, fresh: false, version: "9.9.9", error: "" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneUpdateStatus",
@@ -358,11 +360,11 @@ describe("CommitsCore MIT webview host", () => {
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
     expect(host.sent).toContainEqual(["main", {
-      command: "standaloneInstallStatus", installed: false, staged: false, message: "",
+      command: "standaloneInstallStatus", status: "ready", message: "",
     }]);
   });
 
-  it("stages the running build on standaloneInstall and reports readiness once staged", () => {
+  it("stages the running build on standaloneInstall and reports readiness once an existing launcher will apply it", () => {
     const host = new StubHost();
     host.installStatusValue = { ok: true, installed: false, error: "" };
     const core = new CommitsCore(host);
@@ -372,16 +374,31 @@ describe("CommitsCore MIT webview host", () => {
 
     expect(host.updateRequests).toEqual([{ requestId: 70_000, action: "install", manifestUrl: "" }]);
     expect(host.sent).toContainEqual(["main", {
-      command: "standaloneInstallStatus", installed: false, staged: false, message: "Installing…",
+      command: "standaloneInstallStatus", status: "ready", message: "Installing…",
     }]);
 
-    core.receiveUpdaterResult({ requestId: 70_000, ok: true, available: true, version: "", error: "" });
+    core.receiveUpdaterResult({ requestId: 70_000, ok: true, available: true, fresh: false, version: "", error: "" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus",
-      installed: false,
-      staged: true,
+      status: "staged",
       message: "Installed — restart commits.exe to apply.",
+    }]);
+  });
+
+  it("reports completion directly when nothing was installed and the files landed in place", () => {
+    const host = new StubHost();
+    host.installStatusValue = { ok: true, installed: false, error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
+
+    core.receiveUpdaterResult({ requestId: 70_000, ok: true, available: true, fresh: true, version: "", error: "" });
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneInstallStatus",
+      status: "done",
+      message: "Installed to ~/.commits/app — launch commits.exe to use it.",
     }]);
   });
 
@@ -402,10 +419,10 @@ describe("CommitsCore MIT webview host", () => {
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
-    core.receiveUpdaterResult({ requestId: 70_000, ok: false, available: false, version: "", error: "disk full" });
+    core.receiveUpdaterResult({ requestId: 70_000, ok: false, available: false, fresh: false, version: "", error: "disk full" });
 
     expect(host.sent).toContainEqual(["main", {
-      command: "standaloneInstallStatus", installed: false, staged: false, message: "Install failed: disk full",
+      command: "standaloneInstallStatus", status: "ready", message: "Install failed: disk full",
     }]);
   });
 

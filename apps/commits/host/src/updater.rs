@@ -71,6 +71,7 @@ fn check(backend: &dyn OsBackend, request_id: u32, manifest_url: &str) -> Update
             request_id,
             ok: true,
             available: commits_upgrader::is_newer(CURRENT_VERSION, &manifest.version),
+            fresh: false,
             version: manifest.version,
             error: String::new(),
         },
@@ -86,6 +87,7 @@ fn stage(backend: &dyn OsBackend, request_id: u32, manifest_url: &str) -> Update
             request_id,
             ok: true,
             available: true,
+            fresh: false,
             version,
             error: String::new(),
         },
@@ -105,7 +107,10 @@ fn stage_inner(backend: &dyn OsBackend, manifest_url: &str) -> Result<String, St
 /// Stages a copy of the running executable's own directory, for a build not
 /// launched from the canonical install location: there is nothing on disk
 /// yet for a launcher to apply, so this pushes what is already running into
-/// the same slot a downloaded update would occupy.
+/// the same slot a downloaded update would occupy -- unless nothing is
+/// installed there at all yet, in which case there is no launcher to ever
+/// apply a staged update, so the files go directly to the install location
+/// instead (see [`install_inner`]).
 fn install(request_id: u32) -> UpdaterResult {
     match running_directory() {
         Ok(source_dir) => install_from(&source_dir, request_id),
@@ -119,10 +124,11 @@ fn install(request_id: u32) -> UpdaterResult {
 /// large, being the test binary's own build output) directory.
 fn install_from(source_dir: &Path, request_id: u32) -> UpdaterResult {
     match install_inner(source_dir) {
-        Ok(()) => UpdaterResult {
+        Ok(fresh) => UpdaterResult {
             request_id,
             ok: true,
             available: true,
+            fresh,
             version: String::new(),
             error: String::new(),
         },
@@ -130,10 +136,27 @@ fn install_from(source_dir: &Path, request_id: u32) -> UpdaterResult {
     }
 }
 
-fn install_inner(source_dir: &Path) -> Result<(), String> {
-    let state_dir = commits_upgrader::state_dir()
-        .ok_or_else(|| String::from("could not resolve the update state directory"))?;
-    commits_upgrader::stage_current_install(source_dir, &state_dir.join("update"))
+/// Returns whether this placed files directly at the install location
+/// (`fresh`) rather than staging them for an existing launcher to apply.
+fn install_inner(source_dir: &Path) -> Result<bool, String> {
+    if is_install_dir(source_dir) {
+        // The Install menu entry is hidden once installed, so reaching this
+        // means a direct call raced a rename/move of the install directory
+        // out from under a running instance -- copying source_dir into
+        // itself would be destructive, so refuse instead.
+        return Err(String::from("this build is already the one installed; nothing to do"));
+    }
+    let install_dir = commits_upgrader::default_install_dir()
+        .ok_or_else(|| String::from("could not resolve the install directory"))?;
+    if install_dir.join(commits_upgrader::LAUNCHER_EXE_NAME).is_file() {
+        let state_dir = commits_upgrader::state_dir()
+            .ok_or_else(|| String::from("could not resolve the update state directory"))?;
+        commits_upgrader::stage_current_install(source_dir, &state_dir.join("update"))?;
+        Ok(false)
+    } else {
+        commits_upgrader::stage_current_install(source_dir, &install_dir)?;
+        Ok(true)
+    }
 }
 
 fn running_directory() -> Result<std::path::PathBuf, String> {
@@ -144,12 +167,17 @@ fn running_directory() -> Result<std::path::PathBuf, String> {
 }
 
 /// Whether this run's own directory is the canonical install location.
-/// Canonicalized before comparing: a raw comparison can mismatch even for
-/// the same directory (e.g. drive-letter casing or short/long name form).
-/// A canonicalize failure on the install side (the ordinary case: nothing is
-/// installed there yet) reads as "not installed" rather than an error.
 fn is_installed() -> bool {
-    let Ok(current) = running_directory().and_then(|dir| dir.canonicalize().map_err(|error| error.to_string())) else {
+    running_directory().map(|dir| is_install_dir(&dir)).unwrap_or(false)
+}
+
+/// Whether `current` is the canonical install location. Canonicalized
+/// before comparing: a raw comparison can mismatch even for the same
+/// directory (e.g. drive-letter casing or short/long name form). A
+/// canonicalize failure on the install side (the ordinary case: nothing is
+/// installed there yet) reads as "not installed" rather than an error.
+fn is_install_dir(current: &Path) -> bool {
+    let Ok(current) = current.canonicalize() else {
         return false;
     };
     let Some(install_dir) = commits_upgrader::default_install_dir().and_then(|dir| dir.canonicalize().ok()) else {
@@ -174,6 +202,7 @@ fn failed(request_id: u32, error: String) -> UpdaterResult {
         request_id,
         ok: false,
         available: false,
+        fresh: false,
         version: String::new(),
         error,
     }
@@ -357,21 +386,66 @@ mod tests {
     }
 
     #[test]
-    fn install_from_stages_a_given_directory_into_the_configured_update_dir() {
+    fn install_from_stages_as_an_update_when_a_launcher_is_already_installed() {
         let source_dir = tempfile::tempdir().unwrap();
         std::fs::write(source_dir.path().join("commits-app.exe"), b"a dev build").unwrap();
+        let install_dir = tempfile::tempdir().unwrap();
+        std::fs::write(install_dir.path().join(commits_upgrader::LAUNCHER_EXE_NAME), b"already installed").unwrap();
         let state_dir = tempfile::tempdir().unwrap();
         let _guard = ENV_LOCK.lock().unwrap();
-        unsafe { std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path()) };
+        unsafe {
+            std::env::set_var("COMMITS_INSTALL_DIR", install_dir.path());
+            std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path());
+        }
 
         let result = install_from(source_dir.path(), 7);
 
-        unsafe { std::env::remove_var("COMMITS_UPDATER_DIR") };
+        unsafe {
+            std::env::remove_var("COMMITS_INSTALL_DIR");
+            std::env::remove_var("COMMITS_UPDATER_DIR");
+        }
         assert!(result.ok, "{}", result.error);
+        assert!(!result.fresh);
         assert_eq!(
             std::fs::read(state_dir.path().join("update/commits-app.exe")).unwrap(),
             b"a dev build",
         );
+        // The already-installed launcher itself is untouched -- only staged
+        // for it to apply on its own next start.
+        assert_eq!(
+            std::fs::read(install_dir.path().join(commits_upgrader::LAUNCHER_EXE_NAME)).unwrap(),
+            b"already installed",
+        );
+    }
+
+    #[test]
+    fn install_from_places_files_directly_when_nothing_is_installed_yet() {
+        let source_dir = tempfile::tempdir().unwrap();
+        std::fs::write(source_dir.path().join("commits-app.exe"), b"a dev build").unwrap();
+        let install_root = tempfile::tempdir().unwrap();
+        let install_dir = install_root.path().join("app");
+        assert!(!install_dir.exists());
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("COMMITS_INSTALL_DIR", &install_dir) };
+
+        let result = install_from(source_dir.path(), 7);
+
+        unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
+        assert!(result.ok, "{}", result.error);
+        assert!(result.fresh);
+        assert_eq!(std::fs::read(install_dir.join("commits-app.exe")).unwrap(), b"a dev build");
+    }
+
+    #[test]
+    fn install_from_refuses_when_the_source_is_already_the_install_dir() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("COMMITS_INSTALL_DIR", source_dir.path()) };
+
+        let result = install_from(source_dir.path(), 7);
+
+        unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
+        assert!(!result.ok);
     }
 
     #[test]

@@ -146,10 +146,14 @@ export function decodeNativeResult(bytes: Uint8Array): NativeResult {
 /** `install` stages the running build itself and ignores `manifestUrl`. */
 export type UpdaterAction = "check" | "stage" | "install";
 
+/** `fresh` matters only for the `install` action: whether the files landed
+ * directly at the install location (nothing was installed yet) rather than
+ * staged for an existing launcher to apply on its next start. */
 export interface UpdaterResult {
   requestId: number;
   ok: boolean;
   available: boolean;
+  fresh: boolean;
   version: string;
   error: string;
 }
@@ -174,6 +178,7 @@ export function decodeUpdaterResult(bytes: Uint8Array): UpdaterResult {
     requestId: reader.u32(),
     ok: reader.u8() !== 0,
     available: reader.u8() !== 0,
+    fresh: reader.u8() !== 0,
     version: reader.string(),
     error: reader.string(),
   };
