@@ -28,7 +28,7 @@ export const CORE_SETTING_DEFINITIONS: readonly CoreSettingDefinition[] = [
   setting("repository.commits.avatar.shape", "string", "Circle", ["Circle", "Square"]),
   setting("dateFormat", "string", "Date & Time", ["Date & Time", "Date Only", "Relative"]),
   setting("dateType", "string", "Author Date", ["Author Date", "Commit Date"]),
-  setting("fetchAvatars", "boolean", false),
+  setting("fetchAvatars", "boolean", true),
   setting("graphColours", "colours", ["#6ba2f2", "#ca3a7d", "#f3b33e", "#61aea6", "#ac70f7"]),
   setting("graphStyle", "string", "rounded", ["rounded", "angular"]),
   setting("initialLoadCommits", "number", 300),
