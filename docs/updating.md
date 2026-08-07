@@ -67,6 +67,19 @@ manifest, downloads and verifies the asset, and extracts it into
 responsive. The menu label then switches to "Restart to update"; nothing is
 applied until the app (via `commits.exe`) is started again.
 
+## Install: pushing a running build without a manifest
+
+"Install" appears in the app menu instead, whenever this run's own directory
+is *not* `~/.commits/app` — a dev build, or a build launched ad hoc rather
+than through the installed `commits.exe`. Clicking it copies this run's own
+directory straight into `updater/update/`, the same slot a downloaded update
+occupies, needing no manifest URL or network access at all. The label then
+switches to "Restart to install"; an already-installed `~/.commits/app/commits.exe`
+picks the copy up and applies it the next time it starts, exactly like a
+downloaded update. If nothing is installed there yet at all, staging still
+succeeds, but nothing will apply it until something is (see
+[`scripts/install.ps1`](../scripts/install.ps1) for that first step).
+
 ## Apply and rollback
 
 On the next start, `commits.exe` (the launcher):
