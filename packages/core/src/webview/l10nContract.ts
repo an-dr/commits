@@ -100,6 +100,7 @@ export interface LocalizedStrings {
   readonly copyCommitHash: string;
   readonly copyTagName: string;
   readonly copyBranchName: string;
+  readonly copySelection: string;
   readonly deleteTag: string;
   readonly pushTag: string;
   readonly checkoutBranch: string;
@@ -108,6 +109,7 @@ export interface LocalizedStrings {
   readonly typeCommitHash: string;
   readonly typeTagName: string;
   readonly typeBranchName: string;
+  readonly typeSelection: string;
   readonly labelTag: string;
   readonly labelBranch: string;
   readonly labelCurrentBranch: string;

@@ -110,6 +110,7 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     copyCommitHash: t("Copy Commit Hash to Clipboard"),
     copyTagName: t("Copy Tag Name to Clipboard"),
     copyBranchName: t("Copy Branch Name to Clipboard"),
+    copySelection: t("Copy"),
     deleteTag: t("Delete Tag"),
     pushTag: t("Push Tag"),
     checkoutBranch: t("Checkout Branch"),
@@ -119,6 +120,7 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     typeCommitHash: t("Commit Hash"),
     typeTagName: t("Tag Name"),
     typeBranchName: t("Branch Name"),
+    typeSelection: t("Selection"),
 
     // label
     labelTag: t("the tag"),

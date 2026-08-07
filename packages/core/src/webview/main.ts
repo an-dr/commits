@@ -2004,7 +2004,8 @@ window.addEventListener("message", (event) => {
         let typeLabel: Record<string, string> = {
           "Commit Hash": l10n.typeCommitHash,
           "Tag Name": l10n.typeTagName,
-          "Branch Name": l10n.typeBranchName
+          "Branch Name": l10n.typeBranchName,
+          "Selection": l10n.typeSelection
         };
         showErrorDialog(
           l10n.unableToCopyToClipboard.replace("{0}", typeLabel[msg.type] ?? msg.type),
@@ -2320,8 +2321,29 @@ document.addEventListener("keyup", (e) => {
   gitGraph.dismissTopLayer();
 });
 document.addEventListener("click", hideContextMenuIfOpen);
-document.addEventListener("contextmenu", hideContextMenuIfOpen);
 document.addEventListener("mouseleave", hideContextMenuIfOpen);
+/**
+ * Falls back for any right-click none of the app's own context menus already
+ * claimed (they each call preventDefault() themselves via showContextMenu,
+ * which runs first during bubbling since they're bound closer to the
+ * target). Selected text gets a minimal Copy-only menu; anything else is
+ * swallowed outright, so the host's native context menu (Print, Send tab to
+ * your devices, …) never appears.
+ */
+document.addEventListener("contextmenu", (e) => {
+  hideContextMenuIfOpen();
+  if (e.defaultPrevented) return;
+  const selectedText = window.getSelection()?.toString() ?? "";
+  if (selectedText !== "") {
+    showContextMenu(
+      <MouseEvent>e,
+      [{ title: l10n.copySelection, onClick: () => sendMessage({ command: "copyToClipboard", type: "Selection", data: selectedText }) }],
+      <HTMLElement>e.target
+    );
+  } else {
+    e.preventDefault();
+  }
+});
 
 /** Closes whichever of the two overlays is open, so Escape dismisses either. */
 function hideDialogAndContextMenu() {
