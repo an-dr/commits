@@ -20,6 +20,7 @@
     "dist:wasm": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part wasm",
     "dist:web": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part web",
     "generate:tabler-icons": "node apps/commits/scripts/generate-tabler-icons.mjs",
+    "install:app": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1",
     "postinstall": "node scripts/patch-wizer-package.mjs",
     "test": "vitest run",
     "verify": "npm run build && npm run check && npm test && cargo test --workspace"

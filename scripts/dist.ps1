@@ -60,7 +60,7 @@ if ($Part -in @("host", "all")) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $exe = if ($isWindowsPlatform) { "commits.exe" } else { "commits" }
     Copy-Item (Join-Path $root "target/release/$exe") (Join-Path $outputFull $exe) -Force
-    foreach ($helper in @("commits-askpass", "commits-editor")) {
+    foreach ($helper in @("commits-askpass", "commits-editor", "commits-launcher")) {
         $helperExe = if ($isWindowsPlatform) { "$helper.exe" } else { $helper }
         Copy-Item (Join-Path $root "target/release/$helperExe") (Join-Path $outputFull $helperExe) -Force
     }
