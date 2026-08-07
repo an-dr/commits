@@ -23,6 +23,8 @@ export interface InstallStatus {
   readonly ok: boolean;
   /** Whether this run's own directory is the canonical install location. */
   readonly installed: boolean;
+  /** This build's own version, shown in the About menu. */
+  readonly version: string;
   readonly error: string;
 }
 

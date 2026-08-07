@@ -69,6 +69,8 @@ export class CommitsCore {
    * location -- already fully installed, nothing left to apply).
    */
   private installStatusKind: "hidden" | "ready" | "staged" | "done" = "hidden";
+  /** This build's own version, shown in the About menu. */
+  private appVersion = "";
   private bootstrapped = false;
   private nextOsRequestId = 50_000;
   private nextGitRequestId = 60_000;
@@ -541,6 +543,7 @@ export class CommitsCore {
     const installStatus = this.host.installStatus();
     if (installStatus.ok) {
       this.installStatusKind = installStatus.installed ? "hidden" : "ready";
+      this.appVersion = installStatus.version;
     } else {
       this.host.log("warn", `could not resolve install status: ${installStatus.error}`);
     }
@@ -587,7 +590,12 @@ export class CommitsCore {
   }
 
   private sendInstallStatus(message = ""): void {
-    this.send({ command: "standaloneInstallStatus", status: this.installStatusKind, message });
+    this.send({
+      command: "standaloneInstallStatus",
+      status: this.installStatusKind,
+      version: this.appVersion,
+      message,
+    });
   }
 
   private saveSettings(requestId: unknown, candidate: unknown): void {

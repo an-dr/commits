@@ -186,8 +186,13 @@ fn is_install_dir(current: &Path) -> bool {
     current == install_dir
 }
 
+/// `[SUCCESS, installed_byte, ...version_utf8]` -- the version trails
+/// unprefixed, as the last field, matching `commits-repo`'s own
+/// rest-is-the-final-string convention.
 fn encode_install_status() -> Vec<u8> {
-    vec![SUCCESS, u8::from(is_installed())]
+    let mut response = vec![SUCCESS, u8::from(is_installed())];
+    response.extend(CURRENT_VERSION.as_bytes());
+    response
 }
 
 fn encode_failure(message: &str) -> Vec<u8> {
@@ -239,10 +244,11 @@ impl Module for UpdaterModule {
             .ok_or_else(|| "no Bus service available".into())
     }
 
-    /// Synchronous "is this run installed?" query, answered directly rather
-    /// than through the async request/completed path used by check/stage/
-    /// install: it is a local, instant path comparison, not a network call
-    /// or a filesystem copy, so there is nothing to avoid blocking on.
+    /// Synchronous "is this run installed, and what version is it?" query,
+    /// answered directly rather than through the async request/completed
+    /// path used by check/stage/install: both are local and instant --
+    /// a path comparison and a compile-time constant -- so there is nothing
+    /// to avoid blocking on.
     fn respond(&mut self, sender: &str, _payload: &[u8]) -> Option<Vec<u8>> {
         if sender != OWNER {
             return Some(encode_failure("install status is private to the commits component"));
@@ -482,12 +488,13 @@ mod tests {
     }
 
     #[test]
-    fn respond_answers_the_trusted_sender_with_install_status() {
+    fn respond_answers_the_trusted_sender_with_install_status_and_version() {
         let mut module = UpdaterModule::default();
 
         let response = module.respond(OWNER, &[]).unwrap();
 
         assert_eq!(response[0], SUCCESS);
         assert!(response[1] == 0 || response[1] == 1);
+        assert_eq!(std::str::from_utf8(&response[2..]).unwrap(), CURRENT_VERSION);
     }
 }

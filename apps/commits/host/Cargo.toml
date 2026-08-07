@@ -1,6 +1,9 @@
 [package]
 name = "commits-app"
-version = "0.1.0"
+# The standalone app's own version: compared against a hosted manifest by
+# the self-updater (commits_upgrader::is_newer) and shown in the About menu.
+# Bump on every integration into main -- see AGENTS.md.
+version = "0.2.0"
 edition = "2021"
 
 [[bin]]

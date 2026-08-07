@@ -393,6 +393,12 @@ body {
   background: var(--vscode-menu-separatorBackground);
 }
 
+.standaloneMenuVersion {
+  padding: 3px 6px;
+  color: var(--vscode-menu-foreground);
+  opacity: 0.6;
+}
+
 /* Transient clone/open/reveal feedback next to the menu button, capped so a
    long message can't push the other toolbar controls out of view. */
 #standaloneMenuStatus {

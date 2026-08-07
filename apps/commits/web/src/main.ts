@@ -102,7 +102,7 @@ async function boot(): Promise<void> {
       } else if (data.command === "standaloneUpdateStatus") {
         updateUpdateStatus(data.available === true, data.version ?? "", data.ready === true, data.message ?? "");
       } else if (data.command === "standaloneInstallStatus") {
-        updateInstallStatus(data.status ?? "hidden", data.message ?? "");
+        updateInstallStatus(data.status ?? "hidden", data.version ?? "", data.message ?? "");
       }
       window.dispatchEvent(new MessageEvent("message", { data }));
     } catch {
@@ -160,8 +160,17 @@ function appMenuHtml(): string {
         </li>
         <li class="standaloneMenuSeparator" role="separator"></li>
         <li><button type="button" id="standaloneSettingsButton" disabled>Settings</button></li>
-        <li><button type="button" id="standaloneMenuInstall" hidden>Install</button></li>
-        <li><button type="button" id="standaloneMenuUpdate" hidden></button></li>
+        <li class="standaloneMenuGroup">
+          <button type="button" class="standaloneMenuTitle" aria-haspopup="true">
+            <span>About</span>
+            <span class="standaloneMenuChevron" aria-hidden="true">&rsaquo;</span>
+          </button>
+          <ul class="standaloneMenuSubList">
+            <li class="standaloneMenuVersion" id="standaloneMenuVersion"></li>
+            <li><button type="button" id="standaloneMenuInstall" hidden>Install</button></li>
+            <li><button type="button" id="standaloneMenuUpdate" hidden></button></li>
+          </ul>
+        </li>
       </ul>
     </div>
     <span id="standaloneMenuStatus" aria-live="polite"></span>
@@ -254,12 +263,14 @@ function updateUpdateStatus(available: boolean, version: string, ready: boolean,
  * install location -- nothing was installed there before, so nothing is
  * pending) hides the entry again: there is nothing further this run can do.
  */
-function updateInstallStatus(status: "hidden" | "ready" | "staged" | "done", message: string): void {
+function updateInstallStatus(status: "hidden" | "ready" | "staged" | "done", version: string, message: string): void {
   const button = document.getElementById("standaloneMenuInstall") as HTMLButtonElement | null;
   if (button) {
     button.hidden = status === "hidden" || status === "done";
     button.textContent = status === "staged" ? "Restart to install" : "Install";
   }
+  const versionLabel = document.getElementById("standaloneMenuVersion");
+  if (versionLabel && version) versionLabel.textContent = `Version ${version}`;
   showMenuStatus(message);
 }
 
