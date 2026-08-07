@@ -40,6 +40,28 @@ $ErrorActionPreference = "Stop"
 $isWindowsPlatform = $env:OS -eq "Windows_NT"
 $launcherName = if ($isWindowsPlatform) { "commits.exe" } else { "commits" }
 
+# Mirrors commits_upgrader::stage::is_runtime_artifact (Rust): a build that
+# was ever run directly out of -Source accumulates WebView2's own per-exe
+# browser profile, the bones save-slot directory, and log files right next
+# to the real app -- none of that is part of the distributable app, and a
+# WebView2 profile can hold files open if that exe is still running,
+# aborting a blind recursive copy partway through.
+function Test-RuntimeArtifact([string]$Name) {
+    return $Name -like "*.WebView2" -or $Name -ieq "saves" -or $Name -like "*.log"
+}
+
+function Copy-AppFiles([string]$From, [string]$To) {
+    New-Item -ItemType Directory -Path $To -Force | Out-Null
+    Get-ChildItem -LiteralPath $From -Force | Where-Object { -not (Test-RuntimeArtifact $_.Name) } | ForEach-Object {
+        $target = Join-Path $To $_.Name
+        if ($_.PSIsContainer) {
+            Copy-AppFiles -From $_.FullName -To $target
+        } else {
+            Copy-Item -LiteralPath $_.FullName -Destination $target -Force
+        }
+    }
+}
+
 if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
     if ($SkipBuild) {
         throw "No built app at $Source."
@@ -63,15 +85,13 @@ if (Test-Path -LiteralPath (Join-Path $installDir $launcherName)) {
     # start, exactly like a downloaded update.
     $updateDir = Join-Path $updaterDir "update"
     if (Test-Path -LiteralPath $updateDir) { Remove-Item -LiteralPath $updateDir -Recurse -Force }
-    New-Item -ItemType Directory -Path $updateDir -Force | Out-Null
-    Copy-Item -Path (Join-Path $Source "*") -Destination $updateDir -Recurse -Force
+    Copy-AppFiles -From $Source -To $updateDir
     Write-Host "$installDir is already installed; staged this build at $updateDir."
     Write-Host "It applies the next time commits.exe (the launcher) starts."
     exit 0
 }
 
-New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-Copy-Item -Path (Join-Path $Source "*") -Destination $installDir -Recurse -Force
+Copy-AppFiles -From $Source -To $installDir
 Write-Host "Installed to $installDir"
 
 if ($isWindowsPlatform -and -not $NoShortcuts) {

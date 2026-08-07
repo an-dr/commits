@@ -152,7 +152,8 @@ fn clear_dir(path: &Path) -> Result<(), String> {
 /// Copies every file under `from` to the same relative location under `to`,
 /// overwriting whatever is already there and creating `to` if needed. A
 /// name in `skip` (matched case-insensitively against the entry's own file
-/// name, at any depth) is left untouched in `to` rather than copied.
+/// name, at any depth) is left untouched in `to` rather than copied, as is
+/// anything [`is_runtime_artifact`] recognizes.
 fn copy_dir_contents(from: &Path, to: &Path, skip: &[&str]) -> Result<(), String> {
     fs::create_dir_all(to).map_err(|error| error.to_string())?;
     if !from.is_dir() {
@@ -161,7 +162,7 @@ fn copy_dir_contents(from: &Path, to: &Path, skip: &[&str]) -> Result<(), String
     for entry in fs::read_dir(from).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
         let name = entry.file_name();
-        if skip.iter().any(|skipped| name.eq_ignore_ascii_case(skipped)) {
+        if is_runtime_artifact(&name) || skip.iter().any(|skipped| name.eq_ignore_ascii_case(skipped)) {
             continue;
         }
         let target = to.join(&name);
@@ -173,6 +174,24 @@ fn copy_dir_contents(from: &Path, to: &Path, skip: &[&str]) -> Result<(), String
         }
     }
     Ok(())
+}
+
+/// Whether `name` is a directory an executable creates for its own runtime
+/// use rather than something that was ever part of the distributable app --
+/// WebView2's own per-executable browser profile, the bones save-slot
+/// directory, and rotated log files.
+///
+/// Always skipped, in every direction `copy_dir_contents` runs: a real run
+/// of `stage_current_install` -- which by definition copies the directory of
+/// a process that is currently running -- hit a WebView2 profile file locked
+/// by that same running process, aborted the copy immediately, and silently
+/// left everything after it in `read_dir`'s enumeration order (including the
+/// launcher executable itself) never copied. `apply`'s own backup step reads
+/// the same kind of live, possibly-still-warm install directory, so the
+/// exclusion applies there too rather than only where it was first caught.
+fn is_runtime_artifact(name: &std::ffi::OsStr) -> bool {
+    let name = name.to_string_lossy();
+    name.ends_with(".WebView2") || name.eq_ignore_ascii_case("saves") || name.to_ascii_lowercase().ends_with(".log")
 }
 
 #[cfg(test)]
@@ -247,6 +266,35 @@ mod tests {
 
         assert!(!update_dir.join("old.txt").exists());
         assert_eq!(fs::read(update_dir.join("app.exe")).unwrap(), b"new");
+    }
+
+    #[test]
+    fn stage_current_install_skips_webview2_profiles_saves_and_logs() {
+        // These are exactly the entries a real run left behind next to a
+        // running commits-app.exe; copying them (a) is pointless -- none of
+        // them are part of the app -- and (b) can abort the whole copy
+        // outright, since WebView2's profile holds files open while that
+        // executable is running (see `is_runtime_artifact`).
+        let dir = tempfile::tempdir().unwrap();
+        let source_dir = dir.path().join("dev-build");
+        let update_dir = dir.path().join("update");
+        fs::create_dir_all(source_dir.join("commits-app.exe.WebView2/EBWebView")).unwrap();
+        fs::write(source_dir.join("commits-app.exe.WebView2/EBWebView/lock"), b"locked").unwrap();
+        fs::create_dir_all(source_dir.join("saves")).unwrap();
+        fs::write(source_dir.join("saves/state.bin"), b"save state").unwrap();
+        fs::write(source_dir.join("commits.log"), b"log").unwrap();
+        fs::write(source_dir.join("commits.prev.log"), b"old log").unwrap();
+        fs::write(source_dir.join("commits.exe"), b"the launcher").unwrap();
+        fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
+
+        stage_current_install(&source_dir, &update_dir).unwrap();
+
+        assert!(!update_dir.join("commits-app.exe.WebView2").exists());
+        assert!(!update_dir.join("saves").exists());
+        assert!(!update_dir.join("commits.log").exists());
+        assert!(!update_dir.join("commits.prev.log").exists());
+        assert_eq!(fs::read(update_dir.join("commits.exe")).unwrap(), b"the launcher");
+        assert_eq!(fs::read(update_dir.join("commits-app.exe")).unwrap(), b"the app");
     }
 
     #[test]
