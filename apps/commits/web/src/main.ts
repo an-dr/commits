@@ -134,8 +134,11 @@ function appMenuHtml(): string {
       <button type="button" id="standaloneMenuButton" class="iconBtn" aria-haspopup="true" aria-expanded="false" title="Menu">${toolbarIcons.menu}</button>
       <ul class="standaloneMenuList" hidden>
         <li class="standaloneMenuGroup">
-          <button type="button" class="standaloneMenuTitle" aria-haspopup="true" aria-expanded="false">File</button>
-          <ul class="standaloneMenuSubList" hidden>
+          <button type="button" class="standaloneMenuTitle" aria-haspopup="true">
+            <span>File</span>
+            <span class="standaloneMenuChevron" aria-hidden="true">&rsaquo;</span>
+          </button>
+          <ul class="standaloneMenuSubList">
             <li><button type="button" id="standaloneMenuOpenRepo">Open repo&hellip;</button></li>
             <li class="standaloneMenuSeparator" role="separator"></li>
             <li><button type="button" id="standaloneMenuCloneCommitsRepo">Clone Commits Repo</button></li>
@@ -143,6 +146,7 @@ function appMenuHtml(): string {
             <li><button type="button" id="standaloneMenuOpenCommitsRepoFolder" disabled>Open Commits Repo Folder</button></li>
           </ul>
         </li>
+        <li class="standaloneMenuSeparator" role="separator"></li>
         <li><button type="button" id="standaloneSettingsButton" disabled>Settings</button></li>
       </ul>
     </div>
@@ -151,34 +155,23 @@ function appMenuHtml(): string {
 }
 
 /**
- * Drives the menu: the top-level button opens File/Settings, File expands
- * its own items in place, and everything closes on selection, a click
- * elsewhere, or Escape.
+ * Drives the menu: the top-level button opens File/Settings; File's own
+ * items fly out on hover (or focus, for keyboard use) via CSS alone.
+ * Everything closes on selection, a click elsewhere, or Escape.
  */
 function wireAppMenu(): void {
   const wrap = document.getElementById("standaloneMenuWrap")!;
   const menuButton = document.getElementById("standaloneMenuButton") as HTMLButtonElement;
   const list = wrap.querySelector<HTMLUListElement>(".standaloneMenuList")!;
-  const fileTitle = wrap.querySelector<HTMLButtonElement>(".standaloneMenuTitle")!;
-  const fileList = wrap.querySelector<HTMLUListElement>(".standaloneMenuSubList")!;
 
-  const setFileOpen = (open: boolean): void => {
-    fileList.hidden = !open;
-    fileTitle.setAttribute("aria-expanded", String(open));
-  };
   const setMenuOpen = (open: boolean): void => {
     list.hidden = !open;
     menuButton.setAttribute("aria-expanded", String(open));
-    if (!open) setFileOpen(false);
   };
 
   menuButton.addEventListener("click", (event) => {
     event.stopPropagation();
     setMenuOpen(list.hidden);
-  });
-  fileTitle.addEventListener("click", (event) => {
-    event.stopPropagation();
-    setFileOpen(fileList.hidden);
   });
   document.getElementById("standaloneMenuOpenRepo")!.addEventListener("click", () => {
     setMenuOpen(false);
