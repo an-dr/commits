@@ -1,6 +1,9 @@
+use std::io::Read;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
+use base64::Engine;
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_ipc::native::{NativeResult, OsRequest};
 
@@ -14,6 +17,13 @@ pub const PROMPT_RESPONSE_TOPIC: &str = "os/prompt-response";
 /// Largest working-tree file the page is served. Beyond this the view would be
 /// unusable anyway, and the text crosses the panel boundary as one string.
 pub const MAX_FILE_READ_BYTES: u64 = 4 * 1024 * 1024;
+
+/// Largest body accepted from `fetch_url`, an avatar-sized image or a small
+/// manifest — never a bulk download.
+pub const MAX_FETCH_BYTES: u64 = 5 * 1024 * 1024;
+/// How long `fetch_url` waits before giving up, so a stalled remote never
+/// blocks the OS module's request thread indefinitely.
+pub const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub trait OsBackend: Send + Sync {
     fn read_clipboard(&self) -> Result<String, String>;
@@ -31,6 +41,12 @@ pub trait OsBackend: Send + Sync {
     /// is reported as absent rather than as an error: not being readable is a
     /// normal outcome for a working-tree entry.
     fn read_file(&self, request: &str) -> Result<Option<String>, String>;
+    /// Fetches an HTTPS URL and returns its body as `"{content-type};base64,{data}"`,
+    /// a generic, self-describing shape any caller can turn into a data URI or
+    /// decode directly. A 404 is reported as `Ok(None)` — a normal "nothing at
+    /// this URL" outcome, e.g. a Gravatar that does not exist — rather than an
+    /// error; other failures (network, non-2xx, oversized body) are `Err`.
+    fn fetch_url(&self, url: &str) -> Result<Option<String>, String>;
 }
 
 pub struct SystemOsBackend;
@@ -78,6 +94,43 @@ impl OsBackend for SystemOsBackend {
             .split_once('\n')
             .ok_or_else(|| String::from("a file read names a repository and a path"))?;
         read_repository_file(std::path::Path::new(repository), path)
+    }
+    fn fetch_url(&self, url: &str) -> Result<Option<String>, String> {
+        if !url.starts_with("https://") {
+            return Err("only https URLs may be fetched".into());
+        }
+        // A Windows target's Rust toolchain here has no working C compiler for
+        // rustls's usual ring backend, so this goes through native-tls
+        // (Schannel) instead, built fresh per call rather than cached: it is
+        // cheap local setup, not a network round trip.
+        let connector =
+            native_tls::TlsConnector::new().map_err(|error| error.to_string())?;
+        let agent = ureq::builder()
+            .tls_connector(std::sync::Arc::new(connector))
+            .timeout(FETCH_TIMEOUT)
+            .build();
+        let response = match agent.get(url).call() {
+            Ok(response) => response,
+            Err(ureq::Error::Status(404, _)) => return Ok(None),
+            Err(error) => return Err(error.to_string()),
+        };
+        let content_type = response.content_type().to_string();
+        let mut body = Vec::new();
+        // One byte past the cap: reading exactly MAX_FETCH_BYTES would silently
+        // truncate an oversized body into invalid, corrupt-looking data instead
+        // of a clean error.
+        response
+            .into_reader()
+            .take(MAX_FETCH_BYTES + 1)
+            .read_to_end(&mut body)
+            .map_err(|error| error.to_string())?;
+        if body.len() as u64 > MAX_FETCH_BYTES {
+            return Err(format!("response exceeds {MAX_FETCH_BYTES} bytes"));
+        }
+        Ok(Some(format!(
+            "{content_type};base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(body)
+        )))
     }
 }
 
@@ -208,6 +261,7 @@ fn execute(backend: &dyn OsBackend, request: &OsRequest) -> NativeResult {
         6 => backend
             .open_directory(&request.value)
             .map(|_| Some(String::new())),
+        7 => backend.fetch_url(&request.value),
         _ => Err("unknown OS action".into()),
     };
     match outcome {

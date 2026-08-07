@@ -189,7 +189,7 @@ impl OsRequest {
             action: reader.u8()?,
             value: reader.string()?,
         };
-        if request.action > 6 {
+        if request.action > 7 {
             return Err(WireError::from("unknown os action"));
         }
         reader.finish()?;
@@ -268,13 +268,20 @@ mod tests {
             GitResult::decode(&result.encode().unwrap()).unwrap(),
             result
         );
+
+        let fetch = OsRequest {
+            request_id: 9,
+            action: 7,
+            value: "https://www.gravatar.com/avatar/deadbeef?s=80&d=404".into(),
+        };
+        assert_eq!(OsRequest::decode(&fetch.encode().unwrap()).unwrap(), fetch);
     }
 
     #[test]
     fn rejects_unknown_tags_and_trailing_bytes() {
         assert!(GitRequest::decode(&[9]).is_err());
         assert!(WatchRequest::decode(&[1, 0, 0, 0, 2, 0, 0]).is_err());
-        assert!(OsRequest::decode(&[1, 0, 0, 0, 7, 0, 0]).is_err());
+        assert!(OsRequest::decode(&[1, 0, 0, 0, 8, 0, 0]).is_err());
 
         let mut cancel = vec![1, 7, 0, 0, 0];
         cancel.push(1);

@@ -1,6 +1,7 @@
 import type { GitFileChangeType } from "@an-dr/commits-core/backend/types";
 import type { RequestMessage, ResponseMessage } from "@an-dr/commits-core/types";
 import { encodeFileRead, type GitResult, type NativeResult } from "@commits/ipc/native";
+import { gravatarUrl } from "./gravatar";
 import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
 import { MitGraphBackend } from "./mit/graph-backend";
@@ -34,7 +35,8 @@ type PendingOs =
   | { readonly kind: "copy"; readonly type: string }
   | { readonly kind: "openExternalUrl" }
   | { readonly kind: "revealCommitsRepoFolder" }
-  | { readonly kind: "readFile"; readonly deliver: (content: string | null) => void };
+  | { readonly kind: "readFile"; readonly deliver: (content: string | null) => void }
+  | { readonly kind: "fetchAvatar"; readonly email: string };
 
 /** Bones owner of the unchanged MIT webview's host protocol. */
 export class CommitsCore {
@@ -290,6 +292,11 @@ export class CommitsCore {
         this.send({ command: "getRelativeTimeDiff", value: "" });
         return;
       case "fetchAvatar":
+        if (typeof value.email === "string" && value.email) {
+          const requestId = this.nextOsRequestId++;
+          this.pendingOs.set(requestId, { kind: "fetchAvatar", email: value.email });
+          this.host.requestOs(requestId, "fetch-url", gravatarUrl(value.email));
+        }
         return;
       default:
         if (isMutationCommand(value.command)) {
@@ -315,6 +322,17 @@ export class CommitsCore {
     } else if (pending.kind === "revealCommitsRepoFolder") {
       if (!result.accepted) {
         this.sendCommitsRepoStatus(`Could not open the folder: ${result.error || "unknown error"}`);
+      }
+    } else if (pending.kind === "fetchAvatar") {
+      // A rejected result covers both "no Gravatar for this address" (a plain
+      // 404, reported with no error text) and a real fetch failure; either
+      // way, sending nothing lets the page's own procedural-avatar/initials
+      // fallback take over exactly as it already does before any response
+      // arrives.
+      if (result.accepted && result.value) {
+        this.send({ command: "fetchAvatar", email: pending.email, image: `data:${result.value}` });
+      } else if (result.error) {
+        this.host.log("warn", result.error);
       }
     } else {
       this.send({ command: "openExternalUrl", error: result.accepted ? null : result.error || "Unable to open URL" });

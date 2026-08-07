@@ -5,10 +5,13 @@ edition = "2021"
 
 [dependencies]
 arboard = "3.6"
+base64 = "0.22"
 bus = { path = "../../vendor/bones/core/bus" }
 commits-ipc = { path = "../../ipc/rust" }
 open = "5.3"
 rfd = "0.15"
+ureq = { version = "2.12", default-features = false, features = ["native-tls", "gzip"] }
+native-tls = "0.2"
 
 [dev-dependencies]
 tempfile = "3.20"

@@ -981,6 +981,44 @@ describe("CommitsCore MIT webview host", () => {
     expect(loadRepos?.lastActiveRepo).toBe("C:/second");
   });
 
+  it("requests a Gravatar fetch-url and delivers the image as a data URI", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "fetchAvatar", repo: "C:/repo", email: "MyEmailAddress@example.com", commits: ["abc1234"],
+    }));
+
+    expect(host.osRequests).toEqual([{
+      requestId: 50_000,
+      action: "fetch-url",
+      value: "https://www.gravatar.com/avatar/0bc83cb571cd1c50ba6f3e8a78ef1346?s=80&d=404",
+    }]);
+
+    core.receiveOsResult({ requestId: 50_000, accepted: true, value: "image/jpeg;base64,/9j/", error: "" });
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "fetchAvatar",
+      email: "MyEmailAddress@example.com",
+      image: "data:image/jpeg;base64,/9j/",
+    }]);
+  });
+
+  it("sends nothing for a fetchAvatar request with no Gravatar for that address", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "fetchAvatar", repo: "C:/repo", email: "nobody@example.com", commits: [],
+    }));
+    core.receiveOsResult({ requestId: 50_000, accepted: false, value: "", error: "" });
+
+    expect(host.sent.some(([, message]) => (message as { command?: string }).command === "fetchAvatar"))
+      .toBe(false);
+  });
+
   it("ignores malformed page JSON", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);

@@ -37,6 +37,14 @@ impl OsBackend for StubBackend {
     fn read_file(&self, request: &str) -> Result<Option<String>, String> {
         Ok(Some(request.replace('\n', ":")))
     }
+    fn fetch_url(&self, url: &str) -> Result<Option<String>, String> {
+        if url == "https://example.com/missing" {
+            return Ok(None);
+        }
+        url.starts_with("https://")
+            .then(|| Some("image/png;base64,c3R1Yg==".to_string()))
+            .ok_or("only https URLs may be fetched".into())
+    }
 }
 
 #[test]
@@ -65,6 +73,7 @@ fn publishes_results_for_every_capability() {
         (6, 2, "file:///private"),
         (7, 6, "C:/repo"),
         (8, 6, "not-a-directory"),
+        (9, 7, "https://example.com/avatar.png"),
     ] {
         module.handle(&Envelope {
             topic: REQUEST_TOPIC.into(),
@@ -80,12 +89,12 @@ fn publishes_results_for_every_capability() {
         });
     }
     let deadline = Instant::now() + Duration::from_secs(3);
-    while results.lock().unwrap().len() < 8 && Instant::now() < deadline {
+    while results.lock().unwrap().len() < 9 && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
         bus.dispatch();
     }
     let results = results.lock().unwrap();
-    assert_eq!(results.len(), 8);
+    assert_eq!(results.len(), 9);
     assert!(results
         .iter()
         .any(|result| result.request_id == 1 && result.accepted));
@@ -103,6 +112,9 @@ fn publishes_results_for_every_capability() {
     assert!(results
         .iter()
         .any(|result| result.request_id == 8 && result.error == "not a directory"));
+    assert!(results
+        .iter()
+        .any(|result| result.request_id == 9 && result.value == "image/png;base64,c3R1Yg=="));
 }
 
 /// The read is confined to one repository, and an unreadable entry inside it is

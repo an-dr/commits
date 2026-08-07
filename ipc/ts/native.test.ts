@@ -84,6 +84,7 @@ describe("native protocol", () => {
     expect(encodeOsRequest(1, "pick-folder")[4]).toBe(4);
     expect(encodeOsRequest(1, "read-file")[4]).toBe(5);
     expect(encodeOsRequest(1, "reveal-directory")[4]).toBe(6);
+    expect(encodeOsRequest(1, "fetch-url")[4]).toBe(7);
     // A file read carries its repository and path as one value, so the host can
     // confine the read without a second field on the wire.
     expect(encodeFileRead("C:/repo", "src/a.ts")).toBe("C:/repo\nsrc/a.ts");

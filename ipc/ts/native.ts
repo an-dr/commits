@@ -70,7 +70,8 @@ export type OsAction =
   | "pick-file"
   | "pick-folder"
   | "read-file"
-  | "reveal-directory";
+  | "reveal-directory"
+  | "fetch-url";
 
 /**
  * Value of a `read-file` request: the repository the read is confined to, then
@@ -94,6 +95,7 @@ export function encodeOsRequest(
     "pick-folder": 4,
     "read-file": 5,
     "reveal-directory": 6,
+    "fetch-url": 7,
   };
   return new Writer().u32(requestId).u8(tag[action]).string(value).finish();
 }
