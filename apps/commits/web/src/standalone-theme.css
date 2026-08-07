@@ -149,38 +149,6 @@ body {
   background: var(--vscode-list-hoverBackground);
 }
 
-/* The shared shell pins its panes to the viewport, so the menu bar reserves
-   space by shifting those panes down rather than by flowing above them. */
-:root {
-  --standalone-menu-height: 28px;
-}
-
-#standaloneMenuBar {
-  position: fixed;
-  z-index: 30;
-  top: 0;
-  right: 0;
-  left: 0;
-  display: flex;
-  align-items: stretch;
-  height: var(--standalone-menu-height);
-  border-bottom: 1px solid rgba(128, 128, 128, 0.5);
-  background: var(--vscode-editorWidget-background);
-  font-size: 12px;
-}
-
-#standaloneSettingsButton {
-  padding: 0 10px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-}
-
-#standaloneSettingsButton:hover {
-  background: var(--vscode-toolbar-hoverBackground);
-}
-
 #standaloneSettingsDialog {
   width: min(760px, calc(100vw - 48px));
   max-width: none;
@@ -309,33 +277,22 @@ body {
   }
 }
 
-#view {
-  top: var(--standalone-menu-height);
-}
-
-#branchPanelSidebar,
-#branchPanelResizeHandle,
-#filesPanel {
-  top: calc(var(--top-bar-height) + var(--standalone-menu-height));
+#standaloneMenuWrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .standaloneMenu {
   position: relative;
 }
 
-.standaloneMenuTitle {
-  height: 100%;
-  padding: 0 12px;
-  border: none;
+#standaloneMenuButton {
+  border: 0;
   background: none;
-  color: var(--vscode-foreground);
+  padding: 0;
   font: inherit;
-  cursor: pointer;
-}
-
-.standaloneMenuTitle:hover,
-.standaloneMenuTitle[aria-expanded="true"] {
-  background: var(--vscode-list-hoverBackground);
 }
 
 .standaloneMenuList {
@@ -343,7 +300,7 @@ body {
   z-index: 31;
   top: 100%;
   left: 0;
-  min-width: 180px;
+  min-width: 200px;
   margin: 0;
   padding: 4px 0;
   border: 1px solid var(--vscode-input-border);
@@ -352,11 +309,22 @@ body {
   list-style: none;
 }
 
-.standaloneMenuList[hidden] {
+.standaloneMenuList[hidden],
+.standaloneMenuSubList[hidden] {
   display: none;
 }
 
-.standaloneMenuList button {
+/* File expands its own items in place, directly below it, rather than
+   flying out sideways — the trigger sits at the toolbar's left edge, where
+   there is no room to fly out further left. */
+.standaloneMenuSubList {
+  margin: 0;
+  padding-left: 12px;
+  list-style: none;
+}
+
+.standaloneMenuList button,
+.standaloneMenuTitle {
   display: block;
   width: 100%;
   padding: 6px 14px;
@@ -368,7 +336,9 @@ body {
   cursor: pointer;
 }
 
-.standaloneMenuList button:hover {
+.standaloneMenuList button:hover,
+.standaloneMenuTitle:hover,
+.standaloneMenuTitle[aria-expanded="true"] {
   background: var(--vscode-menu-selectionBackground);
 }
 
@@ -384,16 +354,14 @@ body {
   background: var(--vscode-menu-separatorBackground);
 }
 
-/* Fills the space between the File menu and Settings, so transient
-   clone/open/reveal feedback is visible without reopening the menu. */
+/* Transient clone/open/reveal feedback next to the menu button, capped so a
+   long message can't push the other toolbar controls out of view. */
 #standaloneMenuStatus {
-  flex: 1 1 auto;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  min-width: 0;
-  padding: 0 10px;
+  max-width: 220px;
   overflow: hidden;
-  color: var(--vscode-menu-foreground);
+  color: var(--vscode-foreground);
   font-size: 12px;
   white-space: nowrap;
   text-overflow: ellipsis;

@@ -24,6 +24,8 @@ export const toolbarIcons = {
   sidebar: toolbarIcon(
     '<rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6.5 3v10"/><path d="M4.2 5.5h.1M4.2 8h.1M4.2 10.5h.1"/>'
   ),
+  /** Three stacked lines: the app menu. */
+  menu: toolbarIcon('<path d="M3 5h10"/><path d="M3 8h10"/><path d="M3 11h10"/>'),
   /** Horizontal ellipsis: the overflow menu. */
   more: toolbarIcon('<path d="M3.5 8h.1M8 8h.1M12.5 8h.1"/>'),
   /** Plus: move a working-tree file into the index. */

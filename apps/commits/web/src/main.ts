@@ -5,6 +5,7 @@ import "@an-dr/commits-webview-shell/assets/dropdown.css";
 import { createLocalizedStrings } from "@an-dr/commits-webview-shell/l10n";
 import { buildGraphShell } from "@an-dr/commits-webview-shell/shell";
 import { DEFAULT_SETTINGS, type SettingsDocument } from "@commits/adapter/read/settings";
+import { toolbarIcons } from "@an-dr/commits-core/webview/utils/icons";
 import "./standalone-theme.css";
 import { createViewState } from "./settings";
 import { SettingsEditor } from "./settings-editor";
@@ -51,7 +52,8 @@ async function boot(): Promise<void> {
   const translate = (message: string) => message;
   globalThis.l10n = createLocalizedStrings(translate);
   document.body.innerHTML =
-    `${menuBarHtml()}${buildGraphShell(translate)}${repositoryOverlayHtml()}`;
+    `${buildGraphShell(translate)}${repositoryOverlayHtml()}`;
+  document.getElementById("appMenuSlot")!.innerHTML = appMenuHtml();
 
   let settingsSettled = false;
   let resolveSettings = (_settings: SettingsDocument): void => undefined;
@@ -96,7 +98,7 @@ async function boot(): Promise<void> {
     }
   });
 
-  wireMenuBar();
+  wireAppMenu();
   wireRepositoryOverlay();
   settingsEditor = new SettingsEditor((settings) => {
     post({ command: "standaloneSaveSettings", requestId: nextSettingsRequestId++, settings });
@@ -126,60 +128,77 @@ async function boot(): Promise<void> {
   post({ command: "standaloneViewReady" });
 }
 
-function menuBarHtml(): string {
-  return `<nav id="standaloneMenuBar">
+function appMenuHtml(): string {
+  return `<div id="standaloneMenuWrap">
     <div class="standaloneMenu">
-      <button type="button" class="standaloneMenuTitle" aria-haspopup="true" aria-expanded="false">File</button>
+      <button type="button" id="standaloneMenuButton" class="iconBtn" aria-haspopup="true" aria-expanded="false" title="Menu">${toolbarIcons.menu}</button>
       <ul class="standaloneMenuList" hidden>
-        <li><button type="button" id="standaloneMenuOpenRepo">Open repo&hellip;</button></li>
-        <li class="standaloneMenuSeparator" role="separator"></li>
-        <li><button type="button" id="standaloneMenuCloneCommitsRepo">Clone Commits Repo</button></li>
-        <li><button type="button" id="standaloneMenuOpenCommitsRepo" disabled>Open Commits Repo</button></li>
-        <li><button type="button" id="standaloneMenuOpenCommitsRepoFolder" disabled>Open Commits Repo Folder</button></li>
+        <li class="standaloneMenuGroup">
+          <button type="button" class="standaloneMenuTitle" aria-haspopup="true" aria-expanded="false">File</button>
+          <ul class="standaloneMenuSubList" hidden>
+            <li><button type="button" id="standaloneMenuOpenRepo">Open repo&hellip;</button></li>
+            <li class="standaloneMenuSeparator" role="separator"></li>
+            <li><button type="button" id="standaloneMenuCloneCommitsRepo">Clone Commits Repo</button></li>
+            <li><button type="button" id="standaloneMenuOpenCommitsRepo" disabled>Open Commits Repo</button></li>
+            <li><button type="button" id="standaloneMenuOpenCommitsRepoFolder" disabled>Open Commits Repo Folder</button></li>
+          </ul>
+        </li>
+        <li><button type="button" id="standaloneSettingsButton" disabled>Settings</button></li>
       </ul>
     </div>
     <span id="standaloneMenuStatus" aria-live="polite"></span>
-    <button type="button" id="standaloneSettingsButton" disabled>Settings</button>
-  </nav>`;
+  </div>`;
 }
 
 /**
- * Drives the menu bar: one open menu at a time, closing on selection, on a
- * click elsewhere, or on Escape.
+ * Drives the menu: the top-level button opens File/Settings, File expands
+ * its own items in place, and everything closes on selection, a click
+ * elsewhere, or Escape.
  */
-function wireMenuBar(): void {
-  const bar = document.getElementById("standaloneMenuBar")!;
-  const title = bar.querySelector<HTMLButtonElement>(".standaloneMenuTitle")!;
-  const list = bar.querySelector<HTMLUListElement>(".standaloneMenuList")!;
+function wireAppMenu(): void {
+  const wrap = document.getElementById("standaloneMenuWrap")!;
+  const menuButton = document.getElementById("standaloneMenuButton") as HTMLButtonElement;
+  const list = wrap.querySelector<HTMLUListElement>(".standaloneMenuList")!;
+  const fileTitle = wrap.querySelector<HTMLButtonElement>(".standaloneMenuTitle")!;
+  const fileList = wrap.querySelector<HTMLUListElement>(".standaloneMenuSubList")!;
 
-  const setOpen = (open: boolean): void => {
+  const setFileOpen = (open: boolean): void => {
+    fileList.hidden = !open;
+    fileTitle.setAttribute("aria-expanded", String(open));
+  };
+  const setMenuOpen = (open: boolean): void => {
     list.hidden = !open;
-    title.setAttribute("aria-expanded", String(open));
+    menuButton.setAttribute("aria-expanded", String(open));
+    if (!open) setFileOpen(false);
   };
 
-  title.addEventListener("click", (event) => {
+  menuButton.addEventListener("click", (event) => {
     event.stopPropagation();
-    setOpen(list.hidden);
+    setMenuOpen(list.hidden);
+  });
+  fileTitle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setFileOpen(fileList.hidden);
   });
   document.getElementById("standaloneMenuOpenRepo")!.addEventListener("click", () => {
-    setOpen(false);
+    setMenuOpen(false);
     showRepositoryOverlay();
   });
   document.getElementById("standaloneMenuCloneCommitsRepo")!.addEventListener("click", () => {
-    setOpen(false);
+    setMenuOpen(false);
     post({ command: "standaloneCloneCommitsRepo" });
   });
   document.getElementById("standaloneMenuOpenCommitsRepo")!.addEventListener("click", () => {
-    setOpen(false);
+    setMenuOpen(false);
     post({ command: "standaloneOpenCommitsRepo" });
   });
   document.getElementById("standaloneMenuOpenCommitsRepoFolder")!.addEventListener("click", () => {
-    setOpen(false);
+    setMenuOpen(false);
     post({ command: "standaloneOpenCommitsRepoFolder" });
   });
-  document.addEventListener("click", () => setOpen(false));
+  document.addEventListener("click", () => setMenuOpen(false));
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") setOpen(false);
+    if (event.key === "Escape") setMenuOpen(false);
   });
 }
 
