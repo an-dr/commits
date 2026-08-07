@@ -21,7 +21,8 @@ The document separates portable extension settings from desktop appearance:
     "mode": "system",
     "lightTheme": "paper",
     "darkTheme": "graphite",
-    "timeFormat": "system"
+    "timeFormat": "system",
+    "updateManifestUrl": ""
   }
 }
 ```
@@ -68,6 +69,10 @@ rather than `core`.
 Appearance changes apply immediately after a successful save. Shared graph
 configuration is read when the window opens and therefore applies after the
 window is reopened.
+
+`app.updateManifestUrl` is empty by default, which keeps self-update off. See
+[`updating.md`](updating.md) for the manifest format and what setting it
+enables.
 
 ## Migration and safety
 
