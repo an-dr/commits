@@ -533,7 +533,14 @@ body.filesPanelHidden #filesPanel {
 #commitTable table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: auto;
+  /* auto layout still consults each cell's unwrapped content width when
+     distributing space — a long, nowrap commit message can outweigh the
+     table's actual available width and squeeze the trailing fixed-width
+     columns below their declared width even though max-width:0 below caps
+     the first column's own box. fixed layout ignores content entirely and
+     always honors the widths declared here, which is what "fixed,
+     programmatic widths" below actually requires. */
+  table-layout: fixed;
 }
 /* The merged graph/message cell takes every spare pixel; max-width:0 stops the
    browser sizing it to its content and pushing the trailing columns off. */
@@ -542,11 +549,15 @@ body.filesPanelHidden #filesPanel {
   max-width: 0;
 }
 /* Fixed, programmatic widths: wide enough for the compact date/time or an
-   avatar, never user-resizable, and never dependent on a row's own content. */
+   avatar, never user-resizable, and never dependent on a row's own content.
+   committedCol carries real headroom above the ~98px an exact-fit avatar +
+   10-character ISO date needs, since a non-monospace font fallback or
+   non-100% display scaling can render that string wider than the geometric
+   estimate. */
 #commitTable td.committedCol,
 #commitTable th.committedCol {
-  width: 128px;
-  max-width: 128px;
+  width: 150px;
+  max-width: 150px;
 }
 #commitTable td.idCol,
 #commitTable th.idCol {
@@ -601,26 +612,6 @@ body.filesPanelHidden #filesPanel {
 
 .tableColHeader {
   position: relative;
-}
-
-/* Folding under width pressure: the Dev column drops its date/time text and
-   shrinks to just the avatar first; the ID column disappears next. Widths
-   are still fixed by the rules above, never user-resizable. */
-@container graphContent (max-width: 560px) {
-  #commitTable .committedMeta {
-    display: none;
-  }
-  #commitTable td.committedCol,
-  #commitTable th.committedCol {
-    width: 34px;
-    max-width: 34px;
-  }
-}
-@container graphContent (max-width: 420px) {
-  #commitTable td.idCol,
-  #commitTable th.idCol {
-    display: none;
-  }
 }
 
 /* Commit Details View */
@@ -1079,6 +1070,30 @@ svg.fileIcon {
 }
 #commitTable td.idCol {
   font-family: var(--vscode-editor-font-family, monospace);
+}
+
+/* Folding under width pressure: the Dev column drops its date/time text and
+   shrinks to just the avatar first; the ID column disappears next. Widths
+   are still fixed by the rules above, never user-resizable. This block must
+   stay below the base .committedMeta/.committedCol rules above — with equal
+   selector specificity, cascade order decides, and a query block placed
+   earlier in the file would silently lose to those base rules regardless of
+   whether the container condition matches. */
+@container graphContent (max-width: 560px) {
+  #commitTable td.committedCol .committedMeta {
+    display: none;
+  }
+  #commitTable td.committedCol,
+  #commitTable th.committedCol {
+    width: 34px;
+    max-width: 34px;
+  }
+}
+@container graphContent (max-width: 420px) {
+  #commitTable td.idCol,
+  #commitTable th.idCol {
+    display: none;
+  }
 }
 
 /* Ref labels.
