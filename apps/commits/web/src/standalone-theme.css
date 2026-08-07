@@ -101,6 +101,7 @@ body {
   flex: 1;
   padding: 7px 9px;
   border: 1px solid var(--vscode-input-border);
+  border-radius: var(--input-radius);
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
 }
@@ -246,6 +247,7 @@ body {
   min-width: 0;
   padding: 6px 8px;
   border: 1px solid var(--vscode-input-border);
+  border-radius: var(--input-radius);
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   font: inherit;

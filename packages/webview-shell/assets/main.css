@@ -15,6 +15,8 @@ body {
   /* Defaults until the panels report their own widths. */
   --branch-panel-width: 220px;
   --files-panel-width: 0px;
+  /* Shared corner radius for every text input across the app. */
+  --input-radius: 6px;
 }
 #view {
   position: fixed;
@@ -89,6 +91,7 @@ body.branchPanelHidden #branchPanelSidebar {
   padding: 4px 6px;
   box-sizing: border-box;
   border: 1px solid var(--vscode-input-border, rgba(128, 128, 128, 0.5));
+  border-radius: var(--input-radius);
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
 }
@@ -1228,7 +1231,7 @@ body.branchPanelHidden #sidebarTop {
   height: 22px;
   padding: 0 8px;
   border: 1px solid rgba(128, 128, 128, 0.5);
-  border-radius: 11px;
+  border-radius: var(--input-radius);
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   font-family: inherit;
