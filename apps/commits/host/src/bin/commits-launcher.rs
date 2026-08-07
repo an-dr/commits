@@ -4,6 +4,11 @@
 //! does not report itself healthy in time. See `crates/upgrader` for why
 //! this crate is not named "updater".
 
+// Same reasoning as main.rs: a release build is a desktop entry point, not a
+// console tool, so Windows must not open a terminal behind it. Debug builds
+// keep the console, which is where this file's eprintln! output goes.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
