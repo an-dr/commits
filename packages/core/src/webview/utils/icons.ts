@@ -7,17 +7,6 @@ const toolbarIcon = (body: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 
 export const toolbarIcons = {
-  /** Circular arrow: refresh. */
-  refresh: toolbarIcon('<path d="M13.5 7a5.5 5.5 0 1 0-1.4 4.3"/><path d="M13.5 3v4h-4"/>'),
-  /** Counter-clockwise arrow: reset to HEAD, discarding local changes. Mirrors
-   *  refresh's own arc and arrowhead so the two read as the same weight. */
-  discard: toolbarIcon('<path d="M2.5 7a5.5 5.5 0 1 1 1.4 4.3"/><path d="M2.5 3v4h4"/>'),
-  /** Downward arrow onto a line: pull. */
-  arrowDown: toolbarIcon(
-    '<path d="M8 2v8"/><path d="M4.5 6.5 8 10l3.5-3.5"/><path d="M3 13.5h10"/>'
-  ),
-  /** Upward arrow off a line: push. */
-  arrowUp: toolbarIcon('<path d="M8 14V6"/><path d="M4.5 9.5 8 6l3.5 3.5"/><path d="M3 2.5h10"/>'),
   /** Magnifier: find. */
   search: toolbarIcon('<circle cx="7" cy="7" r="4.2"/><path d="m10.2 10.2 3.3 3.3"/>'),
   /** Panel with a filled rail: toggle the branch sidebar. */

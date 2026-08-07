@@ -10,7 +10,7 @@
     "build:host": "cargo build --release -p commits-app",
     "build:page": "node apps/commits/scripts/generate-page.mjs",
     "build:wasm": "node apps/commits/scripts/build-components.mjs",
-    "build:web": "npm run check:ui-theme && npm run build:bundle && npm run build:page",
+    "build:web": "npm run check:ui-theme && npm run generate:tabler-icons && npm run build:bundle && npm run build:page",
     "check": "tsc --noEmit",
     "check:settings-compat": "node apps/commits/scripts/check-settings-compat.mjs",
     "check:ui-theme": "node apps/commits/scripts/check-ui-theme.mjs",
@@ -19,6 +19,7 @@
     "dist:host": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part host",
     "dist:wasm": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part wasm",
     "dist:web": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part web",
+    "generate:tabler-icons": "node apps/commits/scripts/generate-tabler-icons.mjs",
     "postinstall": "node scripts/patch-wizer-package.mjs",
     "test": "vitest run",
     "verify": "npm run build && npm run check && npm test && cargo test --workspace"
@@ -26,8 +27,9 @@
   "devDependencies": {
     "@bytecodealliance/componentize-js": "0.19.3",
     "@bytecodealliance/jco": "1.17.9",
-    "@types/node": "24.1.0",
     "@commits/wizer-win32-arm64": "file:tooling/wizer-win32-arm64",
+    "@tabler/icons-webfont": "^3.46.0",
+    "@types/node": "24.1.0",
     "esbuild": "0.28.1",
     "typescript": "5.9.3",
     "vitest": "4.1.10"

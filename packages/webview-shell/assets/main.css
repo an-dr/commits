@@ -1225,6 +1225,9 @@ body.branchPanelHidden #sidebarTop {
   width: 16px;
   height: 16px;
 }
+.iconBtn .ti {
+  font-size: 16px;
+}
 .iconBtn:hover {
   opacity: 1;
   background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));

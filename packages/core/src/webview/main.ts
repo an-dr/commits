@@ -40,7 +40,7 @@ import { abbrevCommit, arraysEqual, ELLIPSIS } from "./utils/git";
 import { UNCOMMITTED } from "./utils/graphConstants";
 import { getVSCodeStyle, sendMessage, vscode } from "./utils/host";
 import { escapeHtml, unescapeHtml } from "./utils/html";
-import { svgIcons, toolbarIcons } from "./utils/icons";
+import { svgIcons } from "./utils/icons";
 import { renderTagPill } from "./utils/refPills";
 import { nextBranchSelection } from "./branchSelection";
 
@@ -390,14 +390,14 @@ class GitGraphView {
     this.toolbar.setButtons([
       {
         id: "refreshBtn",
-        icon: toolbarIcons.refresh,
+        icon: '<i class="ti ti-refresh"></i>',
         title: l10n.refresh,
         visible: true,
         onClick: () => this.refresh(true)
       },
       {
         id: "resetBtn",
-        icon: toolbarIcons.discard,
+        icon: '<i class="ti ti-history"></i>',
         title: l10n.resetToHead,
         visible: remoteAvailable,
         onClick: () => this.resetToHead()
@@ -406,7 +406,7 @@ class GitGraphView {
       // double click pulls, and the menu carries both plus the advanced form.
       {
         id: "pullBtn",
-        icon: toolbarIcons.arrowDown,
+        icon: '<i class="ti ti-download"></i>',
         title: l10n.fetchPullTitle,
         visible: true,
         onClick: () => requestRemoteOperation("fetch"),
@@ -420,7 +420,7 @@ class GitGraphView {
       },
       {
         id: "pushBtn",
-        icon: toolbarIcons.arrowUp,
+        icon: '<i class="ti ti-arrow-up"></i>',
         title: l10n.pushCurrentBranch,
         visible: remoteAvailable,
         onClick: () => requestRemoteOperation("push")

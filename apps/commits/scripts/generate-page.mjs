@@ -2,7 +2,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 const root = new URL("../../../", import.meta.url);
 const script = await readFile(new URL("dist/ui/page.js", root), "utf8");
-const css = await readFile(new URL("dist/ui/page.css", root), "utf8");
+const tablerCss = await readFile(new URL("dist/ui/tabler-icons.css", root), "utf8");
+const css = tablerCss + (await readFile(new URL("dist/ui/page.css", root), "utf8"));
 const template = await readFile(new URL("apps/commits/web/src/index.html", root), "utf8");
 const html = template
   .replace("/*__COMMITS_CSS__*/", css)
