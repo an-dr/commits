@@ -10,7 +10,14 @@ import {
   encodeSendJson,
 } from "@commits/ipc/web";
 import type { CommitsRepoStatus, HostPort, LogLevel, PageSource, SettingsIoResult } from "./host-port";
-import { encodeGitRun, encodeOsRequest, type GitRun, type OsAction } from "@commits/ipc/native";
+import {
+  encodeGitRun,
+  encodeOsRequest,
+  encodeUpdaterRequest,
+  type GitRun,
+  type OsAction,
+  type UpdaterAction,
+} from "@commits/ipc/native";
 
 export class BonesHostPort implements HostPort {
   closePanel(panel: string): void {
@@ -102,6 +109,10 @@ export class BonesHostPort implements HostPort {
 
   requestOs(requestId: number, action: OsAction, value = ""): void {
     publish("os/request", encodeOsRequest(requestId, action, value));
+  }
+
+  requestUpdate(requestId: number, action: UpdaterAction, manifestUrl: string): void {
+    publish("updater/request", encodeUpdaterRequest(requestId, action, manifestUrl));
   }
 
   sendPageMessage(panel: string, message: unknown): void {

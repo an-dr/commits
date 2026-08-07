@@ -1,6 +1,6 @@
 import type { GitFileChangeType } from "@an-dr/commits-core/backend/types";
 import type { RequestMessage, ResponseMessage } from "@an-dr/commits-core/types";
-import { encodeFileRead, type GitResult, type NativeResult } from "@commits/ipc/native";
+import { encodeFileRead, type GitResult, type NativeResult, type UpdaterResult } from "@commits/ipc/native";
 import { gravatarUrl } from "./gravatar";
 import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
@@ -28,7 +28,8 @@ type StandaloneRequest =
   | { readonly command: "standaloneSaveSettings"; readonly requestId: number; readonly settings: unknown }
   | { readonly command: "standaloneCloneCommitsRepo" }
   | { readonly command: "standaloneOpenCommitsRepo" }
-  | { readonly command: "standaloneOpenCommitsRepoFolder" };
+  | { readonly command: "standaloneOpenCommitsRepoFolder" }
+  | { readonly command: "standaloneStartUpdate" };
 
 type PendingOs =
   | { readonly kind: "chooseRepository" }
@@ -53,9 +54,14 @@ export class CommitsCore {
   private commitsRepoParentPath: string | null = null;
   private commitsRepoExists = false;
   private pendingCloneRequestId: number | null = null;
+  private pendingUpdateCheckRequestId: number | null = null;
+  private pendingUpdateStageRequestId: number | null = null;
+  /** Set once `check` finds a version newer than this build's own. */
+  private updateAvailableVersion: string | null = null;
   private bootstrapped = false;
   private nextOsRequestId = 50_000;
   private nextGitRequestId = 60_000;
+  private nextUpdateRequestId = 70_000;
   /** Counts panel file reads so only the newest one answers. */
   private fullDiffSequence = 0;
   /** Counts comparisons so only the newest selection answers. */
@@ -94,6 +100,7 @@ export class CommitsCore {
     this.host.subscribe("os/result");
     this.host.subscribe("os/prompt");
     this.host.subscribe("git/completed");
+    this.host.subscribe("updater/completed");
     // Fetched here rather than at construction so the request reaches a running
     // host instead of the build-time snapshot taken while componentizing.
     this.host.openPanel(PANEL, this.host.loadPageSource());
@@ -147,6 +154,9 @@ export class CommitsCore {
         return;
       case "standaloneOpenCommitsRepoFolder":
         this.revealCommitsRepoFolder();
+        return;
+      case "standaloneStartUpdate":
+        this.startUpdate();
         return;
       case "loadRepos":
         this.sendRepos();
@@ -349,6 +359,28 @@ export class CommitsCore {
     this.workingTreeActions.receive(result);
   }
 
+  receiveUpdaterResult(result: UpdaterResult): void {
+    if (result.requestId === this.pendingUpdateCheckRequestId) {
+      this.pendingUpdateCheckRequestId = null;
+      if (result.ok && result.available) {
+        this.updateAvailableVersion = result.version;
+        this.sendUpdateStatus(`Update ${result.version} available`);
+      } else if (!result.ok) {
+        this.host.log("warn", `update check failed: ${result.error}`);
+      }
+      return;
+    }
+    if (result.requestId === this.pendingUpdateStageRequestId) {
+      this.pendingUpdateStageRequestId = null;
+      if (result.ok) {
+        this.sendUpdateStatus(`Update ${result.version} ready — restart to apply`, true);
+      } else {
+        // The available update is still there to retry; only the attempt failed.
+        this.sendUpdateStatus(`Update failed: ${result.error || "unknown error"}`);
+      }
+    }
+  }
+
   receivePrompt(payload: string): void {
     const [id, kind, ...message] = payload.split("\n");
     if (id && kind) this.send({ command: "standaloneCredentialPrompt", id, kind, message: message.join("\n") });
@@ -475,6 +507,37 @@ export class CommitsCore {
       this.currentRepository = this.state.lastActiveRepository;
     }
     if (this.repositories.all().length > 0) this.currentRepository ??= this.repositories.all()[0].path;
+    // An unconfigured URL means self-update is intentionally off, not a
+    // transient failure worth reporting.
+    if (this.settings.app.updateManifestUrl) this.checkForUpdate();
+  }
+
+  /** Runs once at boot when a manifest URL is configured; see `bootstrap`. */
+  private checkForUpdate(): void {
+    if (this.pendingUpdateCheckRequestId !== null || !this.settings.app.updateManifestUrl) return;
+    const requestId = this.nextUpdateRequestId++;
+    this.pendingUpdateCheckRequestId = requestId;
+    this.host.requestUpdate(requestId, "check", this.settings.app.updateManifestUrl);
+  }
+
+  /** Downloads, verifies, and stages the update `checkForUpdate` found. */
+  private startUpdate(): void {
+    if (this.updateAvailableVersion === null || this.pendingUpdateStageRequestId !== null) return;
+    if (!this.settings.app.updateManifestUrl) return;
+    const requestId = this.nextUpdateRequestId++;
+    this.pendingUpdateStageRequestId = requestId;
+    this.sendUpdateStatus("Downloading update…");
+    this.host.requestUpdate(requestId, "stage", this.settings.app.updateManifestUrl);
+  }
+
+  private sendUpdateStatus(message: string, ready = false): void {
+    this.send({
+      command: "standaloneUpdateStatus",
+      available: this.updateAvailableVersion !== null,
+      version: this.updateAvailableVersion ?? "",
+      ready,
+      message,
+    });
   }
 
   private saveSettings(requestId: unknown, candidate: unknown): void {

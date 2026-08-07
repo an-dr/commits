@@ -142,3 +142,39 @@ export function decodeNativeResult(bytes: Uint8Array): NativeResult {
   reader.finish();
   return result;
 }
+
+export type UpdaterAction = "check" | "stage";
+
+export interface UpdaterResult {
+  requestId: number;
+  ok: boolean;
+  available: boolean;
+  version: string;
+  error: string;
+}
+
+/** `stage` re-fetches the manifest itself, so only the URL is ever needed. */
+export function encodeUpdaterRequest(
+  requestId: number,
+  action: UpdaterAction,
+  manifestUrl: string,
+): Uint8Array {
+  return new Writer()
+    .u32(requestId)
+    .u8(action === "check" ? 0 : 1)
+    .string(manifestUrl)
+    .finish();
+}
+
+export function decodeUpdaterResult(bytes: Uint8Array): UpdaterResult {
+  const reader = new Reader(bytes);
+  const result = {
+    requestId: reader.u32(),
+    ok: reader.u8() !== 0,
+    available: reader.u8() !== 0,
+    version: reader.string(),
+    error: reader.string(),
+  };
+  reader.finish();
+  return result;
+}

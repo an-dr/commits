@@ -51,6 +51,8 @@ export interface HostPort {
   runGit(request: import("@commits/ipc/native").GitRun): void;
   respondPrompt(id: string, value: string): void;
   requestOs(requestId: number, action: import("@commits/ipc/native").OsAction, value?: string): void;
+  /** Checks a manifest for a newer version, or stages its verified asset for `commits-launcher` to apply. */
+  requestUpdate(requestId: number, action: import("@commits/ipc/native").UpdaterAction, manifestUrl: string): void;
   sendPageMessage(panel: string, message: unknown): void;
   subscribe(topic: string): void;
 }

@@ -5,11 +5,13 @@ import { Reader, Writer } from "./codec";
 import {
   decodeGitResult,
   decodeNativeResult,
+  decodeUpdaterResult,
   decodeWatchEvent,
   encodeGitCancel,
   encodeGitRun,
   encodeFileRead,
   encodeOsRequest,
+  encodeUpdaterRequest,
   encodeWatchRequest,
 } from "./native";
 
@@ -101,5 +103,20 @@ describe("native protocol", () => {
     expect(() => decodeWatchEvent(Uint8Array.of(1, 0, 0, 0, 3))).toThrow(
       "unknown watch event kind",
     );
+  });
+
+  it("encodes an updater request and decodes its result", () => {
+    expect(encodeUpdaterRequest(3, "check", "https://example.com/manifest.json"))
+      .toEqual(new Writer().u32(3).u8(0).string("https://example.com/manifest.json").finish());
+    expect(encodeUpdaterRequest(3, "stage", "https://example.com/manifest.json")[4]).toBe(1);
+
+    const result = new Writer().u32(3).u8(1).u8(1).string("1.2.0").string("").finish();
+    expect(decodeUpdaterResult(result)).toEqual({
+      requestId: 3,
+      ok: true,
+      available: true,
+      version: "1.2.0",
+      error: "",
+    });
   });
 });

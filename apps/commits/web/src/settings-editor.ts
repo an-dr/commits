@@ -21,11 +21,14 @@ export class SettingsEditor {
     ["12h", "12-hour (AM/PM)"],
     ["24h", "24-hour"],
   ]);
+  private readonly updateManifestUrl = document.createElement("input");
   private settings: SettingsDocument | null = null;
 
   constructor(private readonly save: (settings: SettingsDocument) => void) {
     this.dialog.id = "standaloneSettingsDialog";
     this.dialog.setAttribute("aria-labelledby", "standaloneSettingsTitle");
+    this.updateManifestUrl.type = "text";
+    this.updateManifestUrl.placeholder = "https://example.com/latest.json (leave blank to disable)";
     this.dialog.append(this.createForm());
     document.body.append(this.dialog);
   }
@@ -66,6 +69,7 @@ export class SettingsEditor {
       createAppearanceField("Light theme", this.lightTheme),
       createAppearanceField("Dark theme", this.darkTheme),
       createAppearanceField("Commit time format", this.timeFormat),
+      createAppearanceField("Update manifest URL", this.updateManifestUrl),
     );
     for (const definition of CORE_SETTING_DEFINITIONS) fields.append(this.createField(definition));
     const footer = document.createElement("footer");
@@ -154,6 +158,7 @@ export class SettingsEditor {
     this.lightTheme.value = LIGHT_THEMES.some(({ id }) => id === settings.app.lightTheme) ? settings.app.lightTheme : LIGHT_THEMES[0].id;
     this.darkTheme.value = DARK_THEMES.some(({ id }) => id === settings.app.darkTheme) ? settings.app.darkTheme : DARK_THEMES[0].id;
     this.timeFormat.value = settings.app.timeFormat;
+    this.updateManifestUrl.value = settings.app.updateManifestUrl;
     for (const definition of CORE_SETTING_DEFINITIONS) {
       const control = this.controls.get(definition.key)!;
       const value = settings.core[definition.key];
@@ -206,6 +211,7 @@ export class SettingsEditor {
         lightTheme: this.lightTheme.value,
         darkTheme: this.darkTheme.value,
         timeFormat: this.timeFormat.value as SettingsDocument["app"]["timeFormat"],
+        updateManifestUrl: this.updateManifestUrl.value.trim(),
       },
     };
   }
@@ -222,7 +228,7 @@ function createSelect(options: readonly (readonly [string, string])[]): HTMLSele
   return select;
 }
 
-function createAppearanceField(label: string, control: HTMLSelectElement): HTMLElement {
+function createAppearanceField(label: string, control: HTMLSelectElement | HTMLInputElement): HTMLElement {
   const field = document.createElement("label");
   field.className = "standaloneSettingField standaloneAppearanceField";
   const title = document.createElement("span");

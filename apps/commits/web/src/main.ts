@@ -21,7 +21,8 @@ type StandaloneMessage =
         | "standaloneChooseRepository"
         | "standaloneCloneCommitsRepo"
         | "standaloneOpenCommitsRepo"
-        | "standaloneOpenCommitsRepoFolder";
+        | "standaloneOpenCommitsRepoFolder"
+        | "standaloneStartUpdate";
     }
   | { command: "standaloneOpenRepository"; path: string }
   | { command: "standaloneSaveSettings"; requestId: number; settings: SettingsDocument };
@@ -31,13 +32,17 @@ interface StandaloneResponse {
     | "standaloneRepositoryRequired"
     | "standaloneSettings"
     | "standaloneSettingsSaved"
-    | "standaloneCommitsRepoStatus";
+    | "standaloneCommitsRepoStatus"
+    | "standaloneUpdateStatus";
   recent?: readonly string[];
   settings?: SettingsDocument;
   error?: string;
   requestId?: number;
   exists?: boolean;
   message?: string;
+  available?: boolean;
+  version?: string;
+  ready?: boolean;
 }
 
 declare global {
@@ -91,6 +96,8 @@ async function boot(): Promise<void> {
         settingsEditor.finishSave(activeSettings, data.error ?? "");
       } else if (data.command === "standaloneCommitsRepoStatus") {
         updateCommitsRepoStatus(data.exists === true, data.message ?? "");
+      } else if (data.command === "standaloneUpdateStatus") {
+        updateUpdateStatus(data.available === true, data.version ?? "", data.ready === true, data.message ?? "");
       }
       window.dispatchEvent(new MessageEvent("message", { data }));
     } catch {
@@ -148,6 +155,7 @@ function appMenuHtml(): string {
         </li>
         <li class="standaloneMenuSeparator" role="separator"></li>
         <li><button type="button" id="standaloneSettingsButton" disabled>Settings</button></li>
+        <li><button type="button" id="standaloneMenuUpdate" hidden></button></li>
       </ul>
     </div>
     <span id="standaloneMenuStatus" aria-live="polite"></span>
@@ -189,6 +197,10 @@ function wireAppMenu(): void {
     setMenuOpen(false);
     post({ command: "standaloneOpenCommitsRepoFolder" });
   });
+  document.getElementById("standaloneMenuUpdate")!.addEventListener("click", () => {
+    setMenuOpen(false);
+    post({ command: "standaloneStartUpdate" });
+  });
   document.addEventListener("click", () => setMenuOpen(false));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") setMenuOpen(false);
@@ -200,18 +212,37 @@ function wireAppMenu(): void {
  * exists, and shows transient feedback about the last clone/open/reveal
  * outcome. The message clears itself so a stale "Cloning…" never lingers.
  */
-let commitsRepoStatusTimer: number | null = null;
 function updateCommitsRepoStatus(exists: boolean, message: string): void {
   const openButton = document.getElementById("standaloneMenuOpenCommitsRepo") as HTMLButtonElement | null;
   const folderButton = document.getElementById("standaloneMenuOpenCommitsRepoFolder") as HTMLButtonElement | null;
   if (openButton) openButton.disabled = !exists;
   if (folderButton) folderButton.disabled = !exists;
+  showMenuStatus(message);
+}
 
+/**
+ * Shows the Update entry once a check finds a newer version, and reports
+ * transient feedback about a download in progress or its outcome. Once
+ * `ready` (the download is staged), the label switches to prompting a
+ * restart rather than offering to start the same download again.
+ */
+function updateUpdateStatus(available: boolean, version: string, ready: boolean, message: string): void {
+  const button = document.getElementById("standaloneMenuUpdate") as HTMLButtonElement | null;
+  if (button) {
+    button.hidden = !available;
+    button.textContent = ready ? "Restart to update" : `Update to ${version}`;
+  }
+  showMenuStatus(message);
+}
+
+/** Transient feedback shared by the Commits Repo and Update menu actions. */
+let menuStatusTimer: number | null = null;
+function showMenuStatus(message: string): void {
   const status = document.getElementById("standaloneMenuStatus");
   if (!status) return;
   status.textContent = message;
-  if (commitsRepoStatusTimer !== null) window.clearTimeout(commitsRepoStatusTimer);
-  commitsRepoStatusTimer = message
+  if (menuStatusTimer !== null) window.clearTimeout(menuStatusTimer);
+  menuStatusTimer = message
     ? window.setTimeout(() => { status.textContent = ""; }, 6_000)
     : null;
 }

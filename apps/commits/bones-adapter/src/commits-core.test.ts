@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GitResult, GitRun, NativeResult, OsAction } from "@commits/ipc/native";
+import type { GitResult, GitRun, NativeResult, OsAction, UpdaterAction } from "@commits/ipc/native";
 import { CommitsCore } from "./commits-core";
 import type { CommitsRepoStatus, HostPort, LogLevel, PageSource, SettingsIoResult } from "./host/host-port";
 
@@ -11,6 +11,7 @@ class StubHost implements HostPort {
   readonly topics: string[] = [];
   readonly osRequests: unknown[] = [];
   readonly gitRequests: GitRun[] = [];
+  readonly updateRequests: Array<{ requestId: number; action: UpdaterAction; manifestUrl: string }> = [];
   readonly promptReplies: string[] = [];
   savedState: Uint8Array<ArrayBufferLike> = new Uint8Array();
   settingsBytes: Uint8Array<ArrayBufferLike> = new Uint8Array();
@@ -39,6 +40,9 @@ class StubHost implements HostPort {
   requestOs(requestId: number, action: OsAction, value?: string): void {
     this.osRequests.push({ requestId, action, value });
   }
+  requestUpdate(requestId: number, action: UpdaterAction, manifestUrl: string): void {
+    this.updateRequests.push({ requestId, action, manifestUrl });
+  }
   sendPageMessage(panel: string, message: unknown): void { this.sent.push([panel, message]); }
   subscribe(topic: string): void { this.topics.push(topic); }
 }
@@ -51,7 +55,7 @@ describe("CommitsCore MIT webview host", () => {
     core.start();
 
     expect(host.opened).toEqual([["main", { kind: "url", value: "file:///commits/page.html" }]]);
-    expect(host.topics).toEqual(["web/*", "os/result", "os/prompt", "git/completed"]);
+    expect(host.topics).toEqual(["web/*", "os/result", "os/prompt", "git/completed", "updater/completed"]);
   });
 
   it("boots the shared repository selector from host repositories", () => {
@@ -245,6 +249,103 @@ describe("CommitsCore MIT webview host", () => {
     core.receivePageJson(JSON.stringify({ command: "standaloneOpenCommitsRepoFolder" }));
 
     expect(host.osRequests).toHaveLength(0);
+  });
+
+  it("checks for an update at boot when a manifest URL is configured", () => {
+    const host = new StubHost();
+    host.settingsBytes = new TextEncoder().encode(JSON.stringify({
+      version: 2,
+      core: {},
+      app: { mode: "dark", lightTheme: "paper", darkTheme: "graphite", updateManifestUrl: "https://example.com/manifest.json" },
+    }));
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    expect(host.updateRequests).toEqual([
+      { requestId: 70_000, action: "check", manifestUrl: "https://example.com/manifest.json" },
+    ]);
+  });
+
+  it("does not check for updates when no manifest URL is configured", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    expect(host.updateRequests).toHaveLength(0);
+  });
+
+  it("announces an available update once the check finds a newer version", () => {
+    const host = new StubHost();
+    host.settingsBytes = new TextEncoder().encode(JSON.stringify({
+      version: 2,
+      core: {},
+      app: { mode: "dark", lightTheme: "paper", darkTheme: "graphite", updateManifestUrl: "https://example.com/manifest.json" },
+    }));
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receiveUpdaterResult({
+      requestId: host.updateRequests[0].requestId,
+      ok: true,
+      available: true,
+      version: "9.9.9",
+      error: "",
+    });
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneUpdateStatus",
+      available: true,
+      version: "9.9.9",
+      ready: false,
+      message: "Update 9.9.9 available",
+    }]);
+  });
+
+  it("stages the update on standaloneStartUpdate and reports readiness once staged", () => {
+    const host = new StubHost();
+    host.settingsBytes = new TextEncoder().encode(JSON.stringify({
+      version: 2,
+      core: {},
+      app: { mode: "dark", lightTheme: "paper", darkTheme: "graphite", updateManifestUrl: "https://example.com/manifest.json" },
+    }));
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receiveUpdaterResult({
+      requestId: host.updateRequests[0].requestId,
+      ok: true,
+      available: true,
+      version: "9.9.9",
+      error: "",
+    });
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneStartUpdate" }));
+
+    expect(host.updateRequests).toHaveLength(2);
+    expect(host.updateRequests[1]).toEqual({
+      requestId: 70_001, action: "stage", manifestUrl: "https://example.com/manifest.json",
+    });
+
+    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: true, version: "9.9.9", error: "" });
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneUpdateStatus",
+      available: true,
+      version: "9.9.9",
+      ready: true,
+      message: "Update 9.9.9 ready — restart to apply",
+    }]);
+  });
+
+  it("ignores standaloneStartUpdate when no update is available", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneStartUpdate" }));
+
+    expect(host.updateRequests).toHaveLength(0);
   });
 
   it("loads settings before repository messages and acknowledges atomic saves", () => {

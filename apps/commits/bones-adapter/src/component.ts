@@ -6,7 +6,7 @@ import {
   decodePanelFailed,
   decodePanelOpened,
 } from "@commits/ipc/web";
-import { decodeGitResult, decodeNativeResult } from "@commits/ipc/native";
+import { decodeGitResult, decodeNativeResult, decodeUpdaterResult } from "@commits/ipc/native";
 
 const OWNER = "commits";
 const PANEL = "main";
@@ -53,6 +53,8 @@ export function onMessage(
       core.receiveOsResult(decodeNativeResult(payload));
     } else if (topic === "git/completed") {
       core.receiveGitResult(decodeGitResult(payload));
+    } else if (topic === "updater/completed") {
+      core.receiveUpdaterResult(decodeUpdaterResult(payload));
     } else if (topic === "os/prompt") {
       core.receivePrompt(new TextDecoder().decode(payload));
     }

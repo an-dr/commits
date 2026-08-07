@@ -69,6 +69,8 @@ export type AppSettings = Readonly<Record<string, unknown>> & {
   readonly lightTheme: string;
   readonly darkTheme: string;
   readonly timeFormat: TimeFormat;
+  /** Manifest URL checked for a newer version at boot; empty disables self-update. */
+  readonly updateManifestUrl: string;
 };
 
 export interface SettingsDocument {
@@ -86,6 +88,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   lightTheme: "paper",
   darkTheme: "graphite",
   timeFormat: "system",
+  updateManifestUrl: "",
 };
 
 export const DEFAULT_SETTINGS: SettingsDocument = {
@@ -128,6 +131,7 @@ export function validateSettings(candidate: unknown): SettingsDocument {
       lightTheme: typeof value.app.lightTheme === "string" ? value.app.lightTheme : "paper",
       darkTheme: typeof value.app.darkTheme === "string" ? value.app.darkTheme : "graphite",
       timeFormat: timeFormat === "12h" || timeFormat === "24h" ? timeFormat : "system",
+      updateManifestUrl: typeof value.app.updateManifestUrl === "string" ? value.app.updateManifestUrl : "",
     },
   };
 }
