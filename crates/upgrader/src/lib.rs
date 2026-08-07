@@ -98,7 +98,7 @@ pub fn download_asset_verified(backend: &dyn OsBackend, manifest: &Manifest) -> 
 
 /// Where staged updates and backups live: `COMMITS_UPDATER_DIR` if set
 /// (tests and support diagnostics), otherwise `~/.commits/updater`. Shared by
-/// every process that needs to agree on this location -- `commits-launcher`
+/// every process that needs to agree on this location -- the launcher
 /// applies from it, and the running app stages into it -- so it is a single
 /// function rather than each caller re-deriving the same path.
 pub fn state_dir() -> Option<std::path::PathBuf> {

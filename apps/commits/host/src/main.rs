@@ -61,7 +61,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Turns a failed startup extension into something the user can act on, and
-/// tells `commits-launcher` (if that is what started this process) that
+/// tells the launcher (if that is what started this process) that
 /// startup succeeded.
 ///
 /// The engine treats an extension that cannot attach as non-fatal: it logs the
@@ -125,7 +125,7 @@ fn watch_startup_health(failures: Receiver<String>) {
 
 /// Writes an empty file at `COMMITS_HEALTH_MARKER`, if set. A write failure
 /// (missing parent directory, no permission) is logged, not fatal: the
-/// worst outcome is `commits-launcher` treating a genuinely healthy start as
+/// worst outcome is the launcher treating a genuinely healthy start as
 /// failed and rolling back to the previous version, never the app itself
 /// misbehaving.
 fn write_health_marker() {

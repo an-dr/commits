@@ -5,16 +5,16 @@ already installed there.
 
 .DESCRIPTION
 A fresh install copies a built app into ~/.commits/app and points Start Menu
-and desktop shortcuts at commits-launcher.exe -- the permanent entry point
-that applies a staged update before commits.exe starts, so shortcuts must
-never target commits.exe directly. Running this script again once installed
-does not touch the live install: it stages the build into the same
-updater/update folder commits-launcher itself applies from, exactly as if
-Update had been clicked in the app, so a second run is how a from-source
-build gets "pushed" without waiting on a hosted manifest.
+and desktop shortcuts at commits.exe -- the permanent entry point that
+applies a staged update before commits-app.exe (the real app logic) starts,
+so shortcuts must never target commits-app.exe directly. Running this script
+again once installed does not touch the live install: it stages the build
+into the same updater/update folder the launcher itself applies from,
+exactly as if Update had been clicked in the app, so a second run is how a
+from-source build gets "pushed" without waiting on a hosted manifest.
 
 .PARAMETER Source
-Directory holding a built app (commits.exe, commits-launcher.exe, ...).
+Directory holding a built app (commits.exe, commits-app.exe, ...).
 Defaults to dist/app and, if that does not exist yet, builds it first.
 
 .PARAMETER SkipBuild
@@ -38,7 +38,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $isWindowsPlatform = $env:OS -eq "Windows_NT"
-$launcherName = if ($isWindowsPlatform) { "commits-launcher.exe" } else { "commits-launcher" }
+$launcherName = if ($isWindowsPlatform) { "commits.exe" } else { "commits" }
 
 if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
     if ($SkipBuild) {
@@ -59,14 +59,14 @@ $updaterDir = if ($env:COMMITS_UPDATER_DIR) { $env:COMMITS_UPDATER_DIR } else { 
 
 if (Test-Path -LiteralPath (Join-Path $installDir $launcherName)) {
     # Already installed: never overwrite a possibly-running install directly.
-    # Stage into the same folder commits-launcher applies from on its next
+    # Stage into the same folder the launcher applies from on its next
     # start, exactly like a downloaded update.
     $updateDir = Join-Path $updaterDir "update"
     if (Test-Path -LiteralPath $updateDir) { Remove-Item -LiteralPath $updateDir -Recurse -Force }
     New-Item -ItemType Directory -Path $updateDir -Force | Out-Null
     Copy-Item -Path (Join-Path $Source "*") -Destination $updateDir -Recurse -Force
     Write-Host "$installDir is already installed; staged this build at $updateDir."
-    Write-Host "It applies the next time commits-launcher starts."
+    Write-Host "It applies the next time commits.exe (the launcher) starts."
     exit 0
 }
 

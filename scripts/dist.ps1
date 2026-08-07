@@ -58,9 +58,12 @@ if ($Part -in @("wasm", "all")) {
 if ($Part -in @("host", "all")) {
     cargo build --release -p commits-app
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    # "commits" is the launcher -- the permanent entry point that applies a
+    # staged update before running the real app logic, built separately as
+    # "commits-app". Shortcuts and manual launches always target this one.
     $exe = if ($isWindowsPlatform) { "commits.exe" } else { "commits" }
     Copy-Item (Join-Path $root "target/release/$exe") (Join-Path $outputFull $exe) -Force
-    foreach ($helper in @("commits-askpass", "commits-editor", "commits-launcher")) {
+    foreach ($helper in @("commits-askpass", "commits-editor", "commits-app")) {
         $helperExe = if ($isWindowsPlatform) { "$helper.exe" } else { $helper }
         Copy-Item (Join-Path $root "target/release/$helperExe") (Join-Path $outputFull $helperExe) -Force
     }

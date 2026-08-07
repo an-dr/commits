@@ -14,14 +14,14 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 #[cfg(windows)]
-const MAIN_EXE_NAME: &str = "commits.exe";
+const MAIN_EXE_NAME: &str = "commits-app.exe";
 #[cfg(not(windows))]
-const MAIN_EXE_NAME: &str = "commits";
+const MAIN_EXE_NAME: &str = "commits-app";
 
 #[cfg(windows)]
-const LAUNCHER_EXE_NAME: &str = "commits-launcher.exe";
+const LAUNCHER_EXE_NAME: &str = "commits.exe";
 #[cfg(not(windows))]
-const LAUNCHER_EXE_NAME: &str = "commits-launcher";
+const LAUNCHER_EXE_NAME: &str = "commits";
 
 /// How long the launcher waits for the health marker before concluding the
 /// new version failed to start. Comfortably longer than the app's own

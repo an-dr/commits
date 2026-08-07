@@ -14,7 +14,7 @@ const STAGE: u8 = 1;
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Checks a hosted manifest for a newer version, and stages a verified
-/// download for `commits-launcher` to apply on next start.
+/// download for the launcher to apply on next start.
 ///
 /// Mirrors `commits-git`'s request/completed pattern: each request runs on
 /// its own thread and reports back over the bus rather than blocking the
@@ -69,7 +69,7 @@ fn check(backend: &dyn OsBackend, request_id: u32, manifest_url: &str) -> Update
 }
 
 /// Downloads and checksum-verifies the manifest's asset, then stages it into
-/// the same directory `commits-launcher` applies from on next start.
+/// the same directory the launcher applies from on next start.
 fn stage(backend: &dyn OsBackend, request_id: u32, manifest_url: &str) -> UpdaterResult {
     match stage_inner(backend, manifest_url) {
         Ok(version) => UpdaterResult {

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "commits"
+name = "commits-app"
 path = "src/main.rs"
 
 [[bin]]
@@ -16,7 +16,7 @@ name = "commits-editor"
 path = "src/bin/commits-editor.rs"
 
 [[bin]]
-name = "commits-launcher"
+name = "commits"
 path = "src/bin/commits-launcher.rs"
 
 [dependencies]
