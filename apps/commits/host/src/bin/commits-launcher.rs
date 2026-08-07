@@ -31,7 +31,7 @@ fn main() {
         eprintln!("could not resolve the launcher's own directory");
         std::process::exit(1);
     };
-    let Some(state_dir) = update_state_dir() else {
+    let Some(state_dir) = commits_upgrader::state_dir() else {
         eprintln!("could not resolve the home directory for update state");
         std::process::exit(1);
     };
@@ -135,15 +135,6 @@ fn wait_for_health() -> bool {
 /// (spawn, then wait) without threading an extra parameter through them.
 fn health_marker_path() -> std::path::PathBuf {
     std::env::temp_dir().join(format!("commits-health-{}.marker", std::process::id()))
-}
-
-/// Where staged updates and backups live: `COMMITS_UPDATER_DIR` if set
-/// (mainly for tests and support diagnostics), otherwise `~/.commits/updater`.
-fn update_state_dir() -> Option<std::path::PathBuf> {
-    if let Ok(value) = std::env::var("COMMITS_UPDATER_DIR") {
-        return Some(std::path::PathBuf::from(value));
-    }
-    dirs::home_dir().map(|home| home.join(".commits").join("updater"))
 }
 
 /// Spawns `exe` with its own fresh stdio rather than inheriting the

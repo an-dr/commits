@@ -234,6 +234,88 @@ impl NativeResult {
     }
 }
 
+/// A request to check for, or stage, an application update. Both actions
+/// need only a manifest URL: `Stage` re-fetches the manifest itself rather
+/// than requiring the caller to have kept `Check`'s result around.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdaterRequest {
+    pub request_id: u32,
+    pub action: u8,
+    pub manifest_url: String,
+}
+
+impl UpdaterRequest {
+    pub fn encode(&self) -> Result<Vec<u8>, WireError> {
+        Ok(Writer::default()
+            .u32(self.request_id)
+            .u8(self.action)
+            .string(&self.manifest_url)?
+            .finish())
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+        let mut reader = Reader::new(bytes);
+        let request = Self {
+            request_id: reader.u32()?,
+            action: reader.u8()?,
+            manifest_url: reader.string()?,
+        };
+        if request.action > 1 {
+            return Err(WireError::from("unknown updater action"));
+        }
+        reader.finish()?;
+        Ok(request)
+    }
+}
+
+/// Outcome of an [`UpdaterRequest`]. `available` and `version` describe the
+/// manifest's own version regardless of `action`, so a `Stage` result also
+/// tells the caller what it just staged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdaterResult {
+    pub request_id: u32,
+    pub ok: bool,
+    pub available: bool,
+    pub version: String,
+    pub error: String,
+}
+
+impl UpdaterResult {
+    pub fn encode(&self) -> Result<Vec<u8>, WireError> {
+        Ok(Writer::default()
+            .u32(self.request_id)
+            .u8(u8::from(self.ok))
+            .u8(u8::from(self.available))
+            .string(&self.version)?
+            .string(&self.error)?
+            .finish())
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+        let mut reader = Reader::new(bytes);
+        let request_id = reader.u32()?;
+        let ok = decode_bool(reader.u8()?)?;
+        let available = decode_bool(reader.u8()?)?;
+        let result = Self {
+            request_id,
+            ok,
+            available,
+            version: reader.string()?,
+            error: reader.string()?,
+        };
+        reader.finish()?;
+        Ok(result)
+    }
+}
+
+fn decode_bool(byte: u8) -> Result<bool, WireError> {
+    match byte {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(WireError::from("invalid boolean")),
+    }
+}
+
 fn read_strings(reader: &mut Reader<'_>) -> Result<Vec<String>, WireError> {
     let count = reader.u16()?;
     (0..count).map(|_| reader.string()).collect()
@@ -241,7 +323,7 @@ fn read_strings(reader: &mut Reader<'_>) -> Result<Vec<String>, WireError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{GitRequest, GitResult, GitRun, OsRequest, WatchRequest};
+    use super::{GitRequest, GitResult, GitRun, OsRequest, UpdaterRequest, UpdaterResult, WatchRequest};
 
     #[test]
     fn requests_and_results_round_trip() {
@@ -275,6 +357,22 @@ mod tests {
             value: "https://www.gravatar.com/avatar/deadbeef?s=80&d=404".into(),
         };
         assert_eq!(OsRequest::decode(&fetch.encode().unwrap()).unwrap(), fetch);
+
+        let check = UpdaterRequest {
+            request_id: 3,
+            action: 0,
+            manifest_url: "https://example.com/manifest.json".into(),
+        };
+        assert_eq!(UpdaterRequest::decode(&check.encode().unwrap()).unwrap(), check);
+
+        let staged = UpdaterResult {
+            request_id: 3,
+            ok: true,
+            available: true,
+            version: "1.2.0".into(),
+            error: String::new(),
+        };
+        assert_eq!(UpdaterResult::decode(&staged.encode().unwrap()).unwrap(), staged);
     }
 
     #[test]
@@ -282,6 +380,8 @@ mod tests {
         assert!(GitRequest::decode(&[9]).is_err());
         assert!(WatchRequest::decode(&[1, 0, 0, 0, 2, 0, 0]).is_err());
         assert!(OsRequest::decode(&[1, 0, 0, 0, 8, 0, 0]).is_err());
+        assert!(UpdaterRequest::decode(&[1, 0, 0, 0, 2, 0, 0]).is_err());
+        assert!(UpdaterResult::decode(&[1, 0, 0, 0, 2]).is_err());
 
         let mut cancel = vec![1, 7, 0, 0, 0];
         cancel.push(1);

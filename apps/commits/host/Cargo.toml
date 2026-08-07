@@ -23,6 +23,7 @@ path = "src/bin/commits-launcher.rs"
 bones-messages = { path = "../../../vendor/bones/shared/bones-messages" }
 bus = { path = "../../../vendor/bones/core/bus" }
 commits-git = { path = "../../../crates/git" }
+commits-ipc = { path = "../../../ipc/rust" }
 commits-os = { path = "../../../crates/os" }
 commits-upgrader = { path = "../../../crates/upgrader" }
 commits-watcher = { path = "../../../crates/watcher" }
@@ -34,6 +35,7 @@ tempfile = "3.27.0"
 wasm-extensions = { path = "../../../vendor/bones/core/wasm-extensions" }
 
 [dev-dependencies]
+base64 = "0.22"
 # Only for `measure_precompile`, which times compiling the component against
 # loading an already-compiled one.
 wasmtime = { version = "47", features = ["component-model"] }

@@ -96,6 +96,18 @@ pub fn download_asset_verified(backend: &dyn OsBackend, manifest: &Manifest) -> 
     Ok(bytes)
 }
 
+/// Where staged updates and backups live: `COMMITS_UPDATER_DIR` if set
+/// (tests and support diagnostics), otherwise `~/.commits/updater`. Shared by
+/// every process that needs to agree on this location -- `commits-launcher`
+/// applies from it, and the running app stages into it -- so it is a single
+/// function rather than each caller re-deriving the same path.
+pub fn state_dir() -> Option<std::path::PathBuf> {
+    if let Ok(value) = std::env::var("COMMITS_UPDATER_DIR") {
+        return Some(std::path::PathBuf::from(value));
+    }
+    dirs::home_dir().map(|home| home.join(".commits").join("updater"))
+}
+
 /// Whether `data`'s SHA-256 digest matches `expected_hex` (case-insensitive).
 pub fn verify_checksum(data: &[u8], expected_hex: &str) -> bool {
     let mut hasher = Sha256::new();

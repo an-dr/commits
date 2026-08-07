@@ -9,6 +9,7 @@ edition = "2021"
 
 [dependencies]
 commits-os = { path = "../os" }
+dirs = "6.0.0"
 serde_json = "1.0"
 sha2 = "0.10"
 zip = { version = "2", default-features = false, features = ["deflate"] }

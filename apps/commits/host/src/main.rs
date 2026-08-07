@@ -7,6 +7,7 @@ mod diagnostics;
 mod page;
 mod settings;
 mod splash;
+mod updater;
 
 use std::sync::mpsc::Receiver;
 
@@ -54,6 +55,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(commits_os::OsModule::default())
         .module(settings::SettingsModule::default())
         .module(commits_repo::CommitsRepoModule::default())
+        .module(updater::UpdaterModule::default())
         .run()?;
     Ok(())
 }

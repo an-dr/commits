@@ -557,9 +557,11 @@ dependencies = [
 name = "commits-app"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "bones-messages",
  "bus",
  "commits-git",
+ "commits-ipc",
  "commits-os",
  "commits-upgrader",
  "commits-watcher",
@@ -609,6 +611,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "commits-os",
+ "dirs",
  "serde_json",
  "sha2",
  "tempfile",
