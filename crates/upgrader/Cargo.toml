@@ -11,6 +11,7 @@ edition = "2021"
 commits-os = { path = "../os" }
 serde_json = "1.0"
 sha2 = "0.10"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 base64 = "0.22"

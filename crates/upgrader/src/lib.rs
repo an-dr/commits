@@ -4,6 +4,9 @@
 use commits_os::OsBackend;
 use sha2::{Digest, Sha256};
 
+mod stage;
+pub use stage::{apply, restore_backup, stage as stage_update};
+
 /// A hosted update announcement: the newest available version, where to
 /// download it, and an optional integrity check. Checksum is optional
 /// because not every manifest publisher can commit to one immediately, not
