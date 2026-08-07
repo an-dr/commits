@@ -222,8 +222,7 @@ class GitGraphView {
       repoComps = repoPaths[i].split("/");
       options.push({ name: repoComps[repoComps.length - 1], value: repoPaths[i] });
     }
-    // A single repository needs no selector, and hiding it lets the sidebar
-    // header collapse rather than showing a dropdown with one entry.
+    // A single repository needs no selector, so there is nothing to show.
     document.getElementById("sidebarTop")!.style.display = repoPaths.length > 1 ? "flex" : "none";
     this.repoDropdown.setOptions(options, this.currentRepo);
 
