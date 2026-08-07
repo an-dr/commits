@@ -34,6 +34,26 @@ pub fn stage(archive_bytes: &[u8], update_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Copies `source_dir` (the running executable's own directory) into
+/// `update_dir`, for the Install menu action: a build not launched from the
+/// canonical install location has nothing on disk yet for a launcher to
+/// apply, so staging a copy of what is already running -- rather than a
+/// freshly downloaded asset -- lets the next launcher run install it, same
+/// as a downloaded update would be applied.
+///
+/// `update_dir` must not be nested inside `source_dir`: copying `source_dir`
+/// into a subdirectory of itself would otherwise try to copy that
+/// subdirectory into itself.
+pub fn stage_current_install(source_dir: &Path, update_dir: &Path) -> Result<(), String> {
+    if is_inside(update_dir, source_dir) {
+        return Err(String::from(
+            "update_dir must not be nested inside the running install's own directory",
+        ));
+    }
+    clear_dir(update_dir)?;
+    copy_dir_contents(source_dir, update_dir, &[])
+}
+
 /// Backs up `install_dir` into `backup_dir`, then copies the staged
 /// `update_dir` over `install_dir`. The backup happens unconditionally
 /// before any install-directory file is touched, so a failure partway
@@ -85,14 +105,39 @@ pub fn restore_backup(
     copy_dir_contents(backup_dir, install_dir, running_exe_names)
 }
 
-/// Whether `candidate` is `ancestor` itself or nested inside it. Falls back
-/// to the given (uncanonicalized) path when either side does not exist yet,
-/// since `canonicalize` requires the path to be real; a best-effort lexical
-/// check is still far better than none for a path that has not been created.
+/// Whether `candidate` is `ancestor` itself or nested inside it.
+///
+/// Both sides are canonicalized before comparing -- comparing one
+/// canonicalized path against one raw path is not safe even when the raw
+/// side exists: canonicalizing on Windows can add a `\\?\` prefix or resolve
+/// short/long name differences, so a not-yet-created `candidate` compared
+/// against a canonicalized `ancestor` can spuriously mismatch even when it
+/// really is nested underneath (caught by a real test: `stage_current_install`
+/// recursed into a `update_dir` it had just created inside `source_dir`
+/// forever, because the mismatch let the nesting guard pass).
 fn is_inside(candidate: &Path, ancestor: &Path) -> bool {
-    let candidate = candidate.canonicalize().unwrap_or_else(|_| candidate.to_path_buf());
-    let ancestor = ancestor.canonicalize().unwrap_or_else(|_| ancestor.to_path_buf());
-    candidate.starts_with(&ancestor)
+    canonicalize_best_effort(candidate).starts_with(canonicalize_best_effort(ancestor))
+}
+
+/// Canonicalizes `path`, or -- if it does not exist yet -- canonicalizes its
+/// nearest existing ancestor and re-appends the missing suffix, so the
+/// result is comparable to another canonicalized path regardless of whether
+/// `path` itself has been created.
+fn canonicalize_best_effort(path: &Path) -> std::path::PathBuf {
+    if let Ok(canonical) = path.canonicalize() {
+        return canonical;
+    }
+    let mut missing = Vec::new();
+    let mut current = path;
+    while let Some(parent) = current.parent() {
+        missing.push(current.file_name().unwrap_or_default().to_os_string());
+        if let Ok(mut canonical) = parent.canonicalize() {
+            canonical.extend(missing.into_iter().rev());
+            return canonical;
+        }
+        current = parent;
+    }
+    path.to_path_buf()
 }
 
 /// Removes everything inside `path` without requiring it to already exist.
@@ -169,6 +214,56 @@ mod tests {
 
         assert!(!update_dir.join("old.txt").exists());
         assert_eq!(fs::read(update_dir.join("new.txt")).unwrap(), b"new");
+    }
+
+    #[test]
+    fn stage_current_install_copies_the_running_directory_into_update_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let source_dir = dir.path().join("dev-build");
+        let update_dir = dir.path().join("update");
+        fs::create_dir_all(source_dir.join("extensions")).unwrap();
+        fs::write(source_dir.join("commits.exe"), b"the launcher").unwrap();
+        fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
+        fs::write(source_dir.join("extensions/commits.wasm"), b"component").unwrap();
+
+        stage_current_install(&source_dir, &update_dir).unwrap();
+
+        assert_eq!(fs::read(update_dir.join("commits.exe")).unwrap(), b"the launcher");
+        assert_eq!(fs::read(update_dir.join("commits-app.exe")).unwrap(), b"the app");
+        assert_eq!(fs::read(update_dir.join("extensions/commits.wasm")).unwrap(), b"component");
+    }
+
+    #[test]
+    fn stage_current_install_replaces_whatever_was_staged_before() {
+        let dir = tempfile::tempdir().unwrap();
+        let source_dir = dir.path().join("dev-build");
+        let update_dir = dir.path().join("update");
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::write(source_dir.join("app.exe"), b"new").unwrap();
+        stage(&zip_bytes(&[("old.txt", b"old")]), &update_dir).unwrap();
+
+        stage_current_install(&source_dir, &update_dir).unwrap();
+
+        assert!(!update_dir.join("old.txt").exists());
+        assert_eq!(fs::read(update_dir.join("app.exe")).unwrap(), b"new");
+    }
+
+    #[test]
+    fn stage_current_install_refuses_an_update_dir_nested_inside_the_source() {
+        // A real run of this test caught `is_inside` comparing a
+        // canonicalized `source_dir` against a raw, not-yet-created
+        // `nested_update_dir` and wrongly concluding they were unrelated,
+        // which sent this into unbounded recursion (a stack overflow, not a
+        // clean failure) copying `source_dir` into a directory inside itself.
+        let dir = tempfile::tempdir().unwrap();
+        let source_dir = dir.path().join("dev-build");
+        fs::create_dir_all(&source_dir).unwrap();
+        let nested_update_dir = source_dir.join("update");
+        assert!(!nested_update_dir.exists());
+
+        let result = stage_current_install(&source_dir, &nested_update_dir);
+
+        assert!(result.is_err());
     }
 
     #[test]

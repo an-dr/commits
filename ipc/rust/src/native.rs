@@ -234,9 +234,11 @@ impl NativeResult {
     }
 }
 
-/// A request to check for, or stage, an application update. Both actions
-/// need only a manifest URL: `Stage` re-fetches the manifest itself rather
-/// than requiring the caller to have kept `Check`'s result around.
+/// A request to check for, stage, or install an application update. `Check`
+/// and `Stage` need only a manifest URL: `Stage` re-fetches the manifest
+/// itself rather than requiring the caller to have kept `Check`'s result
+/// around. `Install` (stages the running build itself, for a not-yet-
+/// installed run) ignores `manifest_url`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdaterRequest {
     pub request_id: u32,
@@ -260,7 +262,7 @@ impl UpdaterRequest {
             action: reader.u8()?,
             manifest_url: reader.string()?,
         };
-        if request.action > 1 {
+        if request.action > 2 {
             return Err(WireError::from("unknown updater action"));
         }
         reader.finish()?;
@@ -365,6 +367,13 @@ mod tests {
         };
         assert_eq!(UpdaterRequest::decode(&check.encode().unwrap()).unwrap(), check);
 
+        let install = UpdaterRequest {
+            request_id: 4,
+            action: 2,
+            manifest_url: String::new(),
+        };
+        assert_eq!(UpdaterRequest::decode(&install.encode().unwrap()).unwrap(), install);
+
         let staged = UpdaterResult {
             request_id: 3,
             ok: true,
@@ -380,7 +389,7 @@ mod tests {
         assert!(GitRequest::decode(&[9]).is_err());
         assert!(WatchRequest::decode(&[1, 0, 0, 0, 2, 0, 0]).is_err());
         assert!(OsRequest::decode(&[1, 0, 0, 0, 8, 0, 0]).is_err());
-        assert!(UpdaterRequest::decode(&[1, 0, 0, 0, 2, 0, 0]).is_err());
+        assert!(UpdaterRequest::decode(&[1, 0, 0, 0, 3, 0, 0]).is_err());
         assert!(UpdaterResult::decode(&[1, 0, 0, 0, 2]).is_err());
 
         let mut cancel = vec![1, 7, 0, 0, 0];

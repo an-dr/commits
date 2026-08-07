@@ -143,7 +143,8 @@ export function decodeNativeResult(bytes: Uint8Array): NativeResult {
   return result;
 }
 
-export type UpdaterAction = "check" | "stage";
+/** `install` stages the running build itself and ignores `manifestUrl`. */
+export type UpdaterAction = "check" | "stage" | "install";
 
 export interface UpdaterResult {
   requestId: number;
@@ -159,9 +160,10 @@ export function encodeUpdaterRequest(
   action: UpdaterAction,
   manifestUrl: string,
 ): Uint8Array {
+  const tag: Record<UpdaterAction, number> = { check: 0, stage: 1, install: 2 };
   return new Writer()
     .u32(requestId)
-    .u8(action === "check" ? 0 : 1)
+    .u8(tag[action])
     .string(manifestUrl)
     .finish();
 }

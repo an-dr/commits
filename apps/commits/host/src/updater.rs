@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
@@ -9,17 +10,25 @@ pub const COMPLETED_TOPIC: &str = "updater/completed";
 
 const CHECK: u8 = 0;
 const STAGE: u8 = 1;
+const INSTALL: u8 = 2;
+
+const OWNER: &str = "commits";
+const SUCCESS: u8 = 0;
+const FAILURE: u8 = 1;
 
 /// This binary's own version, compared against a manifest's `version` field.
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Checks a hosted manifest for a newer version, and stages a verified
-/// download for the launcher to apply on next start.
+/// Checks a hosted manifest for a newer version, stages a verified download
+/// for the launcher to apply on next start, or -- for a build not running
+/// from the canonical install location -- stages a copy of itself instead.
+/// Also answers a synchronous "is this run installed?" query used to decide
+/// whether the Install menu entry should show at all.
 ///
-/// Mirrors `commits-git`'s request/completed pattern: each request runs on
-/// its own thread and reports back over the bus rather than blocking the
-/// engine's single-threaded tick, since both a manifest fetch and an asset
-/// download are real network calls with no bound tight enough to make
+/// The async actions mirror `commits-git`'s request/completed pattern: each
+/// request runs on its own thread and reports back over the bus rather than
+/// blocking the engine's single-threaded tick, since a manifest fetch or an
+/// asset download is a real network call with no bound tight enough to make
 /// synchronously. Takes an [`OsBackend`] the same way `OsModule` does, so a
 /// test can inject a stub instead of hitting the network.
 pub struct UpdaterModule {
@@ -41,6 +50,7 @@ impl UpdaterModule {
             let result = match request.action {
                 CHECK => check(backend.as_ref(), request.request_id, &request.manifest_url),
                 STAGE => stage(backend.as_ref(), request.request_id, &request.manifest_url),
+                INSTALL => install(request.request_id),
                 _ => return,
             };
             if let Ok(payload) = result.encode() {
@@ -92,6 +102,73 @@ fn stage_inner(backend: &dyn OsBackend, manifest_url: &str) -> Result<String, St
     Ok(manifest.version)
 }
 
+/// Stages a copy of the running executable's own directory, for a build not
+/// launched from the canonical install location: there is nothing on disk
+/// yet for a launcher to apply, so this pushes what is already running into
+/// the same slot a downloaded update would occupy.
+fn install(request_id: u32) -> UpdaterResult {
+    match running_directory() {
+        Ok(source_dir) => install_from(&source_dir, request_id),
+        Err(error) => failed(request_id, error),
+    }
+}
+
+/// Does the actual staging for [`install`], taking `source_dir` as a
+/// parameter rather than resolving it internally: a test can then supply a
+/// small directory instead of `current_exe()`'s real (and irrelevantly
+/// large, being the test binary's own build output) directory.
+fn install_from(source_dir: &Path, request_id: u32) -> UpdaterResult {
+    match install_inner(source_dir) {
+        Ok(()) => UpdaterResult {
+            request_id,
+            ok: true,
+            available: true,
+            version: String::new(),
+            error: String::new(),
+        },
+        Err(error) => failed(request_id, error),
+    }
+}
+
+fn install_inner(source_dir: &Path) -> Result<(), String> {
+    let state_dir = commits_upgrader::state_dir()
+        .ok_or_else(|| String::from("could not resolve the update state directory"))?;
+    commits_upgrader::stage_current_install(source_dir, &state_dir.join("update"))
+}
+
+fn running_directory() -> Result<std::path::PathBuf, String> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf))
+        .ok_or_else(|| String::from("could not resolve the running executable's own directory"))
+}
+
+/// Whether this run's own directory is the canonical install location.
+/// Canonicalized before comparing: a raw comparison can mismatch even for
+/// the same directory (e.g. drive-letter casing or short/long name form).
+/// A canonicalize failure on the install side (the ordinary case: nothing is
+/// installed there yet) reads as "not installed" rather than an error.
+fn is_installed() -> bool {
+    let Ok(current) = running_directory().and_then(|dir| dir.canonicalize().map_err(|error| error.to_string())) else {
+        return false;
+    };
+    let Some(install_dir) = commits_upgrader::default_install_dir().and_then(|dir| dir.canonicalize().ok()) else {
+        return false;
+    };
+    current == install_dir
+}
+
+fn encode_install_status() -> Vec<u8> {
+    vec![SUCCESS, u8::from(is_installed())]
+}
+
+fn encode_failure(message: &str) -> Vec<u8> {
+    let mut response = Vec::with_capacity(message.len() + 1);
+    response.push(FAILURE);
+    response.extend(message.as_bytes());
+    response
+}
+
 fn failed(request_id: u32, error: String) -> UpdaterResult {
     UpdaterResult {
         request_id,
@@ -132,6 +209,17 @@ impl Module for UpdaterModule {
             .map(|_| ())
             .ok_or_else(|| "no Bus service available".into())
     }
+
+    /// Synchronous "is this run installed?" query, answered directly rather
+    /// than through the async request/completed path used by check/stage/
+    /// install: it is a local, instant path comparison, not a network call
+    /// or a filesystem copy, so there is nothing to avoid blocking on.
+    fn respond(&mut self, sender: &str, _payload: &[u8]) -> Option<Vec<u8>> {
+        if sender != OWNER {
+            return Some(encode_failure("install status is private to the commits component"));
+        }
+        Some(encode_install_status())
+    }
 }
 
 #[cfg(test)]
@@ -143,6 +231,11 @@ mod tests {
     use bus::{Bus, ServiceRegistry};
 
     use super::*;
+
+    /// Serializes tests that mutate the process-wide `COMMITS_UPDATER_DIR`
+    /// and `COMMITS_INSTALL_DIR` env vars, which Rust's default parallel
+    /// test execution would otherwise race.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     /// Serves fixed `fetch_url` responses, matching `commits-upgrader`'s own
     /// `StubBackend` test pattern; the other `OsBackend` methods are unused
@@ -252,8 +345,7 @@ mod tests {
         responses.insert("https://example.com/app.zip".to_string(), Ok(Some(stub_fetch_result("application/zip", &EMPTY_ZIP))));
         let backend = StubBackend { responses };
         let state_dir = tempfile::tempdir().unwrap();
-        // SAFETY: this process's test binary has no other test touching
-        // COMMITS_UPDATER_DIR, so there is no cross-test race.
+        let _guard = ENV_LOCK.lock().unwrap();
         unsafe { std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path()) };
 
         let result = stage(&backend, 2, "https://example.com/manifest.json");
@@ -262,5 +354,66 @@ mod tests {
         assert!(result.ok, "{}", result.error);
         assert_eq!(result.version, "1.5.0");
         assert!(state_dir.path().join("update").is_dir());
+    }
+
+    #[test]
+    fn install_from_stages_a_given_directory_into_the_configured_update_dir() {
+        let source_dir = tempfile::tempdir().unwrap();
+        std::fs::write(source_dir.path().join("commits-app.exe"), b"a dev build").unwrap();
+        let state_dir = tempfile::tempdir().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path()) };
+
+        let result = install_from(source_dir.path(), 7);
+
+        unsafe { std::env::remove_var("COMMITS_UPDATER_DIR") };
+        assert!(result.ok, "{}", result.error);
+        assert_eq!(
+            std::fs::read(state_dir.path().join("update/commits-app.exe")).unwrap(),
+            b"a dev build",
+        );
+    }
+
+    #[test]
+    fn is_installed_when_the_configured_install_dir_matches_the_running_directory() {
+        let running_dir = running_directory().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("COMMITS_INSTALL_DIR", &running_dir) };
+
+        let installed = is_installed();
+
+        unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
+        assert!(installed);
+    }
+
+    #[test]
+    fn not_installed_when_the_configured_install_dir_is_elsewhere() {
+        let elsewhere = tempfile::tempdir().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("COMMITS_INSTALL_DIR", elsewhere.path()) };
+
+        let installed = is_installed();
+
+        unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
+        assert!(!installed);
+    }
+
+    #[test]
+    fn respond_rejects_a_sender_other_than_the_commits_component() {
+        let mut module = UpdaterModule::default();
+
+        let response = module.respond("other", &[]).unwrap();
+
+        assert_eq!(response[0], FAILURE);
+    }
+
+    #[test]
+    fn respond_answers_the_trusted_sender_with_install_status() {
+        let mut module = UpdaterModule::default();
+
+        let response = module.respond(OWNER, &[]).unwrap();
+
+        assert_eq!(response[0], SUCCESS);
+        assert!(response[1] == 0 || response[1] == 1);
     }
 }

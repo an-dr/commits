@@ -29,7 +29,8 @@ type StandaloneRequest =
   | { readonly command: "standaloneCloneCommitsRepo" }
   | { readonly command: "standaloneOpenCommitsRepo" }
   | { readonly command: "standaloneOpenCommitsRepoFolder" }
-  | { readonly command: "standaloneStartUpdate" };
+  | { readonly command: "standaloneStartUpdate" }
+  | { readonly command: "standaloneInstall" };
 
 type PendingOs =
   | { readonly kind: "chooseRepository" }
@@ -56,8 +57,15 @@ export class CommitsCore {
   private pendingCloneRequestId: number | null = null;
   private pendingUpdateCheckRequestId: number | null = null;
   private pendingUpdateStageRequestId: number | null = null;
+  private pendingInstallRequestId: number | null = null;
   /** Set once `check` finds a version newer than this build's own. */
   private updateAvailableVersion: string | null = null;
+  /**
+   * Whether this run's own directory is the canonical install location.
+   * Defaults to `true` so the Install entry stays hidden until `bootstrap`
+   * proves otherwise, rather than flashing on for every boot.
+   */
+  private installed = true;
   private bootstrapped = false;
   private nextOsRequestId = 50_000;
   private nextGitRequestId = 60_000;
@@ -157,6 +165,9 @@ export class CommitsCore {
         return;
       case "standaloneStartUpdate":
         this.startUpdate();
+        return;
+      case "standaloneInstall":
+        this.startInstall();
         return;
       case "loadRepos":
         this.sendRepos();
@@ -378,6 +389,15 @@ export class CommitsCore {
         // The available update is still there to retry; only the attempt failed.
         this.sendUpdateStatus(`Update failed: ${result.error || "unknown error"}`);
       }
+      return;
+    }
+    if (result.requestId === this.pendingInstallRequestId) {
+      this.pendingInstallRequestId = null;
+      if (result.ok) {
+        this.sendInstallStatus(true, "Installed — restart commits.exe to apply.");
+      } else {
+        this.sendInstallStatus(false, `Install failed: ${result.error || "unknown error"}`);
+      }
     }
   }
 
@@ -510,6 +530,13 @@ export class CommitsCore {
     // An unconfigured URL means self-update is intentionally off, not a
     // transient failure worth reporting.
     if (this.settings.app.updateManifestUrl) this.checkForUpdate();
+    const installStatus = this.host.installStatus();
+    if (installStatus.ok) {
+      this.installed = installStatus.installed;
+    } else {
+      this.host.log("warn", `could not resolve install status: ${installStatus.error}`);
+    }
+    this.sendInstallStatus();
   }
 
   /** Runs once at boot when a manifest URL is configured; see `bootstrap`. */
@@ -538,6 +565,21 @@ export class CommitsCore {
       ready,
       message,
     });
+  }
+
+  /** Stages this running build for the next launcher run, regardless of
+   * whether self-update via a hosted manifest is configured -- unlike
+   * `checkForUpdate`/`startUpdate`, this needs no network at all. */
+  private startInstall(): void {
+    if (this.installed || this.pendingInstallRequestId !== null) return;
+    const requestId = this.nextUpdateRequestId++;
+    this.pendingInstallRequestId = requestId;
+    this.sendInstallStatus(false, "Installing…");
+    this.host.requestUpdate(requestId, "install", "");
+  }
+
+  private sendInstallStatus(staged = false, message = ""): void {
+    this.send({ command: "standaloneInstallStatus", installed: this.installed, staged, message });
   }
 
   private saveSettings(requestId: unknown, candidate: unknown): void {

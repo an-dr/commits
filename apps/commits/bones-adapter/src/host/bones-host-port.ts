@@ -9,7 +9,7 @@ import {
   encodeOpenPanel,
   encodeSendJson,
 } from "@commits/ipc/web";
-import type { CommitsRepoStatus, HostPort, LogLevel, PageSource, SettingsIoResult } from "./host-port";
+import type { CommitsRepoStatus, HostPort, InstallStatus, LogLevel, PageSource, SettingsIoResult } from "./host-port";
 import {
   encodeGitRun,
   encodeOsRequest,
@@ -113,6 +113,21 @@ export class BonesHostPort implements HostPort {
 
   requestUpdate(requestId: number, action: UpdaterAction, manifestUrl: string): void {
     publish("updater/request", encodeUpdaterRequest(requestId, action, manifestUrl));
+  }
+
+  installStatus(): InstallStatus {
+    const failed = (error: string): InstallStatus => ({ ok: false, installed: false, error });
+    try {
+      const response = send("updater", new Uint8Array());
+      if (response[0] !== 0) {
+        return failed(response.length > 1
+          ? new TextDecoder().decode(response.slice(1))
+          : "updater host returned an invalid response");
+      }
+      return { ok: true, installed: response[1] === 1, error: "" };
+    } catch (error) {
+      return failed(String(error));
+    }
   }
 
   sendPageMessage(panel: string, message: unknown): void {

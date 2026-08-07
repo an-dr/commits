@@ -19,6 +19,13 @@ export interface CommitsRepoStatus {
   readonly error: string;
 }
 
+export interface InstallStatus {
+  readonly ok: boolean;
+  /** Whether this run's own directory is the canonical install location. */
+  readonly installed: boolean;
+  readonly error: string;
+}
+
 /** Host capabilities used by product behavior on bones and VS Code. */
 export interface HostPort {
   closePanel(panel: string): void;
@@ -51,8 +58,10 @@ export interface HostPort {
   runGit(request: import("@commits/ipc/native").GitRun): void;
   respondPrompt(id: string, value: string): void;
   requestOs(requestId: number, action: import("@commits/ipc/native").OsAction, value?: string): void;
-  /** Checks a manifest for a newer version, or stages its verified asset for `commits-launcher` to apply. */
+  /** Checks a manifest for a newer version, stages its verified asset, or stages the running build itself. */
   requestUpdate(requestId: number, action: import("@commits/ipc/native").UpdaterAction, manifestUrl: string): void;
+  /** Whether this running build is the one installed at the canonical location. */
+  installStatus(): InstallStatus;
   sendPageMessage(panel: string, message: unknown): void;
   subscribe(topic: string): void;
 }

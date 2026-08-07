@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 
 mod stage;
 mod supervise;
-pub use stage::{apply, restore_backup, stage as stage_update};
+pub use stage::{apply, restore_backup, stage as stage_update, stage_current_install};
 pub use supervise::wait_for_marker;
 
 /// A hosted update announcement: the newest available version, where to
@@ -106,6 +106,17 @@ pub fn state_dir() -> Option<std::path::PathBuf> {
         return Some(std::path::PathBuf::from(value));
     }
     dirs::home_dir().map(|home| home.join(".commits").join("updater"))
+}
+
+/// Where a permanent install lives: `COMMITS_INSTALL_DIR` if set (tests),
+/// otherwise `~/.commits/app`. Compared against the running process's own
+/// directory to tell an installed run from a dev or ad-hoc one -- the Install
+/// menu action only makes sense for the latter.
+pub fn default_install_dir() -> Option<std::path::PathBuf> {
+    if let Ok(value) = std::env::var("COMMITS_INSTALL_DIR") {
+        return Some(std::path::PathBuf::from(value));
+    }
+    dirs::home_dir().map(|home| home.join(".commits").join("app"))
 }
 
 /// Whether `data`'s SHA-256 digest matches `expected_hex` (case-insensitive).

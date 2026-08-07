@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GitResult, GitRun, NativeResult, OsAction, UpdaterAction } from "@commits/ipc/native";
 import { CommitsCore } from "./commits-core";
-import type { CommitsRepoStatus, HostPort, LogLevel, PageSource, SettingsIoResult } from "./host/host-port";
+import type { CommitsRepoStatus, HostPort, InstallStatus, LogLevel, PageSource, SettingsIoResult } from "./host/host-port";
 
 class StubHost implements HostPort {
   readonly closed: string[] = [];
@@ -20,6 +20,7 @@ class StubHost implements HostPort {
   pageSource: PageSource = { kind: "url", value: "file:///commits/page.html" };
   commitsRepoStatusValue: CommitsRepoStatus =
     { ok: true, exists: false, path: "C:/commits/repo", parentPath: "C:/commits", error: "" };
+  installStatusValue: InstallStatus = { ok: true, installed: true, error: "" };
 
   closePanel(panel: string): void { this.closed.push(panel); }
   log(level: LogLevel, message: string): void { this.logs.push([level, message]); }
@@ -43,6 +44,7 @@ class StubHost implements HostPort {
   requestUpdate(requestId: number, action: UpdaterAction, manifestUrl: string): void {
     this.updateRequests.push({ requestId, action, manifestUrl });
   }
+  installStatus(): InstallStatus { return this.installStatusValue; }
   sendPageMessage(panel: string, message: unknown): void { this.sent.push([panel, message]); }
   subscribe(topic: string): void { this.topics.push(topic); }
 }
@@ -348,6 +350,65 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.updateRequests).toHaveLength(0);
   });
 
+  it("reports install status at boot, independent of any manifest URL", () => {
+    const host = new StubHost();
+    host.installStatusValue = { ok: true, installed: false, error: "" };
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneInstallStatus", installed: false, staged: false, message: "",
+    }]);
+  });
+
+  it("stages the running build on standaloneInstall and reports readiness once staged", () => {
+    const host = new StubHost();
+    host.installStatusValue = { ok: true, installed: false, error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
+
+    expect(host.updateRequests).toEqual([{ requestId: 70_000, action: "install", manifestUrl: "" }]);
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneInstallStatus", installed: false, staged: false, message: "Installing…",
+    }]);
+
+    core.receiveUpdaterResult({ requestId: 70_000, ok: true, available: true, version: "", error: "" });
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneInstallStatus",
+      installed: false,
+      staged: true,
+      message: "Installed — restart commits.exe to apply.",
+    }]);
+  });
+
+  it("ignores standaloneInstall once already installed", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
+
+    expect(host.updateRequests).toHaveLength(0);
+  });
+
+  it("reports a failed install without losing the not-installed state", () => {
+    const host = new StubHost();
+    host.installStatusValue = { ok: true, installed: false, error: "" };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
+
+    core.receiveUpdaterResult({ requestId: 70_000, ok: false, available: false, version: "", error: "disk full" });
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneInstallStatus", installed: false, staged: false, message: "Install failed: disk full",
+    }]);
+  });
+
   it("loads settings before repository messages and acknowledges atomic saves", () => {
     const host = new StubHost();
     host.settingsBytes = new TextEncoder().encode(JSON.stringify({
@@ -358,7 +419,7 @@ describe("CommitsCore MIT webview host", () => {
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
-    expect(host.sent[0]).toEqual(["main", expect.objectContaining({
+    expect(host.sent).toContainEqual(["main", expect.objectContaining({
       command: "standaloneSettings",
       settings: expect.objectContaining({ app: expect.objectContaining({ mode: "dark" }) }),
     })]);
