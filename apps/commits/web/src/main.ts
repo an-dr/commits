@@ -112,9 +112,14 @@ async function boot(): Promise<void> {
 
   wireAppMenu();
   wireRepositoryOverlay();
-  settingsEditor = new SettingsEditor((settings) => {
-    post({ command: "standaloneSaveSettings", requestId: nextSettingsRequestId++, settings });
-  });
+  settingsEditor = new SettingsEditor(
+    (settings) => {
+      post({ command: "standaloneSaveSettings", requestId: nextSettingsRequestId++, settings });
+    },
+    (key) => {
+      post({ command: "copyToClipboard", type: "settingsKey", data: key });
+    },
+  );
   document.getElementById("standaloneSettingsButton")!.addEventListener("click", () => {
     settingsEditor.open(activeSettings, loadSettingsError);
   });

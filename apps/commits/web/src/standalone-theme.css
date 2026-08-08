@@ -201,8 +201,7 @@ body {
   font-size: 20px;
 }
 
-.standaloneSettingsForm header p,
-.standaloneSettingField code {
+.standaloneSettingsForm header p {
   opacity: 0.7;
   font-size: 11px;
 }
@@ -215,11 +214,31 @@ body {
 }
 
 .standaloneSettingsFields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   padding: 18px;
   overflow-y: auto;
+}
+
+.standaloneSettingsSection {
+  display: grid;
+  gap: 12px;
+}
+
+.standaloneSettingsSection + .standaloneSettingsSection {
+  padding-top: 20px;
+  border-top: 1px solid var(--vscode-widget-border);
+}
+
+.standaloneSettingsSection h2 {
+  margin: 0;
+  color: var(--vscode-menu-foreground);
+  opacity: 0.7;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .standaloneSettingField {
@@ -238,6 +257,23 @@ body {
 
 .standaloneSettingField > span {
   font-weight: 600;
+}
+
+.standaloneSettingName {
+  width: fit-content;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline dotted transparent;
+}
+
+.standaloneSettingName:hover {
+  text-decoration-color: currentcolor;
+}
+
+.standaloneSettingDescription {
+  margin: 0;
+  opacity: 0.7;
+  font-size: 11px;
 }
 
 .standaloneSettingField input:not([type="checkbox"]),
@@ -271,12 +307,6 @@ body {
 
 .standaloneSettingsStatus.is-success {
   color: var(--vscode-gitDecoration-addedResourceForeground);
-}
-
-@media (max-width: 680px) {
-  .standaloneSettingsFields {
-    grid-template-columns: 1fr;
-  }
 }
 
 #standaloneMenuWrap {

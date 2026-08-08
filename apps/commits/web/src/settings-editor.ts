@@ -1,11 +1,15 @@
 import {
   CORE_SETTING_DEFINITIONS,
   type CoreSettingDefinition,
+  type SettingSection,
   type SettingsDocument,
 } from "@commits/adapter/read/settings";
 import { DARK_THEMES, LIGHT_THEMES } from "./themes";
 
 type SettingControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLFieldSetElement;
+
+/** Display order for CoreSettingDefinition.section groups; the app-only Appearance fields render before all of these. */
+const SECTION_ORDER: readonly SettingSection[] = ["General", "Toolbar", "Commits Table", "Graph", "Status Bar", "Blame", "Branches"];
 
 /** Modal editor generated from the MIT extension compatibility catalog. */
 export class SettingsEditor {
@@ -24,7 +28,10 @@ export class SettingsEditor {
   private readonly updateManifestUrl = document.createElement("input");
   private settings: SettingsDocument | null = null;
 
-  constructor(private readonly save: (settings: SettingsDocument) => void) {
+  constructor(
+    private readonly save: (settings: SettingsDocument) => void,
+    private readonly copyKey: (key: string) => void,
+  ) {
     this.dialog.id = "standaloneSettingsDialog";
     this.dialog.setAttribute("aria-labelledby", "standaloneSettingsTitle");
     this.updateManifestUrl.type = "text";
@@ -65,13 +72,18 @@ export class SettingsEditor {
     const fields = document.createElement("div");
     fields.className = "standaloneSettingsFields";
     fields.append(
-      createAppearanceField("Mode", this.mode),
-      createAppearanceField("Light theme", this.lightTheme),
-      createAppearanceField("Dark theme", this.darkTheme),
-      createAppearanceField("Commit time format", this.timeFormat),
-      createAppearanceField("Update manifest URL", this.updateManifestUrl),
+      createSection("Appearance", [
+        createAppearanceField("Mode", this.mode),
+        createAppearanceField("Light theme", this.lightTheme),
+        createAppearanceField("Dark theme", this.darkTheme),
+        createAppearanceField("Commit time format", this.timeFormat),
+        createAppearanceField("Update manifest URL", this.updateManifestUrl),
+      ]),
     );
-    for (const definition of CORE_SETTING_DEFINITIONS) fields.append(this.createField(definition));
+    for (const section of SECTION_ORDER) {
+      const definitions = CORE_SETTING_DEFINITIONS.filter((definition) => definition.section === section);
+      fields.append(createSection(section, definitions.map((definition) => this.createField(definition))));
+    }
     const footer = document.createElement("footer");
     this.status.className = "standaloneSettingsStatus";
     this.status.setAttribute("aria-live", "polite");
@@ -96,9 +108,21 @@ export class SettingsEditor {
     const field = document.createElement("div");
     field.className = "standaloneSettingField";
     const title = document.createElement("label");
+    title.className = "standaloneSettingName";
     title.textContent = formatSettingLabel(definition.key);
-    const key = document.createElement("code");
-    key.textContent = definition.key;
+    // Hover reveals the raw manifest key (title attribute); a click copies it
+    // instead of the label's default behaviour of activating `control`.
+    title.title = definition.key;
+    title.addEventListener("click", (event) => {
+      event.preventDefault();
+      this.copyKey(definition.key);
+      const original = title.textContent;
+      title.textContent = "Copied!";
+      window.setTimeout(() => { title.textContent = original; }, 900);
+    });
+    const description = document.createElement("p");
+    description.className = "standaloneSettingDescription";
+    description.textContent = definition.description;
     const control = this.createControl(definition);
     const id = `standaloneSetting${this.controls.size}`;
     if (control instanceof HTMLFieldSetElement) {
@@ -109,7 +133,7 @@ export class SettingsEditor {
       title.htmlFor = id;
     }
     this.controls.set(definition.key, control);
-    field.append(title, key, control);
+    field.append(title, description, control);
     return field;
   }
 
@@ -226,6 +250,15 @@ function createSelect(options: readonly (readonly [string, string])[]): HTMLSele
     select.append(option);
   }
   return select;
+}
+
+function createSection(heading: string, fields: readonly HTMLElement[]): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "standaloneSettingsSection";
+  const title = document.createElement("h2");
+  title.textContent = heading;
+  section.append(title, ...fields);
+  return section;
 }
 
 function createAppearanceField(label: string, control: HTMLSelectElement | HTMLInputElement): HTMLElement {
