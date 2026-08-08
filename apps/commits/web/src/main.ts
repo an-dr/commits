@@ -161,10 +161,12 @@ function appMenuHtml(): string {
           <ul class="standaloneMenuSubList">
             <li class="standaloneMenuVersion" id="standaloneMenuVersion"></li>
             <li class="standaloneMenuVersion">Dev: an-dr, 2026</li>
-            <li><a href="https://github.com/an-dr/commits" id="standaloneMenuRepoLink" class="standaloneMenuLink">Repo: github/an-dr/commits</a></li>
+            <li><a href="https://github.com/an-dr/commits" id="standaloneMenuRepoLink" class="standaloneMenuLink">Repo: github.com/an-dr/commits</a></li>
+            <li class="standaloneMenuSeparator" role="separator"></li>
             <li><button type="button" id="standaloneMenuCloneCommitsRepo">Clone Commits Repo</button></li>
             <li><button type="button" id="standaloneMenuOpenCommitsRepo" disabled>Open Commits Repo</button></li>
             <li><button type="button" id="standaloneMenuOpenCommitsRepoFolder" disabled>Open Commits Repo Folder</button></li>
+            <li class="standaloneMenuSeparator" role="separator"></li>
             <li><button type="button" id="standaloneMenuInstall" hidden>Install</button></li>
             <li><button type="button" id="standaloneMenuUpdate" hidden></button></li>
           </ul>
