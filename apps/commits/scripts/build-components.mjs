@@ -24,7 +24,7 @@ async function resolveWizerPath() {
       "10.0.0",
       "--locked",
       "--features",
-      "env_logger structopt",
+      "env_logger,structopt",
       "--root",
       ".tools/wizer",
     ]);
