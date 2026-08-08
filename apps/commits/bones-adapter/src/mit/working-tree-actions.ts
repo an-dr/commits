@@ -27,12 +27,13 @@ function failureText(result: GitResult): string {
 }
 
 /**
- * Runs the working-tree mutations the changes panel offers.
+ * Runs the working-tree, branch, and tag mutations the changes panel and
+ * branch/tag context menus offer.
  *
- * Each one is a single bounded Git command over an explicit file list, and the
- * files always follow `--`, so a path can never be read as an option. A failure
- * is reported with Git's own words rather than a generic message, because these
- * commands fail for reasons the user has to act on.
+ * Working-tree actions are a single bounded Git command over an explicit file
+ * list, and the files always follow `--`, so a path can never be read as an
+ * option. Every action reports Git's own failure words rather than a generic
+ * message, because these commands fail for reasons the user has to act on.
  */
 export class WorkingTreeActions {
   private nextRequestId = 40_000;
@@ -96,6 +97,56 @@ export class WorkingTreeActions {
     // Network-bound, unlike the local working-tree mutations above -- matches
     // cloneCommitsRepo's own 120s allowance for a remote round trip.
     this.send(repo, args, deliver, 120_000);
+  }
+
+  /** Checks out a local branch, or a remote one as a new local branch tracking it. */
+  checkoutBranch(repo: string, branchName: string, remoteBranch: string | null, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, remoteBranch === null ? ["checkout", branchName] : ["checkout", "-b", branchName, remoteBranch], deliver);
+  }
+
+  renameBranch(repo: string, oldName: string, newName: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["branch", "-m", oldName, newName], deliver);
+  }
+
+  deleteBranch(repo: string, branchName: string, forceDelete: boolean, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["branch", forceDelete ? "-D" : "-d", branchName], deliver);
+  }
+
+  mergeBranch(repo: string, branchName: string, createNewCommit: boolean, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, createNewCommit ? ["merge", branchName, "--no-ff"] : ["merge", branchName], deliver);
+  }
+
+  deleteTag(repo: string, tagName: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["tag", "-d", tagName], deliver);
+  }
+
+  /** Pushes one tag to `origin`, the same remote `packages/core`'s own (currently unused) backend targets. */
+  pushTag(repo: string, tagName: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["push", "origin", tagName], deliver, 120_000);
   }
 
   private send(repo: string, args: string[], deliver: (status: string | null) => void, timeoutMs = 30_000): void {

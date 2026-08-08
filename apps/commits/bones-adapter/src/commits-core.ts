@@ -315,6 +315,52 @@ export class CommitsCore {
         });
         return;
       }
+      case "checkoutBranch":
+        this.workingTreeActions.checkoutBranch(
+          this.currentRepository ?? "",
+          asString(value.branchName),
+          typeof value.remoteBranch === "string" ? value.remoteBranch : null,
+          (status) => this.send({ command: "checkoutBranch", status }),
+        );
+        return;
+      case "renameBranch":
+        this.workingTreeActions.renameBranch(
+          this.currentRepository ?? "",
+          asString(value.oldName),
+          asString(value.newName),
+          (status) => this.send({ command: "renameBranch", status }),
+        );
+        return;
+      case "deleteBranch":
+        this.workingTreeActions.deleteBranch(
+          this.currentRepository ?? "",
+          asString(value.branchName),
+          value.forceDelete === true,
+          (status) => this.send({ command: "deleteBranch", status }),
+        );
+        return;
+      case "mergeBranch":
+        this.workingTreeActions.mergeBranch(
+          this.currentRepository ?? "",
+          asString(value.branchName),
+          value.createNewCommit === true,
+          (status) => this.send({ command: "mergeBranch", status }),
+        );
+        return;
+      case "deleteTag":
+        this.workingTreeActions.deleteTag(
+          this.currentRepository ?? "",
+          asString(value.tagName),
+          (status) => this.send({ command: "deleteTag", status }),
+        );
+        return;
+      case "pushTag":
+        this.workingTreeActions.pushTag(
+          this.currentRepository ?? "",
+          asString(value.tagName),
+          (status) => this.send({ command: "pushTag", status }),
+        );
+        return;
       case "copyToClipboard":
         if (typeof value.data === "string" && typeof value.type === "string") {
           const requestId = this.nextOsRequestId++;
@@ -746,8 +792,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isMutationCommand(command: string): command is RequestMessage["command"] {
   return [
-    "addTag", "deleteTag", "pushTag", "createBranch", "deleteBranch", "renameBranch",
-    "checkoutBranch", "checkoutCommit", "cherrypickCommit", "revertCommit", "resetToCommit",
-    "mergeBranch", "mergeCommit", "inProgressAction",
+    "addTag", "createBranch", "checkoutCommit", "cherrypickCommit", "revertCommit",
+    "resetToCommit", "mergeCommit", "inProgressAction",
   ].includes(command);
 }

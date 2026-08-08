@@ -764,12 +764,106 @@ describe("CommitsCore MIT webview host", () => {
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
-    core.receivePageJson(JSON.stringify({ command: "mergeBranch", repo: "C:/repo" }));
+    core.receivePageJson(JSON.stringify({ command: "resetToCommit", repo: "C:/repo" }));
 
     const reply = host.sent
       .map(([, message]) => message as { command: string; status?: string | null })
-      .find((message) => message.command === "mergeBranch");
+      .find((message) => message.command === "resetToCommit");
     expect(reply?.status).toContain("not available in the standalone host yet");
+  });
+
+  it("checks out a branch", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "checkoutBranch", repo: "C:/repo", branchName: "feature", remoteBranch: null,
+    }));
+    expect(host.gitRequests[0].args).toEqual(["checkout", "feature"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "checkoutBranch", status: null }]);
+  });
+
+  it("checks out a remote branch as a new local branch", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "checkoutBranch", repo: "C:/repo", branchName: "feature", remoteBranch: "origin/feature",
+    }));
+    expect(host.gitRequests[0].args).toEqual(["checkout", "-b", "feature", "origin/feature"]);
+  });
+
+  it("renames a branch", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "renameBranch", repo: "C:/repo", oldName: "old", newName: "new",
+    }));
+    expect(host.gitRequests[0].args).toEqual(["branch", "-m", "old", "new"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "renameBranch", status: null }]);
+  });
+
+  it("deletes a branch, forcing when asked", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "deleteBranch", repo: "C:/repo", branchName: "old", forceDelete: true,
+    }));
+    expect(host.gitRequests[0].args).toEqual(["branch", "-D", "old"]);
+    failGitAt(host, core, 0, "error: the branch 'old' is not fully merged");
+    expect(host.sent).toContainEqual([
+      "main", { command: "deleteBranch", status: "error: the branch 'old' is not fully merged" },
+    ]);
+  });
+
+  it("merges a branch, forcing a merge commit when asked", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "mergeBranch", repo: "C:/repo", branchName: "feature", createNewCommit: true,
+    }));
+    expect(host.gitRequests[0].args).toEqual(["merge", "feature", "--no-ff"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "mergeBranch", status: null }]);
+  });
+
+  it("deletes a tag", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({ command: "deleteTag", repo: "C:/repo", tagName: "v1.0.0" }));
+    expect(host.gitRequests[0].args).toEqual(["tag", "-d", "v1.0.0"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "deleteTag", status: null }]);
+  });
+
+  it("pushes a tag to origin", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({ command: "pushTag", repo: "C:/repo", tagName: "v1.0.0" }));
+    expect(host.gitRequests[0].args).toEqual(["push", "origin", "v1.0.0"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "pushTag", status: null }]);
   });
 
   it("pushes the current repo and reports success", () => {
