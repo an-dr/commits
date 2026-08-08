@@ -19,9 +19,8 @@ An installation the launcher can update looks like this:
                            # never touched by an update
     updater/               # the update state that isn't itself versioned
       version              # the version last recorded, for the "Updated to X" banner
-    1.2.0/                 # a version folder: commits-app.exe, page.html, ...
+    1.2.0/                 # a version folder: commits-app.exe, page.html, components/, ...
     1.3.0/                 # the current version -- the highest by folder name
-    components/             # WASM components, shared across every version
     state/                   # user save data, shared across every version
   settings.json
   repo/                     # the commits project's own clone (Clone Commits Repo)
@@ -35,14 +34,15 @@ version means its folder already exists, so the very next start already
 sees it as the newest one on disk.
 
 Only the current and previous version folders are kept; anything older is
-deleted once a new one is installed. `components/` and `state/` sit outside
-every version folder because they are shared, not versioned -- built-in WASM
-components are overwritten in place by each install rather than duplicated
-per version, and save data simply outlives any single version. This is
-purely structural, not tied to `~/.commits/app` specifically: `commits-app.exe`
-resolves them by checking whether its own directory's name parses as a
-version and its parent has a launcher beside it, so a `dist/app` build
-assembled the same way (see [`phase-0-1.md`](phase-0-1.md)) behaves
+deleted once a new one is installed. `components/` (the built-in WASM
+components) is versioned along with the rest of a version folder -- updated
+with every release, and cleaned up automatically along with its version once
+pruned -- rather than shared. `state/` is different: it must survive an
+update, so it sits outside every version folder instead. This is purely
+structural, not tied to `~/.commits/app` specifically: `commits-app.exe`
+resolves `state/`'s location by checking whether its own directory's name
+parses as a version and its parent has a launcher beside it, so a `dist/app`
+build assembled the same way (see [`phase-0-1.md`](phase-0-1.md)) behaves
 identically without any extra configuration.
 
 `~/.commits/app/updater` is overridden by the `COMMITS_UPDATER_DIR`
@@ -85,14 +85,13 @@ as the last step of a release, once the asset itself is final.
 "Update to `<version>`" appears in the app menu only once a check finds a
 manifest version newer than the running build. Clicking it re-fetches the
 manifest, downloads and verifies the asset, and extracts it into its own new
-version folder under `app/` — all on a background thread, so the window
-stays responsive. Entries under `components/` in the ZIP land in the shared
-`app/components/` folder instead of the version folder. If a version folder
-by that name already exists (a dev build that never bumped its version, most
-commonly), the new one gets a short content-hash suffix rather than
-overwriting it. The menu label then switches to "Restart to update"; the new
-version becomes current only once `commits.exe` is started again and finds
-it as the newest folder on disk.
+version folder under `app/`, `components/` and all — all on a background
+thread, so the window stays responsive. If a version folder by that name
+already exists (a dev build that never bumped its version, most commonly),
+the new one gets a short content-hash suffix rather than overwriting it. The
+menu label then switches to "Restart to update"; the new version becomes
+current only once `commits.exe` is started again and finds it as the newest
+folder on disk.
 
 ## Install: pushing a running build without a manifest
 

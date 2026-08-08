@@ -16,11 +16,12 @@ const KEEP_VERSIONS: usize = 2;
 /// Extracts a downloaded, checksum-verified ZIP payload into a new version
 /// folder under `install_dir`, named `version` (or `version` plus a short
 /// content hash if that name is already taken -- typically a dev build
-/// that never bumps its version between pushes). Entries under
-/// `components/` land in the shared `install_dir/components/` instead of
-/// the version folder: built-in WASM components are shared across
-/// versions, not duplicated per version. Prunes anything beyond the
-/// current and previous version once extraction succeeds.
+/// that never bumps its version between pushes). `components/` travels
+/// inside the version folder along with everything else: built-in WASM
+/// components are versioned and updated with each release, not shared
+/// across versions, so an old version's own components go with it when it
+/// is later pruned. Prunes anything beyond the current and previous
+/// version once extraction succeeds.
 pub fn extract_version(archive_bytes: &[u8], install_dir: &Path, version: &str) -> Result<PathBuf, String> {
     let hash = short_hash(archive_bytes);
     let version_dir = install_dir.join(version_folder_name(install_dir, version, &hash));
@@ -36,7 +37,7 @@ pub fn extract_version(archive_bytes: &[u8], install_dir: &Path, version: &str) 
             // corrupt or hostile.
             return Err(format!("zip entry {} has an unsafe path", entry.name()));
         };
-        let target = target_for_relative(&relative_path, &version_dir, install_dir);
+        let target = version_dir.join(&relative_path);
         if entry.is_dir() {
             fs::create_dir_all(&target).map_err(|error| error.to_string())?;
             continue;
@@ -58,9 +59,9 @@ pub fn extract_version(archive_bytes: &[u8], install_dir: &Path, version: &str) 
 /// menu action to push a dev build without a manifest. `source_dir`'s own
 /// launcher executable and runtime artifacts (WebView2 profile, state,
 /// logs) are never part of a version folder, so they are excluded from the
-/// copy, and `components/` is routed to the shared folder exactly as in
-/// `extract_version`. Prunes anything beyond the current and previous
-/// version once the copy succeeds.
+/// copy; `components/` travels with the rest of the version folder exactly
+/// as in `extract_version`. Prunes anything beyond the current and
+/// previous version once the copy succeeds.
 pub fn copy_version_from_dir(source_dir: &Path, install_dir: &Path, version: &str) -> Result<PathBuf, String> {
     let relative_files = collect_copyable_files(source_dir)?;
     let mut hasher = Sha256::new();
@@ -81,7 +82,7 @@ pub fn copy_version_from_dir(source_dir: &Path, install_dir: &Path, version: &st
     }
     clear_dir(&version_dir)?;
     for relative in &relative_files {
-        let target = target_for_relative(relative, &version_dir, install_dir);
+        let target = version_dir.join(relative);
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
@@ -136,21 +137,9 @@ fn version_folder_name(install_dir: &Path, version: &str, hash: &str) -> String 
     }
 }
 
-/// Where a copied/extracted entry belongs: `install_dir/components/...` for
-/// anything under a `components/` top-level path (shared, not versioned),
-/// `version_dir/...` for everything else.
-fn target_for_relative(relative: &Path, version_dir: &Path, install_dir: &Path) -> PathBuf {
-    if relative.starts_with("components") {
-        install_dir.join(relative)
-    } else {
-        version_dir.join(relative)
-    }
-}
-
 /// Every file under `source_dir`, as paths relative to it, skipping
 /// [`LAUNCHER_EXE_NAME`] and anything [`is_runtime_artifact`] recognizes at
-/// any depth -- neither belongs in a version folder or the shared
-/// `components/` folder.
+/// any depth -- neither belongs in a version folder.
 fn collect_copyable_files(source_dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
     collect_copyable_files_into(source_dir, Path::new(""), &mut files)?;
@@ -278,15 +267,15 @@ mod tests {
     }
 
     #[test]
-    fn extract_version_routes_components_entries_to_the_shared_folder() {
+    fn extract_version_keeps_components_inside_the_version_folder() {
         let dir = tempfile::tempdir().unwrap();
         let install_dir = dir.path().join("app");
         let archive = zip_bytes(&[("commits-app.exe", b"the app"), ("components/commits.wasm", b"component")]);
 
         let version_dir = extract_version(&archive, &install_dir, "1.3.0").unwrap();
 
-        assert!(!version_dir.join("components").exists());
-        assert_eq!(fs::read(install_dir.join("components/commits.wasm")).unwrap(), b"component");
+        assert_eq!(fs::read(version_dir.join("components/commits.wasm")).unwrap(), b"component");
+        assert!(!install_dir.join("components").exists());
     }
 
     #[test]
@@ -341,7 +330,8 @@ mod tests {
 
         assert_eq!(fs::read(version_dir.join("commits-app.exe")).unwrap(), b"the app");
         assert!(!version_dir.join("commits.exe").exists());
-        assert_eq!(fs::read(install_dir.join("components/commits.wasm")).unwrap(), b"component");
+        assert_eq!(fs::read(version_dir.join("components/commits.wasm")).unwrap(), b"component");
+        assert!(!install_dir.join("components").exists());
     }
 
     #[test]

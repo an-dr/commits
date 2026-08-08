@@ -5,9 +5,9 @@ folder there if it is already installed.
 
 .DESCRIPTION
 dist.ps1 already assembles -Source in the shape an install uses: commits.exe
-at its root, a single version folder, and components/ shared alongside it
-(see dist.ps1's own doc comment). A fresh install copies that shape as-is
-into ~/.commits/app and points Start Menu and desktop shortcuts at
+at its root and a single version folder holding everything else, including
+its own components/ (see dist.ps1's own doc comment). A fresh install copies
+that shape as-is into ~/.commits/app and points Start Menu and desktop shortcuts at
 commits.exe -- it applies whichever version folder is current before
 commits-app.exe (the real app logic) starts, so shortcuts must never target
 commits-app.exe directly. Running this script again once installed does not
@@ -66,9 +66,9 @@ function Copy-AppFiles([string]$From, [string]$To) {
     }
 }
 
-# The single version folder dist.ps1 assembled under $Source -- everything
-# else there (commits.exe, components/) is already in the shape an install
-# uses and can be copied as-is.
+# The single version folder dist.ps1 assembled under $Source -- its own
+# components/ travels with it, and $Source's commits.exe is already in the
+# shape an install uses and can be copied as-is.
 function Get-SourceVersionDir([string]$Source) {
     $versionDirs = @(Get-ChildItem -LiteralPath $Source -Directory -Force | Where-Object {
         $_.Name -match '^[0-9]+(\.[0-9]+)*(-[0-9a-f]+)?$'
@@ -79,18 +79,12 @@ function Get-SourceVersionDir([string]$Source) {
     return $versionDirs[0]
 }
 
-# Pushes $Source's version folder into $InstallDir, disambiguating a
-# version-string collision (typically a dev build that never bumps its
-# version) with a short content hash, merging $Source/components into the
-# shared $InstallDir/components folder, and pruning anything beyond the
-# current and previous version -- mirroring
+# Pushes $Source's version folder (components/ and all) into $InstallDir,
+# disambiguating a version-string collision (typically a dev build that
+# never bumps its version) with a short content hash, and pruning anything
+# beyond the current and previous version -- mirroring
 # commits_upgrader::extract_version/copy_version_from_dir (Rust) exactly.
 function Install-VersionFolder([string]$Source, [string]$InstallDir) {
-    $componentsSource = Join-Path $Source "components"
-    if (Test-Path -LiteralPath $componentsSource -PathType Container) {
-        Copy-AppFiles -From $componentsSource -To (Join-Path $InstallDir "components")
-    }
-
     $sourceVersionDir = Get-SourceVersionDir -Source $Source
     $versionDir = Join-Path $InstallDir $sourceVersionDir.Name
     if (Test-Path -LiteralPath $versionDir) {
@@ -107,8 +101,8 @@ function Install-VersionFolder([string]$Source, [string]$InstallDir) {
 # Keeps only the two most recently installed version folders under
 # $InstallDir (the current version and one fallback), deleting the rest --
 # the same retention commits_upgrader::install (Rust) applies after every
-# extract/copy. Matched by name so commits.exe, updater/, components/, and
-# state/ are never mistaken for a version folder.
+# extract/copy. Matched by name so commits.exe, updater/, and state/ are
+# never mistaken for a version folder.
 function Remove-OldVersions([string]$InstallDir) {
     Get-ChildItem -LiteralPath $InstallDir -Directory -Force |
         Where-Object { $_.Name -match '^[0-9]+(\.[0-9]+)*(-[0-9a-f]+)?$' } |

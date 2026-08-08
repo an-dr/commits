@@ -8,9 +8,9 @@ host part is the expensive one because it compiles the vendored bones engine;
 web and wasm are the fast loops.
 
 dist/app is assembled already in the shape an install uses: commits.exe (the
-launcher) at the root, the other host executables and page.html in a version
-folder named after apps/commits/host/Cargo.toml's own version, and
-components/ shared alongside it. That keeps '.\dist\app\commits.exe'
+launcher) at the root, everything else -- host executables, page.html, and
+the WASM components/ -- in a version folder named after
+apps/commits/host/Cargo.toml's own version. That keeps '.\dist\app\commits.exe'
 (docs/phase-0-1.md) working directly out of a fresh build, and lets
 install.ps1 install/push dist/app's contents largely as-is instead of having
 to re-derive the version and re-split files itself.
@@ -61,9 +61,9 @@ function Get-AppVersion([string]$RepoRoot) {
 
 $version = Get-AppVersion -RepoRoot $root
 $versionDirFull = Join-Path $outputFull $version
+$componentsDirFull = Join-Path $versionDirFull "components"
 
-New-Item -ItemType Directory -Path (Join-Path $outputFull "components") -Force | Out-Null
-New-Item -ItemType Directory -Path $versionDirFull -Force | Out-Null
+New-Item -ItemType Directory -Path $componentsDirFull -Force | Out-Null
 
 if ($Part -in @("web", "all")) {
     Invoke-Npm "build:web"
@@ -75,9 +75,9 @@ if ($Part -in @("wasm", "all")) {
     Invoke-Npm "build:wasm"
     foreach ($component in @("commits", "hello")) {
         Copy-Item (Join-Path $root "dist/extensions/$component.wasm") `
-            (Join-Path $outputFull "components/$component.wasm") -Force
+            (Join-Path $componentsDirFull "$component.wasm") -Force
     }
-    Write-Host "Updated the components in $outputFull/components"
+    Write-Host "Updated the components in $componentsDirFull"
 }
 
 if ($Part -in @("host", "all")) {
