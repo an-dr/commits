@@ -485,3 +485,25 @@ body {
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Restyles the shared MIT context menu (packages/webview-shell's exact
+   upstream CSS, left untouched for fidelity) to match the app's own
+   rounded/compact hamburger menu instead of VS Code's square, wider one. */
+#contextMenu {
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  font-size: 11px;
+  line-height: 1.3;
+  padding: 3px;
+}
+
+#contextMenu li.contextMenuItem {
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+#contextMenu li.contextMenuDivider {
+  margin: 3px 2px;
+  opacity: 1;
+}
