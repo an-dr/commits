@@ -74,6 +74,12 @@ export type RequestRemoteOperation = {
   command: "remoteOperation";
   operation: "fetch" | "pull" | "push";
 };
+/** `status` is null on success, an error message otherwise -- same convention as `ResponseInProgressAction`. */
+export type ResponseRemoteOperation = {
+  command: "remoteOperation";
+  operation: "fetch" | "pull" | "push";
+  status: string | null;
+};
 
 export type RequestLoadRepos = {
   command: "loadRepos";
@@ -208,4 +214,5 @@ export type ResponseMessage =
   | ResponseCopyToClipboard
   | ResponseViewDiff
   | ResponseUtilityAction
-  | ResponseRefresh;
+  | ResponseRefresh
+  | ResponseRemoteOperation;

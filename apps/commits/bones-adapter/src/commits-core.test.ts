@@ -772,6 +772,20 @@ describe("CommitsCore MIT webview host", () => {
     expect(reply?.status).toContain("not available in the standalone host yet");
   });
 
+  it("reports a fetch/pull/push as an unimplemented Git action instead of dropping it silently", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "remoteOperation", operation: "push" }));
+
+    const reply = host.sent
+      .map(([, message]) => message as { command: string; operation?: string; status?: string | null })
+      .find((message) => message.command === "remoteOperation");
+    expect(reply?.operation).toBe("push");
+    expect(reply?.status).toContain("not available in the standalone host yet");
+  });
+
   it("reports the working tree as staged and unstaged entries", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);

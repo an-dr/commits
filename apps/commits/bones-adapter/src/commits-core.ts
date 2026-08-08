@@ -307,6 +307,17 @@ export class CommitsCore {
       case "repoInProgress":
         this.send({ command: "repoInProgress", state: null });
         return;
+      case "remoteOperation": {
+        const operation = value.operation;
+        if (operation === "fetch" || operation === "pull" || operation === "push") {
+          this.send({
+            command: "remoteOperation",
+            operation,
+            status: "This Git action is not available in the standalone host yet.",
+          });
+        }
+        return;
+      }
       case "copyToClipboard":
         if (typeof value.data === "string" && typeof value.type === "string") {
           const requestId = this.nextOsRequestId++;

@@ -2162,6 +2162,11 @@ window.addEventListener("message", (event) => {
     case "refresh":
       gitGraph.refresh(false);
       break;
+    case "remoteOperation": {
+      const remoteOperationErrors = { fetch: l10n.unableToFetch, pull: l10n.unableToPull, push: l10n.unableToPush };
+      refreshGraphOrDisplayError(msg.status, remoteOperationErrors[msg.operation]);
+      break;
+    }
     case "resetToCommit":
       refreshGraphOrDisplayError(msg.status, l10n.unableToReset);
       break;

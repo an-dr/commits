@@ -83,8 +83,11 @@ export interface LocalizedStrings {
   readonly unableToCreateBranch: string;
   readonly unableToDeleteBranch: string;
   readonly unableToDeleteTag: string;
+  readonly unableToFetch: string;
   readonly unableToMergeBranch: string;
   readonly unableToMergeCommit: string;
+  readonly unableToPull: string;
+  readonly unableToPush: string;
   readonly unableToPushTag: string;
   readonly unableToRenameBranch: string;
   readonly unableToReset: string;
