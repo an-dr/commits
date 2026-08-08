@@ -156,8 +156,11 @@ acceptance gates pass.
 - M4 begun with the working tree: the uncommitted row opens a changes panel that
   stages, unstages, discards and commits through bounded native Git commands,
   and a repository-scoped host capability reads the working-tree side of a file
-  the panel diffs. Every other mutating command still returns an explicit
-  unsupported status instead of reporting false success.
+  the panel diffs. Fetch, pull, and push run the same way, reusing
+  `WorkingTreeActions`' request tracking and the existing askpass/editor bridge
+  for credentials. Every other mutating command (branch, tag, checkout,
+  cherry-pick, revert, reset, merge, in-progress action) still returns an
+  explicit unsupported status instead of reporting false success.
 - M5 production cutover complete: no production bundle import or emitted text
   references `startPage`, `repositorySnapshot`, or the old card layout. Legacy
   source/tests remain until their dependent types are retired safely.

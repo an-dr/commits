@@ -81,7 +81,24 @@ export class WorkingTreeActions {
     );
   }
 
-  private send(repo: string, args: string[], deliver: (status: string | null) => void): void {
+  /**
+   * Fetches, pulls, or pushes the current branch's configured remote(s).
+   * Credential prompts (HTTPS password/PAT, SSH passphrase) are handled by
+   * the host process's GIT_ASKPASS/GIT_EDITOR wiring (commits-git's
+   * ProcessRunner), the same as every other Git command run through it.
+   */
+  remoteOperation(repo: string, operation: "fetch" | "pull" | "push", deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    const args = operation === "fetch" ? ["fetch", "--all"] : [operation];
+    // Network-bound, unlike the local working-tree mutations above -- matches
+    // cloneCommitsRepo's own 120s allowance for a remote round trip.
+    this.send(repo, args, deliver, 120_000);
+  }
+
+  private send(repo: string, args: string[], deliver: (status: string | null) => void, timeoutMs = 30_000): void {
     const requestId = this.nextRequestId++;
     this.pending.set(requestId, (result) =>
       deliver(
@@ -90,7 +107,7 @@ export class WorkingTreeActions {
           : failureText(result) || "The Git command did not complete.",
       ),
     );
-    this.host.runGit({ requestId, cwd: repo, args, timeoutMs: 30_000 });
+    this.host.runGit({ requestId, cwd: repo, args, timeoutMs });
   }
 }
 

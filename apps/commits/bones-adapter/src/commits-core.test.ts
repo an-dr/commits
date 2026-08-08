@@ -772,18 +772,51 @@ describe("CommitsCore MIT webview host", () => {
     expect(reply?.status).toContain("not available in the standalone host yet");
   });
 
-  it("reports a fetch/pull/push as an unimplemented Git action instead of dropping it silently", () => {
+  it("pushes the current repo and reports success", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({ command: "remoteOperation", operation: "push" }));
+
+    expect(host.gitRequests[0].cwd).toBe("C:/repo");
+    expect(host.gitRequests[0].args).toEqual(["push"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "remoteOperation", operation: "push", status: null }]);
+  });
+
+  it("fetches every remote and reports Git's own failure text", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({ command: "remoteOperation", operation: "fetch" }));
+
+    expect(host.gitRequests[0].args).toEqual(["fetch", "--all"]);
+    failGitAt(host, core, 0, "fatal: could not read Username for 'https://example.com': terminal prompts disabled");
+    expect(host.sent).toContainEqual([
+      "main",
+      {
+        command: "remoteOperation",
+        operation: "fetch",
+        status: "fatal: could not read Username for 'https://example.com': terminal prompts disabled",
+      },
+    ]);
+  });
+
+  it("pulls the current repo without a repository open", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
-    core.receivePageJson(JSON.stringify({ command: "remoteOperation", operation: "push" }));
+    core.receivePageJson(JSON.stringify({ command: "remoteOperation", operation: "pull" }));
 
-    const reply = host.sent
-      .map(([, message]) => message as { command: string; operation?: string; status?: string | null })
-      .find((message) => message.command === "remoteOperation");
-    expect(reply?.operation).toBe("push");
-    expect(reply?.status).toContain("not available in the standalone host yet");
+    expect(host.gitRequests).toHaveLength(0);
+    expect(host.sent).toContainEqual([
+      "main", { command: "remoteOperation", operation: "pull", status: "No repository is open." },
+    ]);
   });
 
   it("reports the working tree as staged and unstaged entries", () => {

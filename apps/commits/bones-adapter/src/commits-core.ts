@@ -309,13 +309,10 @@ export class CommitsCore {
         return;
       case "remoteOperation": {
         const operation = value.operation;
-        if (operation === "fetch" || operation === "pull" || operation === "push") {
-          this.send({
-            command: "remoteOperation",
-            operation,
-            status: "This Git action is not available in the standalone host yet.",
-          });
-        }
+        if (operation !== "fetch" && operation !== "pull" && operation !== "push") return;
+        this.workingTreeActions.remoteOperation(this.currentRepository ?? "", operation, (status) => {
+          this.send({ command: "remoteOperation", operation, status });
+        });
         return;
       }
       case "copyToClipboard":
