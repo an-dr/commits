@@ -1,0 +1,71 @@
+name: build
+
+# Windows x64 is the repo's only verified-working platform (see README) and
+# is a required check. Windows arm64 has a dedicated wizer bootstrap already
+# (patch-wizer-package.mjs, tooling/wizer-win32-arm64) so it is reasonably
+# likely to work, and Linux has no precedent anywhere in this repo -- both
+# are wired up here but allowed to fail (continue-on-error) until someone
+# confirms a green run and this comment can be updated to drop that.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ !matrix.required }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            required: true
+          - name: windows-arm64
+            os: windows-11-arm
+            required: false
+          - name: linux-x64
+            os: ubuntu-latest
+            required: false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # wry's webkit2gtk backend and the vendored SDL3-from-source build both
+      # need these; windows-latest and windows-11-arm ship MSVC/CMake/Ninja
+      # already (see runner-images), so only Linux needs an explicit install.
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm run check
+
+      - run: npm test
+
+      - run: cargo test --workspace
+
+      # Only windows-x64 has a defined install/launcher layout (docs/updating.md)
+      # to assemble; the other legs stop at "compiles and tests pass" for now.
+      - name: Assemble dist
+        if: matrix.name == 'windows-x64'
+        run: npm run dist
