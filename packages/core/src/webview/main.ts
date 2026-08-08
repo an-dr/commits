@@ -567,6 +567,68 @@ class GitGraphView {
           }
         );
       }
+    } else {
+      // A remote-tracking ref's name is "<remote>/<branch>"; the remote name
+      // never contains a slash, so only the first one splits it.
+      const slash = name.indexOf("/");
+      const remoteName = name.slice(0, slash);
+      const remoteBranchOnly = name.slice(slash + 1);
+      menu.push(
+        {
+          title: l10n.merge + ELLIPSIS,
+          onClick: () =>
+            showCheckboxDialog(
+              l10n.dialogMergeConfirm
+                .replace("{0}", `<b><i>${escapeHtml(name)}</i></b>`)
+                .replace("{1}", l10n.labelCurrentBranch),
+              l10n.dialogMergeNoFastForward,
+              true,
+              l10n.dialogYesMerge,
+              (createNewCommit) =>
+                sendMessage({
+                  command: "mergeBranch",
+                  repo: this.currentRepo,
+                  branchName: name,
+                  createNewCommit
+                }),
+              source
+            )
+        },
+        {
+          title: l10n.pullIntoCurrentBranch + ELLIPSIS,
+          onClick: () =>
+            showConfirmationDialog(
+              l10n.dialogPullBranchConfirm
+                .replace("{0}", `<b><i>${escapeHtml(name)}</i></b>`)
+                .replace("{1}", l10n.labelCurrentBranch),
+              () =>
+                sendMessage({
+                  command: "pullBranch",
+                  repo: this.currentRepo,
+                  remote: remoteName,
+                  branchName: remoteBranchOnly
+                }),
+              source
+            )
+        },
+        {
+          title: l10n.deleteRemoteBranch + ELLIPSIS,
+          onClick: () =>
+            showConfirmationDialog(
+              l10n.dialogDeleteConfirm
+                .replace("{0}", l10n.labelBranch)
+                .replace("{1}", `<b><i>${escapeHtml(name)}</i></b>`),
+              () =>
+                sendMessage({
+                  command: "deleteRemoteBranch",
+                  repo: this.currentRepo,
+                  remote: remoteName,
+                  branchName: remoteBranchOnly
+                }),
+              source
+            )
+        }
+      );
     }
     menu.push(null, {
       title: l10n.copyBranchName,
@@ -1425,10 +1487,75 @@ class GitGraphView {
             );
           }
         } else {
+          // A remote-tracking ref's name is "<remote>/<branch>"; the remote
+          // name never contains a slash, so only the first one splits it.
+          const slash = refName.indexOf("/");
+          const remoteName = refName.slice(0, slash);
+          const remoteBranchOnly = refName.slice(slash + 1);
           menu = [
             {
               title: l10n.checkoutBranch + ELLIPSIS,
               onClick: () => this.checkoutBranchAction(sourceElem, refName)
+            },
+            {
+              title: l10n.merge + ELLIPSIS,
+              onClick: () => {
+                showCheckboxDialog(
+                  l10n.dialogMergeConfirm
+                    .replace("{0}", "<b><i>" + escapeHtml(refName) + "</i></b>")
+                    .replace("{1}", l10n.labelCurrentBranch),
+                  l10n.dialogMergeNoFastForward,
+                  true,
+                  l10n.dialogYesMerge,
+                  (createNewCommit) => {
+                    sendMessage({
+                      command: "mergeBranch",
+                      repo: this.currentRepo!,
+                      branchName: refName,
+                      createNewCommit: createNewCommit
+                    });
+                  },
+                  null
+                );
+              }
+            },
+            {
+              title: l10n.pullIntoCurrentBranch + ELLIPSIS,
+              onClick: () => {
+                showConfirmationDialog(
+                  l10n.dialogPullBranchConfirm
+                    .replace("{0}", "<b><i>" + escapeHtml(refName) + "</i></b>")
+                    .replace("{1}", l10n.labelCurrentBranch),
+                  () => {
+                    sendMessage({
+                      command: "pullBranch",
+                      repo: this.currentRepo!,
+                      remote: remoteName,
+                      branchName: remoteBranchOnly
+                    });
+                  },
+                  null
+                );
+              }
+            },
+            {
+              title: l10n.deleteRemoteBranch + ELLIPSIS,
+              onClick: () => {
+                showConfirmationDialog(
+                  l10n.dialogDeleteConfirm
+                    .replace("{0}", l10n.labelBranch)
+                    .replace("{1}", "<b><i>" + escapeHtml(refName) + "</i></b>"),
+                  () => {
+                    sendMessage({
+                      command: "deleteRemoteBranch",
+                      repo: this.currentRepo!,
+                      remote: remoteName,
+                      branchName: remoteBranchOnly
+                    });
+                  },
+                  null
+                );
+              }
             }
           ];
         }
@@ -2167,6 +2294,12 @@ window.addEventListener("message", (event) => {
       refreshGraphOrDisplayError(msg.status, remoteOperationErrors[msg.operation]);
       break;
     }
+    case "pullBranch":
+      refreshGraphOrDisplayError(msg.status, l10n.unableToPull);
+      break;
+    case "deleteRemoteBranch":
+      refreshGraphOrDisplayError(msg.status, l10n.unableToDeleteRemoteBranch);
+      break;
     case "resetToCommit":
       refreshGraphOrDisplayError(msg.status, l10n.unableToReset);
       break;

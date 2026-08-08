@@ -81,6 +81,30 @@ export type ResponseRemoteOperation = {
   status: string | null;
 };
 
+/** Pulls one specific remote branch into the current branch (`git pull <remote> <branchName>`). */
+export type RequestPullBranch = {
+  command: "pullBranch";
+  repo: string;
+  remote: string;
+  branchName: string;
+};
+export type ResponsePullBranch = {
+  command: "pullBranch";
+  status: string | null;
+};
+
+/** Deletes a branch on its remote (`git push <remote> --delete <branchName>`). */
+export type RequestDeleteRemoteBranch = {
+  command: "deleteRemoteBranch";
+  repo: string;
+  remote: string;
+  branchName: string;
+};
+export type ResponseDeleteRemoteBranch = {
+  command: "deleteRemoteBranch";
+  status: string | null;
+};
+
 export type RequestLoadRepos = {
   command: "loadRepos";
   check: boolean;
@@ -188,6 +212,8 @@ export type RequestMessage =
   | RequestFetchAvatar
   | RequestSelectRepo
   | RequestRemoteOperation
+  | RequestPullBranch
+  | RequestDeleteRemoteBranch
   | RequestLoadRepos
   | RequestSaveRepoState
   | RequestCopyToClipboard
@@ -215,4 +241,6 @@ export type ResponseMessage =
   | ResponseViewDiff
   | ResponseUtilityAction
   | ResponseRefresh
-  | ResponseRemoteOperation;
+  | ResponseRemoteOperation
+  | ResponsePullBranch
+  | ResponseDeleteRemoteBranch;

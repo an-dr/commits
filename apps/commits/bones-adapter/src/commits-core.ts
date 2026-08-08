@@ -315,6 +315,22 @@ export class CommitsCore {
         });
         return;
       }
+      case "pullBranch":
+        this.workingTreeActions.pullBranch(
+          this.currentRepository ?? "",
+          asString(value.remote),
+          asString(value.branchName),
+          (status) => this.send({ command: "pullBranch", status }),
+        );
+        return;
+      case "deleteRemoteBranch":
+        this.workingTreeActions.deleteRemoteBranch(
+          this.currentRepository ?? "",
+          asString(value.remote),
+          asString(value.branchName),
+          (status) => this.send({ command: "deleteRemoteBranch", status }),
+        );
+        return;
       case "checkoutBranch":
         this.workingTreeActions.checkoutBranch(
           this.currentRepository ?? "",

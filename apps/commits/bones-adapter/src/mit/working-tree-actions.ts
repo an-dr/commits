@@ -99,6 +99,24 @@ export class WorkingTreeActions {
     this.send(repo, args, deliver, 120_000);
   }
 
+  /** Pulls one specific remote branch into the current branch. */
+  pullBranch(repo: string, remote: string, branchName: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["pull", remote, branchName], deliver, 120_000);
+  }
+
+  /** Deletes a branch on its remote. */
+  deleteRemoteBranch(repo: string, remote: string, branchName: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["push", remote, "--delete", branchName], deliver, 120_000);
+  }
+
   /** Checks out a local branch, or a remote one as a new local branch tracking it. */
   checkoutBranch(repo: string, branchName: string, remoteBranch: string | null, deliver: (status: string | null) => void): void {
     if (repo === "") {

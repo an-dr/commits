@@ -83,6 +83,7 @@ export interface LocalizedStrings {
   readonly unableToCreateBranch: string;
   readonly unableToDeleteBranch: string;
   readonly unableToDeleteTag: string;
+  readonly unableToDeleteRemoteBranch: string;
   readonly unableToFetch: string;
   readonly unableToMergeBranch: string;
   readonly unableToMergeCommit: string;
@@ -109,6 +110,8 @@ export interface LocalizedStrings {
   readonly checkoutBranch: string;
   readonly renameBranch: string;
   readonly deleteBranch: string;
+  readonly deleteRemoteBranch: string;
+  readonly pullIntoCurrentBranch: string;
   readonly typeCommitHash: string;
   readonly typeTagName: string;
   readonly typeBranchName: string;
@@ -140,6 +143,7 @@ export interface LocalizedStrings {
   readonly dialogRenameBranchTitle: string;
   readonly dialogRenameBranchSubmit: string;
   readonly dialogPushTagConfirm: string;
+  readonly dialogPullBranchConfirm: string;
   readonly dialogYes: string;
   readonly dialogYesCherryPick: string;
   readonly dialogYesRevert: string;

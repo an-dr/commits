@@ -866,6 +866,37 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.sent).toContainEqual(["main", { command: "pushTag", status: null }]);
   });
 
+  it("pulls one remote branch into the current branch", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "pullBranch", repo: "C:/repo", remote: "origin", branchName: "feature",
+    }));
+    expect(host.gitRequests[0].args).toEqual(["pull", "origin", "feature"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "pullBranch", status: null }]);
+  });
+
+  it("deletes a branch on its remote", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "deleteRemoteBranch", repo: "C:/repo", remote: "origin", branchName: "old",
+    }));
+    expect(host.gitRequests[0].args).toEqual(["push", "origin", "--delete", "old"]);
+    failGitAt(host, core, 0, "error: unable to delete 'old': remote ref does not exist");
+    expect(host.sent).toContainEqual([
+      "main",
+      { command: "deleteRemoteBranch", status: "error: unable to delete 'old': remote ref does not exist" },
+    ]);
+  });
+
   it("pushes the current repo and reports success", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
