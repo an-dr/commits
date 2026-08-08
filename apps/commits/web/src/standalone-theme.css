@@ -324,7 +324,7 @@ body {
   position: relative;
 }
 
-/* File's items fly out to the left on hover (or focus, for keyboard use)
+/* About's items fly out to the left on hover (or focus, for keyboard use)
    — the whole menu now opens from the toolbar's right edge, where there is
    no room to fly out further right. */
 .standaloneMenuSubList {
@@ -355,7 +355,8 @@ body {
 }
 
 .standaloneMenuList button,
-.standaloneMenuTitle {
+.standaloneMenuTitle,
+.standaloneMenuLink {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -368,12 +369,15 @@ body {
   color: var(--vscode-menu-foreground);
   font: inherit;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .standaloneMenuList button:hover,
 .standaloneMenuTitle:hover,
-.standaloneMenuGroup:hover > .standaloneMenuTitle {
+.standaloneMenuGroup:hover > .standaloneMenuTitle,
+.standaloneMenuLink:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
