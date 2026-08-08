@@ -6,8 +6,10 @@ use sha2::{Digest, Sha256};
 
 mod stage;
 mod supervise;
+mod versions;
 pub use stage::{apply, restore_backup, stage as stage_update, stage_current_install};
 pub use supervise::wait_for_marker;
+pub use versions::{current_version_dir, previous_version_dir};
 
 /// A hosted update announcement: the newest available version, where to
 /// download it, and an optional integrity check. Checksum is optional
@@ -51,18 +53,9 @@ pub fn parse_manifest(body: &str) -> Result<Manifest, String> {
 /// smaller than any well-formed one, so a malformed candidate is never
 /// mistaken for an update.
 pub fn is_newer(current: &str, candidate: &str) -> bool {
-    fn segments(version: &str) -> Option<Vec<u64>> {
-        version.split('.').map(|part| part.parse().ok()).collect()
-    }
-    match (segments(current), segments(candidate)) {
+    match (versions::parse_version_segments(current), versions::parse_version_segments(candidate)) {
         (Some(current), Some(candidate)) => {
-            let len = current.len().max(candidate.len());
-            let pad = |v: &Vec<u64>| {
-                let mut v = v.clone();
-                v.resize(len, 0);
-                v
-            };
-            pad(&candidate) > pad(&current)
+            versions::compare_segments(&candidate, &current) == std::cmp::Ordering::Greater
         }
         _ => false,
     }
