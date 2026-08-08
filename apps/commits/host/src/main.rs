@@ -53,7 +53,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .startup_extension("commits")
         .saves_dir(shared_data_dir("state"))
         .window("commits", 1200, 1000)
-        .min_window_size(1000, 800)
+        .min_window_size(1200, 800)
         .web()
         // Modules init in registration order, so these two come first: the
         // page server has to be listening before the splash can ask it for a
