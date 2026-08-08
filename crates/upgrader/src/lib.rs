@@ -4,10 +4,10 @@
 use commits_os::OsBackend;
 use sha2::{Digest, Sha256};
 
-mod stage;
+mod install;
 mod supervise;
 mod versions;
-pub use stage::{apply, restore_backup, stage as stage_update, stage_current_install};
+pub use install::{copy_version_from_dir, extract_version, install_fresh, remove_version_dir};
 pub use supervise::wait_for_marker;
 pub use versions::{current_version_dir, previous_version_dir};
 
@@ -93,12 +93,15 @@ pub fn download_asset_verified(backend: &dyn OsBackend, manifest: &Manifest) -> 
 /// (tests and support diagnostics), otherwise `~/.commits/updater`. Shared by
 /// every process that needs to agree on this location -- the launcher
 /// applies from it, and the running app stages into it -- so it is a single
-/// function rather than each caller re-deriving the same path.
+/// function rather than each caller re-deriving the same path. Nested inside
+/// the install dir itself (`app/updater`) rather than a home-level sibling,
+/// since every version folder lives under the same install dir and this is
+/// the one thing about an install that is not itself versioned.
 pub fn state_dir() -> Option<std::path::PathBuf> {
     if let Ok(value) = std::env::var("COMMITS_UPDATER_DIR") {
         return Some(std::path::PathBuf::from(value));
     }
-    dirs::home_dir().map(|home| home.join(".commits").join("updater"))
+    default_install_dir().map(|install_dir| install_dir.join("updater"))
 }
 
 /// Where a permanent install lives: `COMMITS_INSTALL_DIR` if set (tests),
@@ -130,11 +133,11 @@ pub fn record_version_and_check_update(current: &str) -> Result<bool, String> {
     Ok(previous.is_some_and(|value| value.trim() != current))
 }
 
-/// The launcher's own filename -- the single source of truth shared by the
-/// launcher binary itself (to exclude itself from apply/restore) and the
-/// running app (to tell whether `default_install_dir()` already has one,
-/// deciding whether Install can stage as an update or must place files
-/// directly).
+/// The launcher's own filename -- the single source of truth shared by
+/// `copy_version_from_dir` (to exclude it from a version folder's contents)
+/// and the running app (to tell whether `default_install_dir()` already has
+/// one, deciding whether Install can push a new version folder or must
+/// place files directly via `install_fresh`).
 #[cfg(windows)]
 pub const LAUNCHER_EXE_NAME: &str = "commits.exe";
 #[cfg(not(windows))]
