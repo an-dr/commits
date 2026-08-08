@@ -68,6 +68,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(commits_repo::CommitsRepoModule::default())
         .module(updater::UpdaterModule::default())
         .run()?;
+    // Reached only once the engine loop returns without error -- a clean
+    // shutdown, whether the window closed on its own or the user closed it.
+    // `watch_startup_health`'s own marker write (on its background thread,
+    // after `STARTUP_GRACE_PERIOD`) already covers a long-running app; this
+    // covers a short-lived one closed before that timer ever fires, which
+    // that thread cannot reliably do for itself once the process is about to
+    // exit right behind it. Redundant, not wrong, if both end up writing it.
+    write_health_marker();
     Ok(())
 }
 
@@ -94,11 +102,20 @@ fn shared_data_dir(name: &str) -> std::path::PathBuf {
 ///
 /// A launcher supervising this process for a self-update needs to know
 /// startup actually succeeded, not just that this line of code ran, so the
-/// health marker (`COMMITS_HEALTH_MARKER`) is written only after this same
-/// grace period passes with no failure on `failures` -- the one channel that
-/// already knows about the blank-window failure mode above. Launched
-/// directly (the ordinary case today), `COMMITS_HEALTH_MARKER` is unset and
-/// this is a no-op past the existing failure-reporting behavior.
+/// health marker (`COMMITS_HEALTH_MARKER`) is written once this grace period
+/// passes with no failure on `failures` -- the one channel that already knows
+/// about the blank-window failure mode above. Launched directly (the
+/// ordinary case today), `COMMITS_HEALTH_MARKER` is unset and this is a
+/// no-op past the existing failure-reporting behavior.
+///
+/// This alone used to leave a real gap: closing the window before the grace
+/// period elapses (trivially easy, since the app is usable within about a
+/// second) never sends a failure and never lets this timer fire either, so
+/// no marker was ever written -- a supervising launcher would conclude
+/// startup failed and delete the version it just launched, even though
+/// nothing went wrong. `run()` covers that case directly, on its own thread,
+/// since a background thread has no guaranteed chance to run between the
+/// engine loop returning and the process exiting right after it.
 ///
 /// Waits on its own thread: the report has to arrive while the engine is still
 /// running its loop, not after it returns.
@@ -119,7 +136,12 @@ fn watch_startup_health(failures: Receiver<String>) {
                     return;
                 }
                 // The engine shut down without failing -- the ordinary path,
-                // needing no report and no marker (the app is exiting anyway).
+                // needing no dialog since the app is exiting anyway. Writing
+                // the marker here too would be redundant at best: `main()`
+                // returns, and the process exits, essentially the same
+                // instant the sender's drop makes this branch reachable, so
+                // this thread is not guaranteed to ever run again to do it
+                // (confirmed empirically -- see `run()`'s own write instead).
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
             };
             let log = diagnostics::log_path()
