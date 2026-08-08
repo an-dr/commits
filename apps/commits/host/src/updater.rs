@@ -184,14 +184,20 @@ fn is_install_dir(current: &Path) -> bool {
 /// version trails unprefixed, as the last field, matching `commits-repo`'s
 /// own rest-is-the-final-string convention.
 ///
-/// `just_updated` records this version to `state_dir()` as a side effect --
-/// treated as "not just updated" on a write failure (e.g. an unresolvable
-/// home directory) rather than surfaced as an error, since the entire
-/// purpose is a one-time confirmation banner, not something worth failing
-/// the whole status query over.
+/// `just_updated` only has meaning for an installed run -- a dev or ad-hoc
+/// build was never "updated" by this mechanism -- so it skips
+/// `record_version_and_check_update` (and the `state_dir()` write that
+/// implies) entirely rather than reporting `false` after touching disk
+/// anyway: a non-installed run has no business creating `app/updater/` at
+/// all. For an installed run, a write failure (e.g. an unresolvable home
+/// directory) reads as "not just updated" rather than surfacing an error,
+/// since the entire purpose is a one-time confirmation banner, not
+/// something worth failing the whole status query over.
 fn encode_install_status() -> Vec<u8> {
-    let just_updated = commits_upgrader::record_version_and_check_update(CURRENT_VERSION).unwrap_or(false);
-    let mut response = vec![SUCCESS, u8::from(is_installed()), u8::from(just_updated)];
+    let installed = is_installed();
+    let just_updated =
+        if installed { commits_upgrader::record_version_and_check_update(CURRENT_VERSION).unwrap_or(false) } else { false };
+    let mut response = vec![SUCCESS, u8::from(installed), u8::from(just_updated)];
     response.extend(CURRENT_VERSION.as_bytes());
     response
 }
@@ -507,17 +513,49 @@ mod tests {
 
     #[test]
     fn respond_reports_just_updated_exactly_once_after_the_version_changes() {
+        // just_updated is only ever recorded for an installed run, so this
+        // needs COMMITS_INSTALL_DIR set to match the running directory too,
+        // not just a state dir to record into.
         let state_dir = tempfile::tempdir().unwrap();
         std::fs::write(state_dir.path().join("version"), "0.0.1").unwrap();
+        let install_dir = running_directory().unwrap().parent().unwrap().to_path_buf();
         let _guard = ENV_LOCK.lock().unwrap();
-        unsafe { std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path()) };
+        unsafe {
+            std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path());
+            std::env::set_var("COMMITS_INSTALL_DIR", &install_dir);
+        }
         let mut module = UpdaterModule::default();
 
         let first = module.respond(OWNER, &[]).unwrap();
         let second = module.respond(OWNER, &[]).unwrap();
 
-        unsafe { std::env::remove_var("COMMITS_UPDATER_DIR") };
+        unsafe {
+            std::env::remove_var("COMMITS_UPDATER_DIR");
+            std::env::remove_var("COMMITS_INSTALL_DIR");
+        }
         assert_eq!(first[2], 1, "the first response after a version change reports it");
         assert_eq!(second[2], 0, "a later response at the same version does not report it again");
+    }
+
+    #[test]
+    fn respond_never_creates_the_state_dir_for_a_non_installed_run() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let _guard = ENV_LOCK.lock().unwrap();
+        unsafe {
+            std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path());
+            std::env::set_var("COMMITS_INSTALL_DIR", elsewhere.path());
+        }
+        let mut module = UpdaterModule::default();
+
+        let response = module.respond(OWNER, &[]).unwrap();
+
+        unsafe {
+            std::env::remove_var("COMMITS_UPDATER_DIR");
+            std::env::remove_var("COMMITS_INSTALL_DIR");
+        }
+        assert_eq!(response[1], 0, "not installed");
+        assert_eq!(response[2], 0, "never just-updated when not installed");
+        assert!(!state_dir.path().join("version").exists(), "a non-installed run must not write app/updater/version");
     }
 }
