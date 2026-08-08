@@ -1,17 +1,19 @@
 <#
 .SYNOPSIS
-Installs the standalone app to ~/.commits/app, or stages an update if it is
-already installed there.
+Installs the standalone app to ~/.commits/app, or pushes a new version
+folder there if it is already installed.
 
 .DESCRIPTION
-A fresh install copies a built app into ~/.commits/app and points Start Menu
-and desktop shortcuts at commits.exe -- the permanent entry point that
-applies a staged update before commits-app.exe (the real app logic) starts,
-so shortcuts must never target commits-app.exe directly. Running this script
-again once installed does not touch the live install: it stages the build
-into the same updater/update folder the launcher itself applies from,
-exactly as if Update had been clicked in the app, so a second run is how a
-from-source build gets "pushed" without waiting on a hosted manifest.
+A fresh install copies commits.exe (the permanent entry point) to
+~/.commits/app itself and everything else into a version-named folder
+underneath it, then points Start Menu and desktop shortcuts at commits.exe
+-- it applies whichever version folder is current before commits-app.exe
+(the real app logic) starts, so shortcuts must never target commits-app.exe
+directly. Running this script again once installed does not touch the live
+install: it pushes the build into its own new version folder, exactly as if
+Update had been clicked in the app, so a second run is how a from-source
+build gets "pushed" without waiting on a hosted manifest. Only the current
+and previous version folders are kept; older ones are deleted.
 
 .PARAMETER Source
 Directory holding a built app (commits.exe, commits-app.exe, ...).
@@ -40,7 +42,7 @@ $ErrorActionPreference = "Stop"
 $isWindowsPlatform = $env:OS -eq "Windows_NT"
 $launcherName = if ($isWindowsPlatform) { "commits.exe" } else { "commits" }
 
-# Mirrors commits_upgrader::stage::is_runtime_artifact (Rust): a build that
+# Mirrors commits_upgrader::install::is_runtime_artifact (Rust): a build that
 # was ever run directly out of -Source accumulates WebView2's own per-exe
 # browser profile, the bones save-slot directory, and log files right next
 # to the real app -- none of that is part of the distributable app, and a
@@ -62,6 +64,69 @@ function Copy-AppFiles([string]$From, [string]$To) {
     }
 }
 
+# Reads the standalone app's own version straight from its Cargo.toml, the
+# same value baked into the built commits-app.exe as CARGO_PKG_VERSION --
+# this script has no other reliable way to name the version folder it is
+# about to create.
+function Get-AppVersion([string]$RepoRoot) {
+    $cargoToml = Join-Path $RepoRoot "apps/commits/host/Cargo.toml"
+    $content = Get-Content -LiteralPath $cargoToml -Raw
+    if ($content -match '(?m)^\[package\][\s\S]*?^version\s*=\s*"([^"]+)"') {
+        return $Matches[1]
+    }
+    throw "Could not read the app version from $cargoToml"
+}
+
+# Copies $From (a built app directory) into a new version folder under
+# $InstallDir, mirroring commits_upgrader::extract_version /
+# copy_version_from_dir (Rust) exactly: the launcher exe never becomes part
+# of a version folder, "extensions" entries are merged into the shared
+# $InstallDir/extensions folder instead of duplicated per version, and a
+# version-string collision (typically a dev build that never bumps its
+# version) is disambiguated with a short content hash rather than
+# overwriting whatever is already there. Prunes anything beyond the current
+# and previous version once the push succeeds.
+function Install-VersionFolder([string]$From, [string]$InstallDir, [string]$Version) {
+    $extensionsSource = Join-Path $From "extensions"
+    if (Test-Path -LiteralPath $extensionsSource -PathType Container) {
+        Copy-AppFiles -From $extensionsSource -To (Join-Path $InstallDir "extensions")
+    }
+
+    $versionDir = Join-Path $InstallDir $Version
+    if (Test-Path -LiteralPath $versionDir) {
+        $mainExe = Join-Path $From "commits-app.exe"
+        $hash = (Get-FileHash -LiteralPath $mainExe -Algorithm SHA256).Hash.Substring(0, 8).ToLowerInvariant()
+        $versionDir = Join-Path $InstallDir "$Version-$hash"
+    }
+    New-Item -ItemType Directory -Path $versionDir -Force | Out-Null
+    Get-ChildItem -LiteralPath $From -Force | Where-Object {
+        -not (Test-RuntimeArtifact $_.Name) -and $_.Name -ne $launcherName -and $_.Name -ne "extensions"
+    } | ForEach-Object {
+        $target = Join-Path $versionDir $_.Name
+        if ($_.PSIsContainer) {
+            Copy-AppFiles -From $_.FullName -To $target
+        } else {
+            Copy-Item -LiteralPath $_.FullName -Destination $target -Force
+        }
+    }
+
+    Remove-OldVersions -InstallDir $InstallDir
+    return $versionDir
+}
+
+# Keeps only the two most recently installed version folders under
+# $InstallDir (the current version and one fallback), deleting the rest --
+# the same retention commits_upgrader::install (Rust) applies after every
+# extract/copy. Matched by name so commits.exe, updater/, extensions/, and
+# saves/ are never mistaken for a version folder.
+function Remove-OldVersions([string]$InstallDir) {
+    Get-ChildItem -LiteralPath $InstallDir -Directory -Force |
+        Where-Object { $_.Name -match '^[0-9]+(\.[0-9]+)*(-[0-9a-f]+)?$' } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -Skip 2 |
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
+}
+
 if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
     if ($SkipBuild) {
         throw "No built app at $Source."
@@ -74,24 +139,23 @@ if (-not (Test-Path -LiteralPath (Join-Path $Source $launcherName))) {
     throw "$Source does not contain $launcherName. Run 'npm run dist' (or drop -SkipBuild) and try again."
 }
 
-# Matches commits_upgrader::state_dir() (Rust) exactly: both the launcher and
-# this script must agree on where a staged update lives.
 $installDir = $InstallDir
-$updaterDir = if ($env:COMMITS_UPDATER_DIR) { $env:COMMITS_UPDATER_DIR } else { Join-Path $HOME ".commits/updater" }
+$version = Get-AppVersion -RepoRoot (Split-Path -Parent $PSScriptRoot)
 
 if (Test-Path -LiteralPath (Join-Path $installDir $launcherName)) {
-    # Already installed: never overwrite a possibly-running install directly.
-    # Stage into the same folder the launcher applies from on its next
-    # start, exactly like a downloaded update.
-    $updateDir = Join-Path $updaterDir "update"
-    if (Test-Path -LiteralPath $updateDir) { Remove-Item -LiteralPath $updateDir -Recurse -Force }
-    Copy-AppFiles -From $Source -To $updateDir
-    Write-Host "$installDir is already installed; staged this build at $updateDir."
+    # Already installed: never overwrite a possibly-running install
+    # directly. Push this build as a new version folder, exactly like a
+    # downloaded update -- the launcher picks it up as current the next
+    # time it starts, simply because it is the newest version folder there.
+    $versionDir = Install-VersionFolder -From $Source -InstallDir $installDir -Version $version
+    Write-Host "$installDir is already installed; pushed this build to $versionDir."
     Write-Host "It applies the next time commits.exe (the launcher) starts."
     exit 0
 }
 
-Copy-AppFiles -From $Source -To $installDir
+New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $Source $launcherName) -Destination (Join-Path $installDir $launcherName) -Force
+Install-VersionFolder -From $Source -InstallDir $installDir -Version $version | Out-Null
 Write-Host "Installed to $installDir"
 
 if ($isWindowsPlatform -and -not $NoShortcuts) {
