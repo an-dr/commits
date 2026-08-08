@@ -39,9 +39,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         // budget -- still bounded, because a call this long does block the
         // window (BUG-003).
         .extension_call_timeout(std::time::Duration::from_secs(20))
-        .extensions_dir("extensions")
+        // Absolute when running from an installed version folder, so
+        // components and state stay shared across versions instead of
+        // siloed inside whichever version folder happens to be running;
+        // relative (today's exe-relative default) for a dev build run
+        // directly out of a flat build directory. Named "components" and
+        // "state" rather than bones' own "extensions"/"states" defaults --
+        // this app's own choice of vocabulary, distinct from the engine's.
+        .extensions_dir(shared_data_dir("components"))
         .startup_extension("commits")
-        .saves_dir("saves")
+        .saves_dir(shared_data_dir("state"))
         .window("commits", 1100, 720)
         .web()
         // Modules init in registration order, so these two come first: the
@@ -58,6 +65,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(updater::UpdaterModule::default())
         .run()?;
     Ok(())
+}
+
+/// Resolves `name` for the engine builder's `extensions_dir`/`saves_dir`:
+/// see `commits_upgrader::shared_or_exe_relative` for why this needs to be
+/// install-wide rather than always exe-relative. Falls back to the plain
+/// relative name (the engine's own default behavior) if the running
+/// executable's path cannot be resolved at all.
+fn shared_data_dir(name: &str) -> std::path::PathBuf {
+    commits_upgrader::shared_or_exe_relative(name).unwrap_or_else(|| std::path::PathBuf::from(name))
 }
 
 /// Turns a failed startup extension into something the user can act on, and

@@ -26,11 +26,14 @@ const LOAD_FAILURE: &str = "failed to load";
 const LOG_FILE: &str = "commits.log";
 const PREVIOUS_LOG_FILE: &str = "commits.prev.log";
 
-/// Resolves the log beside the running executable, next to `page.html` and
-/// `saves`, so a copied `dist/app` keeps its diagnostics with it.
+/// Resolves the log the same way `saves_dir`/`extensions_dir` do (see
+/// `commits_upgrader::shared_or_exe_relative`): beside the running
+/// executable for a dev build, so a copied `dist/app` keeps its diagnostics
+/// with it, or at the shared install-wide location when running from an
+/// installed version folder, so `commits.log` survives across updates
+/// instead of starting over in each new version folder.
 pub fn log_path() -> Option<PathBuf> {
-    let executable = std::env::current_exe().ok()?;
-    Some(executable.parent()?.join(LOG_FILE))
+    commits_upgrader::shared_or_exe_relative(LOG_FILE)
 }
 
 /// Installs the file logger, returning it alongside the channel that carries
@@ -176,8 +179,8 @@ mod tests {
     fn reports_an_extension_load_failure_exactly_once() {
         let (sink, failures, _buffer) = sink();
 
-        sink.log(Level::Error, "engine", "failed to load extensions/commits.wasm: trap");
-        sink.log(Level::Error, "engine", "failed to load extensions/other.wasm: trap");
+        sink.log(Level::Error, "engine", "failed to load components/commits.wasm: trap");
+        sink.log(Level::Error, "engine", "failed to load components/other.wasm: trap");
 
         assert!(failures.recv().unwrap().starts_with("failed to load"));
         // The sender is dropped with the first report, so a second failing

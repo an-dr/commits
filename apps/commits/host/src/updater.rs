@@ -175,19 +175,9 @@ fn is_installed() -> bool {
 /// Whether `current` is a version folder directly under the canonical
 /// install location -- i.e. this run started as `commits.exe` (the
 /// launcher) launching a version folder it picked, rather than a dev build
-/// or an ad-hoc launch. Canonicalized before comparing: a raw comparison
-/// can mismatch even for the same directory (e.g. drive-letter casing or
-/// short/long name form). A canonicalize failure on the install side (the
-/// ordinary case: nothing is installed there yet) reads as "not installed"
-/// rather than an error.
+/// or an ad-hoc launch.
 fn is_install_dir(current: &Path) -> bool {
-    let Ok(current) = current.canonicalize() else {
-        return false;
-    };
-    let Some(install_dir) = commits_upgrader::default_install_dir().and_then(|dir| dir.canonicalize().ok()) else {
-        return false;
-    };
-    current.parent() == Some(install_dir.as_path())
+    commits_upgrader::is_installed_version_dir(current)
 }
 
 /// `[SUCCESS, installed_byte, just_updated_byte, ...version_utf8]` -- the

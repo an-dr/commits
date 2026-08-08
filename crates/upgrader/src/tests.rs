@@ -1,8 +1,8 @@
 use commits_os::OsBackend;
 
 use crate::{
-    download_asset_verified, fetch_manifest, is_newer, parse_manifest, record_version_and_check_update,
-    verify_checksum, Manifest,
+    download_asset_verified, fetch_manifest, is_installed_version_dir, is_newer, parse_manifest,
+    record_version_and_check_update, shared_or_exe_relative, verify_checksum, Manifest,
 };
 
 /// Serializes tests that mutate the process-wide `COMMITS_UPDATER_DIR` env
@@ -209,4 +209,58 @@ fn reports_an_update_exactly_once_after_the_version_changes() {
     assert_eq!(record_version_and_check_update("1.1.0"), Ok(false));
 
     unsafe { std::env::remove_var("COMMITS_UPDATER_DIR") };
+}
+
+fn running_exe_dir() -> std::path::PathBuf {
+    std::env::current_exe().unwrap().parent().unwrap().to_path_buf()
+}
+
+#[test]
+fn is_installed_version_dir_when_the_running_directory_is_a_child_of_the_install_dir() {
+    let exe_dir = running_exe_dir();
+    let install_dir = exe_dir.parent().unwrap();
+    let _guard = ENV_LOCK.lock().unwrap();
+    unsafe { std::env::set_var("COMMITS_INSTALL_DIR", install_dir) };
+
+    let installed = is_installed_version_dir(&exe_dir);
+
+    unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
+    assert!(installed);
+}
+
+#[test]
+fn not_an_installed_version_dir_when_the_install_dir_is_elsewhere() {
+    let elsewhere = tempfile::tempdir().unwrap();
+    let _guard = ENV_LOCK.lock().unwrap();
+    unsafe { std::env::set_var("COMMITS_INSTALL_DIR", elsewhere.path()) };
+
+    let installed = is_installed_version_dir(&running_exe_dir());
+
+    unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
+    assert!(!installed);
+}
+
+#[test]
+fn shared_or_exe_relative_stays_beside_the_exe_when_not_installed() {
+    let elsewhere = tempfile::tempdir().unwrap();
+    let _guard = ENV_LOCK.lock().unwrap();
+    unsafe { std::env::set_var("COMMITS_INSTALL_DIR", elsewhere.path()) };
+
+    let resolved = shared_or_exe_relative("saves").unwrap();
+
+    unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
+    assert_eq!(resolved, running_exe_dir().join("saves"));
+}
+
+#[test]
+fn shared_or_exe_relative_steps_up_to_the_install_dir_when_installed() {
+    let exe_dir = running_exe_dir();
+    let install_dir = exe_dir.parent().unwrap();
+    let _guard = ENV_LOCK.lock().unwrap();
+    unsafe { std::env::set_var("COMMITS_INSTALL_DIR", install_dir) };
+
+    let resolved = shared_or_exe_relative("saves").unwrap();
+
+    unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
+    assert_eq!(resolved, install_dir.join("saves"));
 }

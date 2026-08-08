@@ -17,7 +17,7 @@ const KEEP_VERSIONS: usize = 2;
 /// folder under `install_dir`, named `version` (or `version` plus a short
 /// content hash if that name is already taken -- typically a dev build
 /// that never bumps its version between pushes). Entries under
-/// `extensions/` land in the shared `install_dir/extensions/` instead of
+/// `components/` land in the shared `install_dir/components/` instead of
 /// the version folder: built-in WASM components are shared across
 /// versions, not duplicated per version. Prunes anything beyond the
 /// current and previous version once extraction succeeds.
@@ -56,9 +56,9 @@ pub fn extract_version(archive_bytes: &[u8], install_dir: &Path, version: &str) 
 /// build) into a new version folder under `install_dir`, the same way
 /// [`extract_version`] does for a downloaded ZIP -- used by the Install
 /// menu action to push a dev build without a manifest. `source_dir`'s own
-/// launcher executable and runtime artifacts (WebView2 profile, saves,
+/// launcher executable and runtime artifacts (WebView2 profile, state,
 /// logs) are never part of a version folder, so they are excluded from the
-/// copy, and `extensions/` is routed to the shared folder exactly as in
+/// copy, and `components/` is routed to the shared folder exactly as in
 /// `extract_version`. Prunes anything beyond the current and previous
 /// version once the copy succeeds.
 pub fn copy_version_from_dir(source_dir: &Path, install_dir: &Path, version: &str) -> Result<PathBuf, String> {
@@ -136,11 +136,11 @@ fn version_folder_name(install_dir: &Path, version: &str, hash: &str) -> String 
     }
 }
 
-/// Where a copied/extracted entry belongs: `install_dir/extensions/...` for
-/// anything under an `extensions/` top-level path (shared, not versioned),
+/// Where a copied/extracted entry belongs: `install_dir/components/...` for
+/// anything under a `components/` top-level path (shared, not versioned),
 /// `version_dir/...` for everything else.
 fn target_for_relative(relative: &Path, version_dir: &Path, install_dir: &Path) -> PathBuf {
-    if relative.starts_with("extensions") {
+    if relative.starts_with("components") {
         install_dir.join(relative)
     } else {
         version_dir.join(relative)
@@ -150,7 +150,7 @@ fn target_for_relative(relative: &Path, version_dir: &Path, install_dir: &Path) 
 /// Every file under `source_dir`, as paths relative to it, skipping
 /// [`LAUNCHER_EXE_NAME`] and anything [`is_runtime_artifact`] recognizes at
 /// any depth -- neither belongs in a version folder or the shared
-/// `extensions/` folder.
+/// `components/` folder.
 fn collect_copyable_files(source_dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
     collect_copyable_files_into(source_dir, Path::new(""), &mut files)?;
@@ -189,7 +189,7 @@ fn collect_copyable_files_into(base: &Path, relative: &Path, out: &mut Vec<PathB
 /// which is why these are excluded rather than merely skipped on error.
 fn is_runtime_artifact(name: &std::ffi::OsStr) -> bool {
     let name = name.to_string_lossy();
-    name.ends_with(".WebView2") || name.eq_ignore_ascii_case("saves") || name.to_ascii_lowercase().ends_with(".log")
+    name.ends_with(".WebView2") || name.eq_ignore_ascii_case("state") || name.to_ascii_lowercase().ends_with(".log")
 }
 
 /// The first 8 hex characters of `data`'s SHA-256 digest -- enough to tell
@@ -278,15 +278,15 @@ mod tests {
     }
 
     #[test]
-    fn extract_version_routes_extensions_entries_to_the_shared_folder() {
+    fn extract_version_routes_components_entries_to_the_shared_folder() {
         let dir = tempfile::tempdir().unwrap();
         let install_dir = dir.path().join("app");
-        let archive = zip_bytes(&[("commits-app.exe", b"the app"), ("extensions/commits.wasm", b"component")]);
+        let archive = zip_bytes(&[("commits-app.exe", b"the app"), ("components/commits.wasm", b"component")]);
 
         let version_dir = extract_version(&archive, &install_dir, "1.3.0").unwrap();
 
-        assert!(!version_dir.join("extensions").exists());
-        assert_eq!(fs::read(install_dir.join("extensions/commits.wasm")).unwrap(), b"component");
+        assert!(!version_dir.join("components").exists());
+        assert_eq!(fs::read(install_dir.join("components/commits.wasm")).unwrap(), b"component");
     }
 
     #[test]
@@ -332,34 +332,34 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let source_dir = dir.path().join("dev-build");
         let install_dir = dir.path().join("app");
-        fs::create_dir_all(source_dir.join("extensions")).unwrap();
+        fs::create_dir_all(source_dir.join("components")).unwrap();
         fs::write(source_dir.join("commits.exe"), b"the launcher").unwrap();
         fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
-        fs::write(source_dir.join("extensions/commits.wasm"), b"component").unwrap();
+        fs::write(source_dir.join("components/commits.wasm"), b"component").unwrap();
 
         let version_dir = copy_version_from_dir(&source_dir, &install_dir, "1.0.0").unwrap();
 
         assert_eq!(fs::read(version_dir.join("commits-app.exe")).unwrap(), b"the app");
         assert!(!version_dir.join("commits.exe").exists());
-        assert_eq!(fs::read(install_dir.join("extensions/commits.wasm")).unwrap(), b"component");
+        assert_eq!(fs::read(install_dir.join("components/commits.wasm")).unwrap(), b"component");
     }
 
     #[test]
-    fn copy_version_from_dir_skips_webview2_profiles_saves_and_logs() {
+    fn copy_version_from_dir_skips_webview2_profiles_state_and_logs() {
         let dir = tempfile::tempdir().unwrap();
         let source_dir = dir.path().join("dev-build");
         let install_dir = dir.path().join("app");
         fs::create_dir_all(source_dir.join("commits-app.exe.WebView2/EBWebView")).unwrap();
         fs::write(source_dir.join("commits-app.exe.WebView2/EBWebView/lock"), b"locked").unwrap();
-        fs::create_dir_all(source_dir.join("saves")).unwrap();
-        fs::write(source_dir.join("saves/state.bin"), b"save state").unwrap();
+        fs::create_dir_all(source_dir.join("state")).unwrap();
+        fs::write(source_dir.join("state/save.bin"), b"save state").unwrap();
         fs::write(source_dir.join("commits.log"), b"log").unwrap();
         fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
 
         let version_dir = copy_version_from_dir(&source_dir, &install_dir, "1.0.0").unwrap();
 
         assert!(!version_dir.join("commits-app.exe.WebView2").exists());
-        assert!(!version_dir.join("saves").exists());
+        assert!(!version_dir.join("state").exists());
         assert!(!version_dir.join("commits.log").exists());
         assert_eq!(fs::read(version_dir.join("commits-app.exe")).unwrap(), b"the app");
     }

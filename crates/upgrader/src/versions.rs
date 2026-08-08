@@ -45,7 +45,7 @@ struct VersionDir {
 }
 
 /// Every direct child of `install_dir` whose name parses as a version --
-/// this is what excludes `commits.exe`, `updater/`, `extensions/`, `saves/`,
+/// this is what excludes `commits.exe`, `updater/`, `components/`, `state/`,
 /// and log files from being mistaken for a version folder, with no need for
 /// an explicit skip list.
 fn list_version_dirs(install_dir: &Path) -> Vec<VersionDir> {
@@ -124,8 +124,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         make_version_dir(dir.path(), "1.2.0");
         make_version_dir(dir.path(), "updater");
-        make_version_dir(dir.path(), "extensions");
-        make_version_dir(dir.path(), "saves");
+        make_version_dir(dir.path(), "components");
+        make_version_dir(dir.path(), "state");
         fs::write(dir.path().join("commits.exe"), b"launcher").unwrap();
         fs::write(dir.path().join("commits.log"), b"log").unwrap();
 

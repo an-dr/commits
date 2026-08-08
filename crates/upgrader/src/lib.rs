@@ -115,6 +115,46 @@ pub fn default_install_dir() -> Option<std::path::PathBuf> {
     dirs::home_dir().map(|home| home.join(".commits").join("app"))
 }
 
+/// Whether `dir` is a version folder directly under the canonical install
+/// location -- i.e. this process is `commits-app.exe` running from a version
+/// folder `commits.exe` (the launcher) picked, rather than a dev build or an
+/// ad-hoc launch. Shared by the Install menu's own installed-or-not check and
+/// by callers that need to tell a shared, install-wide location (saves,
+/// extensions, logs) apart from an exe-relative one. Canonicalized before
+/// comparing: a raw comparison can mismatch even for the same directory
+/// (e.g. drive-letter casing or short/long name form). A canonicalize
+/// failure on the install side (the ordinary case: nothing is installed
+/// there yet) reads as "not installed" rather than an error.
+pub fn is_installed_version_dir(dir: &std::path::Path) -> bool {
+    let Ok(dir) = dir.canonicalize() else {
+        return false;
+    };
+    let Some(install_dir) = default_install_dir().and_then(|d| d.canonicalize().ok()) else {
+        return false;
+    };
+    dir.parent() == Some(install_dir.as_path())
+}
+
+/// Resolves `name` against the shared, install-wide location (the install
+/// dir itself, a level above the version folder) when the running
+/// executable is inside an installed version folder, or against the
+/// running executable's own directory otherwise. The latter matches the
+/// `resolve_relative_to_exe` convention the bones engine builder already
+/// uses for a relative `saves_dir`/`extensions_dir`, so a dev build run
+/// directly out of a flat build directory keeps finding everything beside
+/// itself exactly as before -- only an installed run, where the exe now
+/// lives inside a version folder, needs the extra step up to keep save
+/// data, extensions, and logs shared across versions instead of siloed
+/// inside whichever version folder happens to be running.
+pub fn shared_or_exe_relative(name: &str) -> Option<std::path::PathBuf> {
+    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    if is_installed_version_dir(&exe_dir) {
+        exe_dir.parent().map(|install_dir| install_dir.join(name))
+    } else {
+        Some(exe_dir.join(name))
+    }
+}
+
 /// Compares `current` against the version last recorded in `state_dir()`,
 /// records `current` for next time, and returns whether this is the first
 /// start reporting a version different from the one last recorded -- the
