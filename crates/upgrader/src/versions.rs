@@ -33,7 +33,7 @@ pub(crate) fn compare_segments(a: &[u64], b: &[u64]) -> std::cmp::Ordering {
 /// dev build that never bumps its version between pushes. The suffix plays
 /// no part in ordering; see [`VersionDir`]'s modified-time tiebreak for how
 /// two folders with the same numeric version are actually ordered.
-fn parse_folder_name(name: &str) -> Option<Vec<u64>> {
+pub(crate) fn parse_folder_name(name: &str) -> Option<Vec<u64>> {
     let version_part = name.split('-').next().unwrap_or(name);
     parse_version_segments(version_part)
 }

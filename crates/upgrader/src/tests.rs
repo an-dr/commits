@@ -2,7 +2,8 @@ use commits_os::OsBackend;
 
 use crate::{
     download_asset_verified, fetch_manifest, is_installed_version_dir, is_newer, parse_manifest,
-    record_version_and_check_update, shared_or_exe_relative, verify_checksum, Manifest,
+    record_version_and_check_update, shared_or_exe_relative, shared_or_exe_relative_from, verify_checksum,
+    Manifest, LAUNCHER_EXE_NAME,
 };
 
 /// Serializes tests that mutate the process-wide `COMMITS_UPDATER_DIR` env
@@ -241,26 +242,50 @@ fn not_an_installed_version_dir_when_the_install_dir_is_elsewhere() {
 }
 
 #[test]
-fn shared_or_exe_relative_stays_beside_the_exe_when_not_installed() {
-    let elsewhere = tempfile::tempdir().unwrap();
-    let _guard = ENV_LOCK.lock().unwrap();
-    unsafe { std::env::set_var("COMMITS_INSTALL_DIR", elsewhere.path()) };
+fn shared_or_exe_relative_resolves_beside_the_real_running_exe() {
+    // The test binary's own directory has no launcher beside it, so this
+    // exercises the plain exe-relative fallback end to end through the
+    // public function (current_exe() and all).
+    let resolved = shared_or_exe_relative("state").unwrap();
 
-    let resolved = shared_or_exe_relative("saves").unwrap();
-
-    unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
-    assert_eq!(resolved, running_exe_dir().join("saves"));
+    assert_eq!(resolved, running_exe_dir().join("state"));
 }
 
 #[test]
-fn shared_or_exe_relative_steps_up_to_the_install_dir_when_installed() {
-    let exe_dir = running_exe_dir();
-    let install_dir = exe_dir.parent().unwrap();
-    let _guard = ENV_LOCK.lock().unwrap();
-    unsafe { std::env::set_var("COMMITS_INSTALL_DIR", install_dir) };
+fn shared_or_exe_relative_from_stays_beside_the_exe_without_a_version_folder_shape() {
+    let dir = tempfile::tempdir().unwrap();
+    let exe_dir = dir.path().join("some-build");
+    std::fs::create_dir_all(&exe_dir).unwrap();
 
-    let resolved = shared_or_exe_relative("saves").unwrap();
+    let resolved = shared_or_exe_relative_from(&exe_dir, "state");
 
-    unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
-    assert_eq!(resolved, install_dir.join("saves"));
+    assert_eq!(resolved, exe_dir.join("state"));
+}
+
+#[test]
+fn shared_or_exe_relative_from_stays_beside_the_exe_without_a_launcher_sibling() {
+    // A version-parseable folder name alone isn't enough -- without an
+    // actual launcher next to it, this isn't a real install/build shape.
+    let dir = tempfile::tempdir().unwrap();
+    let exe_dir = dir.path().join("1.3.0");
+    std::fs::create_dir_all(&exe_dir).unwrap();
+
+    let resolved = shared_or_exe_relative_from(&exe_dir, "state");
+
+    assert_eq!(resolved, exe_dir.join("state"));
+}
+
+#[test]
+fn shared_or_exe_relative_from_steps_up_when_running_from_a_version_folder() {
+    // Purely structural: this is exactly the shape dist.ps1 assembles for a
+    // plain build directory too, not only a real ~/.commits/app install.
+    let dir = tempfile::tempdir().unwrap();
+    let install_dir = dir.path().join("app");
+    let exe_dir = install_dir.join("1.3.0");
+    std::fs::create_dir_all(&exe_dir).unwrap();
+    std::fs::write(install_dir.join(LAUNCHER_EXE_NAME), b"launcher").unwrap();
+
+    let resolved = shared_or_exe_relative_from(&exe_dir, "state");
+
+    assert_eq!(resolved, install_dir.join("state"));
 }
