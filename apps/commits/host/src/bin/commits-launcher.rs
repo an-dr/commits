@@ -1,8 +1,9 @@
-//! Permanent entry point for a self-updating install: applies any staged,
-//! already-verified update before the real app can possibly be holding its
-//! own files open, launches it, and rolls back to the previous version if it
-//! does not report itself healthy in time. See `crates/upgrader` for why
-//! this crate is not named "updater".
+//! Permanent entry point for a self-updating install: picks the current
+//! version folder under its own install dir, launches it, and -- if it does
+//! not report itself healthy in time -- deletes that version folder and
+//! falls back to the previous one, which installing the failed version
+//! never touched. See `crates/upgrader` for why this crate is not named
+//! "updater", and `docs/updating.md` for the version-folder layout.
 
 // Same reasoning as main.rs: a release build is a desktop entry point, not a
 // console tool, so Windows must not open a terminal behind it. Debug builds
@@ -12,8 +13,6 @@
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
-
-use commits_upgrader::LAUNCHER_EXE_NAME;
 
 #[cfg(windows)]
 const MAIN_EXE_NAME: &str = "commits-app.exe";
@@ -33,31 +32,15 @@ fn main() {
         eprintln!("could not resolve the launcher's own directory");
         std::process::exit(1);
     };
-    let Some(state_dir) = commits_upgrader::state_dir() else {
-        eprintln!("could not resolve the home directory for update state");
-        std::process::exit(1);
-    };
-    let update_dir = state_dir.join("update");
-    let backup_dir = state_dir.join("backup");
-
-    if update_dir.is_dir() {
-        // The launcher's own exe is never part of an update payload and can
-        // never be overwritten by anything anyway while it is running this
-        // code, so it is excluded from both the backup and the apply copy.
-        if let Err(error) =
-            commits_upgrader::apply(&install_dir, &update_dir, &backup_dir, &[LAUNCHER_EXE_NAME])
-        {
-            // A failed apply must never block the app from starting at all:
-            // the previous, presumably-working install is still in place.
-            eprintln!("could not apply the staged update: {error}");
-        }
-    }
-
-    launch_and_supervise(&install_dir, &backup_dir);
+    launch_and_supervise(&install_dir);
 }
 
-fn launch_and_supervise(install_dir: &Path, backup_dir: &Path) {
-    let exe = install_dir.join(MAIN_EXE_NAME);
+fn launch_and_supervise(install_dir: &Path) {
+    let Some(version_dir) = commits_upgrader::current_version_dir(install_dir) else {
+        eprintln!("no version is installed under {}", install_dir.display());
+        std::process::exit(1);
+    };
+    let exe = version_dir.join(MAIN_EXE_NAME);
     match spawn_and_confirm_healthy(&exe) {
         // Healthy: leave it running detached. A Windows child outlives its
         // parent by default, so the launcher exiting here does not affect it.
@@ -70,34 +53,36 @@ fn launch_and_supervise(install_dir: &Path, backup_dir: &Path) {
         Err(error) => eprintln!("could not launch {}: {error}", exe.display()),
     }
 
-    if let Err(error) = restore_backup_with_retry(install_dir, backup_dir) {
-        eprintln!("could not restore the backup: {error}");
+    let Some(previous_dir) = commits_upgrader::previous_version_dir(install_dir) else {
+        eprintln!("{} failed its health check and there is no previous version to fall back to", version_dir.display());
         return;
+    };
+    // The failed version must be removed, not merely ignored: it is still
+    // the highest version on disk, so leaving it in place would make the
+    // very next start pick it again and fail the same way forever instead
+    // of ever reaching `previous_dir`.
+    if let Err(error) = remove_version_dir_with_retry(&version_dir) {
+        eprintln!("could not remove the failed version {}: {error}", version_dir.display());
     }
-    // One relaunch of the restored version, without supervising it again --
+    // One relaunch of the previous version, without supervising it again --
     // if a previously-working version still fails, that is a deeper problem
     // than a startup health check is meant to solve.
-    if let Err(error) = spawn_detached(&exe, None) {
-        eprintln!("could not relaunch the restored version: {error}");
+    if let Err(error) = spawn_detached(&previous_dir.join(MAIN_EXE_NAME), None) {
+        eprintln!("could not relaunch the previous version: {error}");
     }
 }
 
-/// `restore_backup`, retrying on failure: `Child::wait()` confirms the OS
+/// `remove_version_dir`, retrying on failure: `Child::wait()` confirms the OS
 /// has reaped the just-killed process, but that alone does not guarantee
 /// every file it had open (e.g. one being scanned by antivirus at that
-/// moment) is instantly writable again. A short retry loop is the standard
-/// mitigation for that kind of transient lock. It does *not* cover the
-/// launcher's own exe -- that one can never be overwritten while running no
-/// matter how long this retries, which is why it is excluded entirely via
-/// `LAUNCHER_EXE_NAME` rather than retried (a real test of this caught that
-/// distinction the hard way: retrying up to 20 seconds never once helped
-/// when the excluded-file fix was still missing).
-fn restore_backup_with_retry(install_dir: &Path, backup_dir: &Path) -> Result<(), String> {
+/// moment, or its own WebView2 profile) is instantly removable. A short
+/// retry loop is the standard mitigation for that kind of transient lock.
+fn remove_version_dir_with_retry(version_dir: &Path) -> Result<(), String> {
     const ATTEMPTS: u32 = 10;
     const RETRY_DELAY: Duration = Duration::from_millis(300);
     let mut last_error = String::new();
     for attempt in 0..ATTEMPTS {
-        match commits_upgrader::restore_backup(install_dir, backup_dir, &[LAUNCHER_EXE_NAME]) {
+        match commits_upgrader::remove_version_dir(version_dir) {
             Ok(()) => return Ok(()),
             Err(error) => last_error = error,
         }
@@ -154,4 +139,3 @@ fn spawn_detached(exe: &Path, marker_path: Option<&Path>) -> std::io::Result<Chi
     }
     command.spawn()
 }
-
