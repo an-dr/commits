@@ -51,6 +51,13 @@ header bar (`setHeader`, `headerElem`) entirely, so the panel has no title text
 above the file list any more. None of this is upstreamable as-is; re-importing
 would need to decide whether these behaviors move with it.
 
+Settings can now be applied without reopening the view. `GitGraphView` gained
+a public `updateConfig()` that merges into its existing `config` object in
+place instead of replacing it, `startCommitsView`'s one-shot config/density/
+refresh-shortcut setup was extracted into reusable functions, and `main.ts`
+now exports `applyLiveSettings()`, which the standalone host calls after a
+settings save. See ADR-010.
+
 Every other file remains as imported, and the MIT grant and notice are
 unchanged; MIT permits modification. What is lost is reproducibility: the
 snapshot can no longer be verified by hashing against

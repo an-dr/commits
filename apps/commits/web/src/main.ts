@@ -80,6 +80,9 @@ async function boot(): Promise<void> {
   let nextSettingsRequestId = 1;
   let settingsEditor: SettingsEditor;
   const appearance = createAppearanceController();
+  // Set once startCommitsView's module resolves below; applies a saved
+  // settings change to the already-built graph view without reopening it.
+  let applyLiveSettings: (() => void) | null = null;
 
   window.addEventListener("bones-message", (event) => {
     try {
@@ -95,7 +98,11 @@ async function boot(): Promise<void> {
         finishSettings(activeSettings);
       } else if (data.command === "standaloneSettingsSaved") {
         activeSettings = data.settings ?? activeSettings;
-        if (!data.error) appearance.update(activeSettings);
+        if (!data.error) {
+          appearance.update(activeSettings);
+          globalThis.viewState = createViewState(activeSettings);
+          applyLiveSettings?.();
+        }
         settingsEditor.finishSave(activeSettings, data.error ?? "");
       } else if (data.command === "standaloneCommitsRepoStatus") {
         updateCommitsRepoStatus(data.exists === true, data.message ?? "");
@@ -131,7 +138,7 @@ async function boot(): Promise<void> {
   globalThis.viewState = createViewState(initialSettings);
   // The shared graph reads viewState while its module is evaluated, so these
   // imports must not begin until the settings-backed global exists.
-  const [{ setWebviewHost }, { startCommitsView }] = await Promise.all([
+  const [{ setWebviewHost }, { startCommitsView, applyLiveSettings: applyLive }] = await Promise.all([
     import("@an-dr/commits-core/webview/utils/host"),
     import("@an-dr/commits-core/webview/main"),
   ]);
@@ -142,6 +149,7 @@ async function boot(): Promise<void> {
     getStyleValue: (name) => getComputedStyle(document.documentElement).getPropertyValue(name),
   });
   startCommitsView();
+  applyLiveSettings = applyLive;
   post({ command: "standaloneViewReady" });
 }
 

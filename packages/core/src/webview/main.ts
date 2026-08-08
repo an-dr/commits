@@ -717,6 +717,15 @@ class GitGraphView {
     this.repoInProgressBanner.render(state);
   }
 
+  /**
+   * Applies changed settings without reopening the view. `this.graph` reads
+   * the same `config` object by reference (constructor), so mutating its
+   * properties in place reaches both without reconstructing either.
+   */
+  public updateConfig(config: Partial<Config>) {
+    Object.assign(this.config, config);
+  }
+
   public refresh(hard: boolean) {
     if (hard) {
       if (this.expandedCommit !== null) {
@@ -1957,22 +1966,25 @@ function readClickedFile(e: Event) {
   };
 }
 
+// Mutable so `applyLiveSettings` can rebind the chord without tearing down
+// and re-registering `observeRefreshShortcut`'s own listener.
+let refreshShortcutKey = viewState.refreshShortcutKey;
+
 /**
  * Refreshes on the configured Ctrl/Cmd chord. Registered on the document
  * because the panel has no single focusable root, and skipped while a text
  * field has focus so it cannot swallow a keystroke meant for typing.
  */
 function observeRefreshShortcut(view: GitGraphView) {
-  const shortcut = viewState.refreshShortcutKey;
-  if (shortcut === null) {
-    return;
-  }
   document.addEventListener("keydown", (e) => {
+    if (refreshShortcutKey === null) {
+      return;
+    }
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === shortcut) {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === refreshShortcutKey) {
       view.refresh(true);
       e.preventDefault();
       e.stopPropagation();
@@ -1980,13 +1992,37 @@ function observeRefreshShortcut(view: GitGraphView) {
   });
 }
 
+// Excludes `grid`: `renderGraph()` recomputes its y/expandY/offsetY from live
+// DOM measurements on every render, so a config update must leave whatever
+// is already on `this.config.grid` alone rather than resetting it to a
+// stale default between updateConfig() and the next render pass.
+function configFromViewState(): Omit<Config, "grid"> {
+  return {
+    autoCenterCommitDetailsView: viewState.autoCenterCommitDetailsView,
+    committedVisual: viewState.committedVisual,
+    avatarMode: viewState.avatarMode,
+    avatarSize: viewState.avatarSize,
+    avatarShape: viewState.avatarShape,
+    fetchAvatars: viewState.fetchAvatars,
+    graphColours: viewState.graphColours,
+    graphStyle: viewState.graphStyle,
+    initialLoadCommits: viewState.initialLoadCommits,
+    loadMoreCommits: viewState.loadMoreCommits,
+    showCurrentBranchByDefault: viewState.showCurrentBranchByDefault
+  };
+}
+
 // Density is a body class so it applies to everything the stylesheet scopes
 // under it, without each renderer having to know the setting.
-if (viewState.uiDensity === "Normal") {
-  document.body.classList.add("compactUi");
-} else if (viewState.uiDensity === "Compact") {
-  document.body.classList.add("compactUi", "extraCompactUi");
+function applyUiDensity(density: GG.GitGraphViewState["uiDensity"]) {
+  document.body.classList.remove("compactUi", "extraCompactUi");
+  if (density === "Normal") {
+    document.body.classList.add("compactUi");
+  } else if (density === "Compact") {
+    document.body.classList.add("compactUi", "extraCompactUi");
+  }
 }
+applyUiDensity(viewState.uiDensity);
 
 let gitGraph!: GitGraphView;
 
@@ -1995,24 +2031,23 @@ export function startCommitsView() {
   gitGraph = new GitGraphView(
     viewState.repos,
     viewState.lastActiveRepo,
-    {
-      autoCenterCommitDetailsView: viewState.autoCenterCommitDetailsView,
-      committedVisual: viewState.committedVisual,
-      avatarMode: viewState.avatarMode,
-      avatarSize: viewState.avatarSize,
-      avatarShape: viewState.avatarShape,
-      fetchAvatars: viewState.fetchAvatars,
-      graphColours: viewState.graphColours,
-      graphStyle: viewState.graphStyle,
-      grid: { x: 16, y: 24, offsetX: 8, offsetY: 12, expandY: 250 },
-      initialLoadCommits: viewState.initialLoadCommits,
-      loadMoreCommits: viewState.loadMoreCommits,
-      showCurrentBranchByDefault: viewState.showCurrentBranchByDefault
-    },
+    { ...configFromViewState(), grid: { x: 16, y: 24, offsetX: 8, offsetY: 12, expandY: 250 } },
     vscode.getState()
   );
   observeExternalUrls();
   observeRefreshShortcut(gitGraph);
+}
+
+/**
+ * Re-applies the current global `viewState` to the already-built view, for a
+ * host that lets settings take effect without reopening the page. No-op
+ * before `startCommitsView` has run.
+ */
+export function applyLiveSettings(): void {
+  refreshShortcutKey = viewState.refreshShortcutKey;
+  applyUiDensity(viewState.uiDensity);
+  gitGraph?.updateConfig(configFromViewState());
+  gitGraph?.refresh(false);
 }
 
 /* Command Processing */

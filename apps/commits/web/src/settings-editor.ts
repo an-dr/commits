@@ -59,7 +59,7 @@ export class SettingsEditor {
     }
     this.settings = settings;
     this.populate(settings);
-    this.status.textContent = "Saved. Appearance is active; graph settings apply when the window is reopened.";
+    this.status.textContent = "Saved and applied.";
     this.status.className = "standaloneSettingsStatus is-success";
   }
 
