@@ -94,6 +94,8 @@ body.branchPanelHidden #branchPanelSidebar {
   padding: 8px 6px 3px;
   font-size: 12px;
   font-weight: 700;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .branchPanelFilterInput {
   width: calc(100% - 12px);
@@ -113,6 +115,8 @@ body.branchPanelHidden #branchPanelSidebar {
   padding-right: 6px;
   box-sizing: border-box;
   white-space: nowrap;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .branchPanelItem:hover,
 .branchPanelFolder:hover {
