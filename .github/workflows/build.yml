@@ -54,7 +54,13 @@ jobs:
             build-essential cmake ninja-build \
             libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
 
-      - run: npm ci
+      # Not `npm ci`: some optional native dependencies (e.g. @napi-rs/wasm-runtime's
+      # peer deps) are platform-gated, so a lockfile resolved on one OS is not
+      # guaranteed complete for another -- `npm ci`'s strict lockfile-completeness
+      # check fails on Linux for exactly that reason. `npm install` resolves
+      # what the current platform actually needs instead of requiring the
+      # lockfile to already list every platform's variants.
+      - run: npm install
 
       - run: npm run build
 
