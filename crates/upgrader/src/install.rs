@@ -94,18 +94,33 @@ pub fn copy_version_from_dir(source_dir: &Path, install_dir: &Path, version: &st
 
 /// Places a build directly at `install_dir` when nothing is installed
 /// there yet -- there is no launcher present to ever apply anything
-/// staged, so this completes the install outright: `source_dir`'s launcher
-/// executable goes to `install_dir` itself, and everything else becomes
-/// the first version folder.
+/// staged, so this completes the install outright: the launcher executable
+/// found near `source_dir` goes to `install_dir` itself, and everything
+/// else becomes the first version folder.
 pub fn install_fresh(source_dir: &Path, install_dir: &Path, version: &str) -> Result<(), String> {
-    let launcher_source = source_dir.join(LAUNCHER_EXE_NAME);
-    if !launcher_source.is_file() {
-        return Err(format!("{LAUNCHER_EXE_NAME} not found in {}", source_dir.display()));
-    }
+    let Some(launcher_source) = find_launcher_near(source_dir) else {
+        return Err(format!("{LAUNCHER_EXE_NAME} not found in or above {}", source_dir.display()));
+    };
     fs::create_dir_all(install_dir).map_err(|error| error.to_string())?;
     fs::copy(&launcher_source, install_dir.join(LAUNCHER_EXE_NAME)).map_err(|error| error.to_string())?;
     copy_version_from_dir(source_dir, install_dir, version)?;
     Ok(())
+}
+
+/// [`LAUNCHER_EXE_NAME`] beside `source_dir` itself -- a flat dev build, the
+/// same shape a raw `cargo build` output (`target/release/`) still has, with
+/// the launcher and `commits-app.exe` as siblings -- or, failing that, one
+/// level up: `source_dir` running_directory() resolves to is now often a
+/// version folder (e.g. running straight out of `dist/app/<version>/`, or an
+/// already-installed version folder), where the launcher is a sibling of
+/// the version folder, not inside it.
+fn find_launcher_near(source_dir: &Path) -> Option<PathBuf> {
+    let direct = source_dir.join(LAUNCHER_EXE_NAME);
+    if direct.is_file() {
+        return Some(direct);
+    }
+    let sibling = source_dir.parent()?.join(LAUNCHER_EXE_NAME);
+    sibling.is_file().then_some(sibling)
 }
 
 /// Deletes a single version folder outright. Used by the launcher when a
@@ -389,7 +404,26 @@ mod tests {
     }
 
     #[test]
-    fn install_fresh_fails_without_a_launcher_in_source_dir() {
+    fn install_fresh_finds_the_launcher_one_level_up_from_a_version_folder_source() {
+        // running_directory() often resolves to a version folder now (e.g.
+        // running straight out of dist/app/<version>/), where the launcher
+        // is a sibling of the version folder, not inside it.
+        let dir = tempfile::tempdir().unwrap();
+        let build_root = dir.path().join("dist-app");
+        let source_dir = build_root.join("0.3.0");
+        let install_dir = dir.path().join("app");
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::write(build_root.join(LAUNCHER_EXE_NAME), b"the launcher").unwrap();
+        fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
+
+        install_fresh(&source_dir, &install_dir, "1.0.0").unwrap();
+
+        assert_eq!(fs::read(install_dir.join(LAUNCHER_EXE_NAME)).unwrap(), b"the launcher");
+        assert_eq!(fs::read(install_dir.join("1.0.0/commits-app.exe")).unwrap(), b"the app");
+    }
+
+    #[test]
+    fn install_fresh_fails_without_a_launcher_in_source_dir_or_its_parent() {
         let dir = tempfile::tempdir().unwrap();
         let source_dir = dir.path().join("dev-build");
         let install_dir = dir.path().join("app");
