@@ -20,7 +20,11 @@ body {
 }
 #view {
   position: fixed;
-  top: 0;
+  /* Starts below the fixed #topBar rather than containing it, so the files
+     panel (which insets #view on the right) never reaches the toolbar --
+     every button up there keeps the same screen position regardless of
+     what's open below it. */
+  top: var(--top-bar-height);
   left: 0;
   right: var(--files-panel-width, 0px);
   bottom: var(--full-diff-height, 0px);
@@ -31,11 +35,17 @@ body {
 #view:focus {
   outline: none;
 }
+/* Fixed and full width -- unlike #view below it, the toolbar never insets
+   for the files panel, so its buttons never shift or fold away just because
+   that panel opened. */
 #topBar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 15;
   display: flex;
   align-items: stretch;
-  flex: 0 0 auto;
   background: var(--vscode-editor-background);
   border-bottom: 1px solid rgba(128, 128, 128, 0.5);
 }
@@ -1166,31 +1176,11 @@ body.vscode-light .gitRef {
 }
 
 /* Top bar: one static row, full width, that never changes shape because of
-   the branch panel or files panel -- it used to tie #sidebarTop's width to
-   --branch-panel-width so the repo dropdown lined up with the sidebar below
-   it, which meant resizing or toggling that sidebar reshaped the bar too.
-   #sidebarTop now just takes a fixed width of its own.
-   Neither this nor #controls sets its own height from --top-bar-height:
-   #topBar's `align-items: stretch` already equalizes them from their
-   natural content height, and #topBar's own rendered height (what JS
-   measures to *write* --top-bar-height) must never depend on that same
-   variable, or the two chase each other -- a real run of this ran away to
-   thousands of pixels within a few resize callbacks. */
-#sidebarTop {
-  flex: 0 0 220px;
-  width: 220px;
-  box-sizing: border-box;
-  border-right: 1px solid rgba(128, 128, 128, 0.5);
-  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
-  display: flex;
-  align-items: center;
-  padding: 4px 6px;
-  overflow: hidden;
-}
-#sidebarTop #repoSelect {
-  flex: 1 1 auto;
-  min-width: 0;
-}
+   the branch panel or files panel.
+   Nothing inside it sets its own height from --top-bar-height: #topBar's own
+   rendered height (what JS measures to *write* --top-bar-height) must never
+   depend on that same variable, or the two chase each other -- a real run of
+   this ran away to thousands of pixels within a few resize callbacks. */
 #controls {
   flex: 1 1 auto;
   min-width: 0;
@@ -1209,6 +1199,17 @@ body.vscode-light .gitRef {
   gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
+}
+/* Fixed width like the icon buttons around it. */
+#controlsLeft #repoSelect {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+/* Grows and shrinks equally on both sides of the filter/find pair, centering
+   it in the space left over by the fixed-width items around it -- unlike
+   those items, a spacer has nothing to protect from shrinking to zero. */
+.controlsSpacer {
+  flex: 1 1 auto;
 }
 /* Icon buttons: square, borderless, and dimmed until hovered, so a row of
    them reads as one toolbar rather than six separate controls. */
@@ -1242,9 +1243,10 @@ body.vscode-light .gitRef {
 .iconBtn.overflowHidden {
   display: none;
 }
+/* Fixed width rather than flexible, so it stays put and centered instead of
+   stretching or shrinking as the space around it changes. */
 #commitFilterControl {
-  flex: 1 1 120px;
-  min-width: 80px;
+  flex: 0 0 260px;
   display: flex;
 }
 #commitFilter {
@@ -1267,6 +1269,7 @@ body.vscode-light .gitRef {
 #controlsBtns {
   margin-left: auto;
   display: flex;
+  align-items: center;
   gap: 2px;
   flex-shrink: 0;
 }

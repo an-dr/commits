@@ -75,6 +75,69 @@ describe("CommitsCore MIT webview host", () => {
     }]);
   });
 
+  it("requests submodule status for the current repository when repos are sent", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    const request = host.gitRequests.find((candidate) => candidate.args[0] === "submodule");
+    expect(request?.cwd).toBe("C:/repo");
+    expect(request?.args).toEqual(["submodule", "status", "--recursive"]);
+  });
+
+  it("nests submodules of submodules under the repository that owns them", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    completeGit(host, core, "submodule", [
+      " 6d769aa0f01d86acd112cf59869bfbc5f79abd1d vendor/bones (heads/main)",
+      " e425e3d2f92c96d2146f83a1b23de235c75d1758 vendor/bones/agents (heads/main)",
+      " 0200cd23a33886a189787b2845fc9834a0530587 vendor/bones/vendor/pubsub-bus (v3.1.0-1-g0200cd2)",
+    ].join("\n"));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "loadRepos",
+      repos: {
+        "C:/repo": { columnWidths: null },
+        "C:/repo/vendor/bones": { columnWidths: null },
+        "C:/repo/vendor/bones/agents": { columnWidths: null },
+        "C:/repo/vendor/bones/vendor/pubsub-bus": { columnWidths: null },
+      },
+      lastActiveRepo: "C:/repo",
+    }]);
+  });
+
+  it("requests submodule status for a repository's root only once", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "loadRepos" }));
+    core.receivePageJson(JSON.stringify({ command: "loadRepos" }));
+
+    expect(host.gitRequests.filter((request) => request.args[0] === "submodule")).toHaveLength(1);
+  });
+
+  it("stays quiet about submodules when the repository has none", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+    const sentBefore = host.sent.length;
+
+    completeGit(host, core, "submodule", "");
+
+    expect(host.sent.length).toBe(sentBefore);
+  });
+
   it("reports the commits repo status once the view is ready", () => {
     const host = new StubHost();
     host.commitsRepoStatusValue =

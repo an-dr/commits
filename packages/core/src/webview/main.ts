@@ -215,15 +215,22 @@ class GitGraphView {
       changedRepo = true;
     }
 
-    let options = [],
+    // Sorted so a submodule's path (a string-prefixed extension of its
+    // parent's) always lands right after its parent and before any sibling,
+    // which is what lets the dropdown render this as a tree by indentation
+    // alone, with no separate hierarchy to keep in sync.
+    let sortedPaths = [...repoPaths].sort(),
+      options = [],
       repoComps,
       i;
-    for (i = 0; i < repoPaths.length; i++) {
-      repoComps = repoPaths[i].split("/");
-      options.push({ name: repoComps[repoComps.length - 1], value: repoPaths[i] });
+    for (i = 0; i < sortedPaths.length; i++) {
+      const path = sortedPaths[i];
+      repoComps = path.split("/");
+      const depth = sortedPaths.filter(
+        (other) => other !== path && path.startsWith(other + "/")
+      ).length;
+      options.push({ name: repoComps[repoComps.length - 1], value: path, depth });
     }
-    // A single repository needs no selector, so there is nothing to show.
-    document.getElementById("sidebarTop")!.style.display = repoPaths.length > 1 ? "flex" : "none";
     this.repoDropdown.setOptions(options, this.currentRepo);
 
     if (changedRepo) {
@@ -1542,7 +1549,7 @@ class GitGraphView {
    * instead of a number nobody re-measures.
    *
    * Nothing inside `#topBar` may size itself from `--top-bar-height` (see the
-   * comment above `#sidebarTop` in main.css) -- that would make the height
+   * comment above `#controls` in main.css) -- that would make the height
    * this reads depend on the variable it writes, and a real run of exactly
    * that ran away to thousands of pixels within a few callbacks. Rounded and
    * compared against the last value regardless, as a second, independent

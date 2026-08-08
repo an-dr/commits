@@ -5,6 +5,8 @@ import { addOutsideClickListener } from "./utils/outsideClick";
 interface DropdownOption {
   name: string;
   value: string;
+  /** Nesting level for tree-style options (e.g. a repo's submodules); 0 when absent. */
+  depth?: number;
 }
 
 export class Dropdown {
@@ -140,12 +142,15 @@ export class Dropdown {
     this.currentValueElem.innerHTML = selected === undefined ? "" : escapeHtml(selected.name);
     let html = "";
     for (let i = 0; i < this.options.length; i++) {
+      const depth = this.options[i].depth ?? 0;
       html +=
         '<div class="dropdownOption' +
         (this.selectedOption === i ? " selected" : "") +
         '" data-id="' +
         i +
-        '">' +
+        '"' +
+        (depth > 0 ? ' style="padding-left:' + (10 + depth * 14) + 'px"' : "") +
+        '>' +
         escapeHtml(this.options[i].name) +
         (this.showInfo
           ? '<div class="dropdownOptionInfo" title="' +

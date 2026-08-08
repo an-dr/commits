@@ -301,7 +301,9 @@ body {
   position: absolute;
   z-index: 31;
   top: 100%;
-  left: 0;
+  /* The trigger sits at the toolbar's right edge, where there is no room to
+     open further right. */
+  right: 0;
   min-width: 150px;
   margin: 3px 0 0;
   padding: 3px;
@@ -322,17 +324,17 @@ body {
   position: relative;
 }
 
-/* File's items fly out to the right on hover (or focus, for keyboard use)
-   — the trigger sits at the toolbar's left edge, where there is no room to
-   fly out further left. */
+/* File's items fly out to the left on hover (or focus, for keyboard use)
+   — the whole menu now opens from the toolbar's right edge, where there is
+   no room to fly out further right. */
 .standaloneMenuSubList {
   display: none;
   position: absolute;
   z-index: 32;
   top: -3px;
-  left: 100%;
+  right: 100%;
   min-width: 170px;
-  margin: 0 0 0 2px;
+  margin: 0 2px 0 0;
   padding: 3px;
   border: 1px solid var(--vscode-input-border);
   border-radius: 6px;

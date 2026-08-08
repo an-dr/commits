@@ -7,6 +7,7 @@ import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
 import { MitGraphBackend } from "./mit/graph-backend";
 import { WorkingTreeActions } from "./mit/working-tree-actions";
 import { RepositoryManager } from "./read/repository-manager";
+import { parseSubmodulePaths } from "./read/submodule-status";
 import {
   DEFAULT_PERSISTENT_STATE,
   MAX_RECENT_REPOSITORIES,
@@ -75,6 +76,12 @@ export class CommitsCore {
   private nextOsRequestId = 50_000;
   private nextGitRequestId = 60_000;
   private nextUpdateRequestId = 70_000;
+  /** Nested submodule paths discovered per repository root, keyed by root path. */
+  private readonly submodulePaths = new Map<string, readonly string[]>();
+  /** Root paths a submodule discovery has already been issued for, so a
+   *  repeated `sendRepos` never re-queries the same root. */
+  private readonly requestedSubmoduleRoots = new Set<string>();
+  private readonly pendingSubmoduleDiscovery = new Map<number, string>();
   /** Counts panel file reads so only the newest one answers. */
   private fullDiffSequence = 0;
   /** Counts comparisons so only the newest selection answers. */
@@ -371,6 +378,12 @@ export class CommitsCore {
       this.finishCloneCommitsRepo(result);
       return;
     }
+    const submoduleRoot = this.pendingSubmoduleDiscovery.get(result.requestId);
+    if (submoduleRoot !== undefined) {
+      this.pendingSubmoduleDiscovery.delete(result.requestId);
+      this.finishSubmoduleDiscovery(submoduleRoot, result);
+      return;
+    }
     this.graph.receive(result);
     this.workingTreeActions.receive(result);
   }
@@ -644,9 +657,47 @@ export class CommitsCore {
   }
 
   private sendRepos(): void {
+    if (this.currentRepository !== null) this.discoverSubmodulesIfNeeded(this.currentRepository);
     const repos: Record<string, { columnWidths: number[] | null }> = {};
-    for (const repository of this.repositories.all()) repos[repository.path] = { columnWidths: null };
+    for (const repository of this.repositories.all()) {
+      repos[repository.path] = { columnWidths: null };
+      for (const submodulePath of this.submodulePaths.get(repository.path) ?? []) {
+        repos[submodulePath] = { columnWidths: null };
+      }
+    }
     this.send({ command: "loadRepos", repos, lastActiveRepo: this.currentRepository });
+  }
+
+  /**
+   * Recurses through a repository's submodules once per root path, so the
+   * repo selector can nest them the way `git submodule status --recursive`
+   * reports them -- including submodules of submodules.
+   */
+  private discoverSubmodulesIfNeeded(rootPath: string): void {
+    if (this.requestedSubmoduleRoots.has(rootPath)) return;
+    this.requestedSubmoduleRoots.add(rootPath);
+    const requestId = this.nextGitRequestId++;
+    this.pendingSubmoduleDiscovery.set(requestId, rootPath);
+    this.host.runGit({
+      requestId,
+      cwd: rootPath,
+      args: ["submodule", "status", "--recursive"],
+      timeoutMs: 15_000,
+    });
+  }
+
+  /** Reacts to a submodule discovery's GitResult: records the paths found (if
+   *  any) and, only when that changes what the selector should show, re-sends
+   *  the repo list. A plain repository with no submodules stays silent. */
+  private finishSubmoduleDiscovery(rootPath: string, result: GitResult): void {
+    if (result.status !== "completed" || result.exitCode !== 0) {
+      this.submodulePaths.set(rootPath, []);
+      return;
+    }
+    const relativePaths = parseSubmodulePaths(new TextDecoder().decode(result.stdout));
+    const absolutePaths = relativePaths.map((relative) => `${rootPath}/${relative}`);
+    this.submodulePaths.set(rootPath, absolutePaths);
+    if (absolutePaths.length > 0) this.sendRepos();
   }
 
   private send(message: ResponseMessage | Record<string, unknown>): void {
