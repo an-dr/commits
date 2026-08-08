@@ -81,7 +81,8 @@ export class SettingsEditor {
       ]),
     );
     for (const section of SECTION_ORDER) {
-      const definitions = CORE_SETTING_DEFINITIONS.filter((definition) => definition.section === section);
+      const definitions = CORE_SETTING_DEFINITIONS.filter((definition) => definition.section === section && definition.standalone);
+      if (definitions.length === 0) continue;
       fields.append(createSection(section, definitions.map((definition) => this.createField(definition))));
     }
     const footer = document.createElement("footer");
@@ -184,6 +185,7 @@ export class SettingsEditor {
     this.timeFormat.value = settings.app.timeFormat;
     this.updateManifestUrl.value = settings.app.updateManifestUrl;
     for (const definition of CORE_SETTING_DEFINITIONS) {
+      if (!definition.standalone) continue;
       const control = this.controls.get(definition.key)!;
       const value = settings.core[definition.key];
       if (control instanceof HTMLFieldSetElement) {
@@ -205,6 +207,7 @@ export class SettingsEditor {
     if (this.settings === null) return null;
     const core: Record<string, unknown> = { ...this.settings.core };
     for (const definition of CORE_SETTING_DEFINITIONS) {
+      if (!definition.standalone) continue;
       const control = this.controls.get(definition.key)!;
       if (control instanceof HTMLFieldSetElement) {
         core[definition.key] = Object.fromEntries(Array.from(control.querySelectorAll<HTMLInputElement>("input"))

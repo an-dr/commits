@@ -22,7 +22,41 @@ export interface CoreSettingDefinition {
   readonly description: string;
   readonly defaultValue: SettingValue;
   readonly options?: readonly SettingValue[];
+  /** False for a key nothing in the standalone app reads -- it still round-trips through
+   *  the persisted document, but a settings UI should not show a control for it. */
+  readonly standalone: boolean;
 }
+
+// Keys meaningful only to the VS Code extension: its own status bar item,
+// inline editor blame, its SCM view's toolbar buttons, and its Node backend's
+// repo-search/date-type/uncommitted-changes handling (packages/core/src/backend,
+// which the standalone app never invokes -- see docs/shared-core.md). Verified
+// by grepping apps/ and packages/core/src/webview for each key: zero hits
+// outside this file for every one of these.
+const VSCODE_ONLY_KEYS: ReadonlySet<string> = new Set([
+  "scmButtons.fetch",
+  "scmButtons.pull",
+  "scmButtons.push",
+  "dateType",
+  "maxDepthOfRepoSearch",
+  "showStatusBarItem",
+  "statusBarIconOnly",
+  "showUncommittedChanges",
+  "tabIconColourTheme",
+  "blame.inlineMessageEnabled",
+  "inlineBlame.enabled",
+  "blame.inlineMessageFormat",
+  "blame.inlineMessageNoCommit",
+  "blame.inlineMessageMargin",
+  "blame.currentUserAlias",
+  "blame.ignoreWhitespace",
+  "blame.delayBlame",
+  "blame.maxLineCount",
+  "blame.extendedHoverInformation",
+  "blame.detectMoveOrCopyFromOtherFiles",
+  "logLevel",
+  "statusBarItem.dirtyIndicator",
+]);
 
 const shortcutOptions = ["UNASSIGNED", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => `CTRL/CMD + ${letter}`)];
 const setting = (
@@ -32,7 +66,15 @@ const setting = (
   description: string,
   defaultValue: SettingValue,
   options?: readonly SettingValue[],
-): CoreSettingDefinition => ({ key: `${PREFIX}${key}`, kind, section, description, defaultValue, options });
+): CoreSettingDefinition => ({
+  key: `${PREFIX}${key}`,
+  kind,
+  section,
+  description,
+  defaultValue,
+  options,
+  standalone: !VSCODE_ONLY_KEYS.has(key),
+});
 
 /** Complete configuration catalog from an-dr-com-mit-s/package.json. */
 export const CORE_SETTING_DEFINITIONS: readonly CoreSettingDefinition[] = [
