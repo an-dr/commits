@@ -22,6 +22,9 @@ path = "src/bin/commits-editor.rs"
 name = "commits"
 path = "src/bin/commits-launcher.rs"
 
+[build-dependencies]
+winresource = "0.1"
+
 [dependencies]
 bones-messages = { path = "../../../vendor/bones/shared/bones-messages" }
 bus = { path = "../../../vendor/bones/core/bus" }
