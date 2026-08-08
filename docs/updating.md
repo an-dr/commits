@@ -17,11 +17,12 @@ An installation the launcher can update looks like this:
   app/
     commits.exe           # the permanent entry point -- stable, not versioned,
                            # never touched by an update
-    updater/               # the update state that isn't itself versioned
-      version              # the version last recorded, for the "Updated to X" banner
     1.2.0/                 # a version folder: commits-app.exe, page.html, components/, ...
     1.3.0/                 # the current version -- the highest by folder name
-    state/                   # user save data, shared across every version
+    state/                   # user save data, shared across every version -- also
+                             # holds updater.bin, the version last recorded for the
+                             # "Updated to X" banner (see "Confirming an update took
+                             # effect" below)
   settings.json
   repo/                     # the commits project's own clone (Clone Commits Repo)
 ```
@@ -44,9 +45,6 @@ resolves `state/`'s location by checking whether its own directory's name
 parses as a version and its parent has a launcher beside it, so a `dist/app`
 build assembled the same way (see [`phase-0-1.md`](phase-0-1.md)) behaves
 identically without any extra configuration.
-
-`~/.commits/app/updater` is overridden by the `COMMITS_UPDATER_DIR`
-environment variable, mainly for tests and support diagnostics.
 
 ## The manifest
 
@@ -137,18 +135,22 @@ but never became healthy.
 
 ## Confirming an update took effect
 
-The app records its own version in `updater/version` on every start, and
-compares it against what it last recorded. The first start after that
-comparison changes — a version that differs from last time, however it got
-there (a downloaded update or a direct Install) — shows "Updated to version
-X" once next to the menu button. A first run ever on a machine (no prior
-version recorded) does not trigger this; there is nothing to compare yet.
+The app records its own version on every start through bones' own
+`persistence` module (`wasm_extensions::persistence::Persistence`, the same
+mechanism a WASM extension uses to save its own state) — a `persistence/save`
+publish keyed by the `updater` module's own bus name, landing at
+`state/updater.bin`, no separate on-disk state of this crate's own to manage.
+It compares that against what it last recorded, read back via a direct `send`
+to the `persistence` endpoint. The first start after that comparison changes
+— a version that differs from last time, however it got there (a downloaded
+update or a direct Install) — shows "Updated to version X" once next to the
+menu button. A first run ever (no prior save) does not trigger this; there is
+nothing to compare yet.
 
 ## Checking behavior locally
 
 Point `updateManifestUrl` at a manifest whose `version` is higher than the
 running build's, served from anywhere reachable over HTTPS (a local static
-file server works for testing). `COMMITS_UPDATER_DIR` and
-`COMMITS_INSTALL_DIR` can redirect the update marker and the install
-location to scratch directories instead of the real `~/.commits/app` while
-testing the launcher directly.
+file server works for testing). `COMMITS_INSTALL_DIR` can redirect the
+install location to a scratch directory instead of the real `~/.commits/app`
+while testing the launcher directly.

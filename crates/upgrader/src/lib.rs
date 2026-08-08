@@ -89,21 +89,6 @@ pub fn download_asset_verified(backend: &dyn OsBackend, manifest: &Manifest) -> 
     Ok(bytes)
 }
 
-/// Where staged updates and backups live: `COMMITS_UPDATER_DIR` if set
-/// (tests and support diagnostics), otherwise `~/.commits/updater`. Shared by
-/// every process that needs to agree on this location -- the launcher
-/// applies from it, and the running app stages into it -- so it is a single
-/// function rather than each caller re-deriving the same path. Nested inside
-/// the install dir itself (`app/updater`) rather than a home-level sibling,
-/// since every version folder lives under the same install dir and this is
-/// the one thing about an install that is not itself versioned.
-pub fn state_dir() -> Option<std::path::PathBuf> {
-    if let Ok(value) = std::env::var("COMMITS_UPDATER_DIR") {
-        return Some(std::path::PathBuf::from(value));
-    }
-    default_install_dir().map(|install_dir| install_dir.join("updater"))
-}
-
 /// Where a permanent install lives: `COMMITS_INSTALL_DIR` if set (tests),
 /// otherwise `~/.commits/app`. Compared against the running process's own
 /// directory to tell an installed run from a dev or ad-hoc one -- the Install
@@ -178,24 +163,6 @@ fn shared_or_exe_relative_from(exe_dir: &std::path::Path, name: &str) -> std::pa
         }
     }
     exe_dir.join(name)
-}
-
-/// Compares `current` against the version last recorded in `state_dir()`,
-/// records `current` for next time, and returns whether this is the first
-/// start reporting a version different from the one last recorded -- the
-/// signal a caller uses to show a one-time "just updated" notice. A missing
-/// record (first run ever on this machine) is not a change: there is
-/// nothing to announce yet, only something to start recording.
-pub fn record_version_and_check_update(current: &str) -> Result<bool, String> {
-    let path = state_dir()
-        .ok_or_else(|| String::from("could not resolve the update state directory"))?
-        .join("version");
-    let previous = std::fs::read_to_string(&path).ok();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    std::fs::write(&path, current).map_err(|error| error.to_string())?;
-    Ok(previous.is_some_and(|value| value.trim() != current))
 }
 
 /// The launcher's own filename -- the single source of truth shared by

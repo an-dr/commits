@@ -2,11 +2,10 @@ use commits_os::OsBackend;
 
 use crate::{
     download_asset_verified, fetch_manifest, is_installed_version_dir, is_newer, parse_manifest,
-    record_version_and_check_update, shared_or_exe_relative, shared_or_exe_relative_from, verify_checksum,
-    Manifest, LAUNCHER_EXE_NAME,
+    shared_or_exe_relative, shared_or_exe_relative_from, verify_checksum, Manifest, LAUNCHER_EXE_NAME,
 };
 
-/// Serializes tests that mutate the process-wide `COMMITS_UPDATER_DIR` env
+/// Serializes tests that mutate the process-wide `COMMITS_INSTALL_DIR` env
 /// var, which Rust's default parallel test execution would otherwise race.
 static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -181,35 +180,6 @@ fn download_asset_verified_accepts_anything_when_no_checksum_is_published() {
     };
 
     assert_eq!(download_asset_verified(&backend, &manifest).unwrap(), b"whatever");
-}
-
-#[test]
-fn first_run_ever_records_the_version_without_reporting_an_update() {
-    let state_dir = tempfile::tempdir().unwrap();
-    let _guard = ENV_LOCK.lock().unwrap();
-    unsafe { std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path()) };
-
-    let just_updated = record_version_and_check_update("1.0.0");
-
-    unsafe { std::env::remove_var("COMMITS_UPDATER_DIR") };
-    assert_eq!(just_updated, Ok(false));
-    assert_eq!(std::fs::read_to_string(state_dir.path().join("version")).unwrap(), "1.0.0");
-}
-
-#[test]
-fn reports_an_update_exactly_once_after_the_version_changes() {
-    let state_dir = tempfile::tempdir().unwrap();
-    let _guard = ENV_LOCK.lock().unwrap();
-    unsafe { std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path()) };
-
-    assert_eq!(record_version_and_check_update("1.0.0"), Ok(false));
-    assert_eq!(record_version_and_check_update("1.0.0"), Ok(false));
-    assert_eq!(record_version_and_check_update("1.1.0"), Ok(true));
-    // The notice fires once: the next start at the same (now current) version
-    // is not itself a change.
-    assert_eq!(record_version_and_check_update("1.1.0"), Ok(false));
-
-    unsafe { std::env::remove_var("COMMITS_UPDATER_DIR") };
 }
 
 fn running_exe_dir() -> std::path::PathBuf {

@@ -1,7 +1,9 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_messages::persistence::{Save, ENDPOINT as PERSISTENCE_ENDPOINT};
+use bones_messages::{EncodeMessage, Message};
+use bus::{Bus, Envelope, Handler, Module, ModuleContext, Registry};
 use commits_ipc::native::{UpdaterRequest, UpdaterResult};
 use commits_os::{OsBackend, SystemOsBackend};
 
@@ -15,6 +17,14 @@ const INSTALL: u8 = 2;
 const OWNER: &str = "commits";
 const SUCCESS: u8 = 0;
 const FAILURE: u8 = 1;
+
+/// This module's own bus registration name -- also the `sender` stamped on
+/// its persistence save/load calls (see [`UpdaterModule::record_version_and_check_update`]),
+/// so its version marker lives at `state/updater.bin`
+/// (`wasm_extensions::persistence::Persistence`), distinct from any other
+/// module's or extension's own save file, and with no directory of its own
+/// to manage: `state/` already exists for exactly this purpose.
+const MODULE_NAME: &str = "updater";
 
 /// This binary's own version, compared against a manifest's `version` field.
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -33,12 +43,13 @@ const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// test can inject a stub instead of hitting the network.
 pub struct UpdaterModule {
     bus: Option<Bus>,
+    registry: Option<Registry>,
     backend: Arc<dyn OsBackend>,
 }
 
 impl UpdaterModule {
     pub fn new(backend: Arc<dyn OsBackend>) -> Self {
-        Self { bus: None, backend }
+        Self { bus: None, registry: None, backend }
     }
 
     fn start(&self, request: UpdaterRequest) {
@@ -56,12 +67,45 @@ impl UpdaterModule {
             if let Ok(payload) = result.encode() {
                 bus.publish(Envelope {
                     topic: COMPLETED_TOPIC.into(),
-                    sender: "updater".into(),
+                    sender: MODULE_NAME.into(),
                     correlation: Some(u64::from(request.request_id)),
                     payload,
                 });
             }
         });
+    }
+
+    /// Compares `current` against the version last saved through bones'
+    /// own `persistence` module (`state/updater.bin`), records `current`
+    /// for next time, and returns whether this is the first start
+    /// reporting a version different from the one last saved -- the signal
+    /// [`encode_install_status`] uses to show a one-time "just updated"
+    /// notice. A missing save (first run ever, or persistence unavailable)
+    /// is not a change: there is nothing to announce yet, only something to
+    /// start recording.
+    ///
+    /// The load is a direct, synchronous `send` (ADR-010) through the
+    /// [`Registry`] service, so the answer reflects whatever was already on
+    /// disk. The save is a `persistence/save` publish instead -- the same
+    /// pub/sub, fire-and-forget path a WASM extension itself would use --
+    /// which only takes effect on the engine's next `Bus::dispatch()`
+    /// rather than immediately; that is fine here, since the load that
+    /// matters is the *next start's*, well after this process has ticked
+    /// many times over.
+    fn record_version_and_check_update(&self, current: &str) -> bool {
+        let previous = self.registry.as_ref().and_then(|registry| registry.call(MODULE_NAME, PERSISTENCE_ENDPOINT, &[]).ok());
+        if let Some(bus) = &self.bus {
+            bus.publish(Envelope {
+                topic: Save::TOPIC.into(),
+                sender: MODULE_NAME.into(),
+                correlation: None,
+                payload: Save { bytes: current.as_bytes() }.encode(),
+            });
+        }
+        match previous {
+            Some(bytes) if !bytes.is_empty() => bytes != current.as_bytes(),
+            _ => false,
+        }
     }
 }
 
@@ -186,17 +230,12 @@ fn is_install_dir(current: &Path) -> bool {
 ///
 /// `just_updated` only has meaning for an installed run -- a dev or ad-hoc
 /// build was never "updated" by this mechanism -- so it skips
-/// `record_version_and_check_update` (and the `state_dir()` write that
-/// implies) entirely rather than reporting `false` after touching disk
-/// anyway: a non-installed run has no business creating `app/updater/` at
-/// all. For an installed run, a write failure (e.g. an unresolvable home
-/// directory) reads as "not just updated" rather than surfacing an error,
-/// since the entire purpose is a one-time confirmation banner, not
-/// something worth failing the whole status query over.
-fn encode_install_status() -> Vec<u8> {
+/// [`UpdaterModule::record_version_and_check_update`] entirely rather than
+/// reporting `false` after saving anyway: a non-installed run has no
+/// business recording a version marker at all.
+fn encode_install_status(module: &UpdaterModule) -> Vec<u8> {
     let installed = is_installed();
-    let just_updated =
-        if installed { commits_upgrader::record_version_and_check_update(CURRENT_VERSION).unwrap_or(false) } else { false };
+    let just_updated = if installed { module.record_version_and_check_update(CURRENT_VERSION) } else { false };
     let mut response = vec![SUCCESS, u8::from(installed), u8::from(just_updated)];
     response.extend(CURRENT_VERSION.as_bytes());
     response
@@ -239,16 +278,20 @@ impl Handler for UpdaterModule {
 
 impl Module for UpdaterModule {
     fn name(&self) -> &str {
-        "updater"
+        MODULE_NAME
     }
 
     fn init(&mut self, context: &mut ModuleContext) -> Result<(), String> {
         context.subscribe(REQUEST_TOPIC);
         self.bus = context.get_service::<Bus>().cloned();
-        self.bus
-            .as_ref()
-            .map(|_| ())
-            .ok_or_else(|| "no Bus service available".into())
+        self.registry = context.get_service::<Registry>().cloned();
+        if self.bus.is_none() {
+            return Err("no Bus service available".into());
+        }
+        if self.registry.is_none() {
+            return Err("no Registry service available".into());
+        }
+        Ok(())
     }
 
     /// Synchronous "is this run installed, and what version is it?" query,
@@ -260,7 +303,7 @@ impl Module for UpdaterModule {
         if sender != OWNER {
             return Some(encode_failure("install status is private to the commits component"));
         }
-        Some(encode_install_status())
+        Some(encode_install_status(self))
     }
 }
 
@@ -270,13 +313,14 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
-    use bus::{Bus, ServiceRegistry};
+    use bus::{Bus, ModuleRegistration, ServiceRegistry};
+    use wasm_extensions::persistence::Persistence;
 
     use super::*;
 
-    /// Serializes tests that mutate the process-wide `COMMITS_UPDATER_DIR`
-    /// and `COMMITS_INSTALL_DIR` env vars, which Rust's default parallel
-    /// test execution would otherwise race.
+    /// Serializes tests that mutate the process-wide `COMMITS_INSTALL_DIR`
+    /// env var, which Rust's default parallel test execution would
+    /// otherwise race.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     /// Serves fixed `fetch_url` responses, matching `commits-upgrader`'s own
@@ -318,6 +362,7 @@ mod tests {
         let bus = Bus::new();
         let mut services = ServiceRegistry::new();
         services.provide(bus.clone()).unwrap();
+        services.provide(Registry::new()).unwrap();
         let mut module = UpdaterModule::new(Arc::new(StubBackend { responses }));
         module.init(&mut ModuleContext::new(&mut services)).unwrap();
 
@@ -497,65 +542,92 @@ mod tests {
 
     #[test]
     fn respond_answers_the_trusted_sender_with_install_status_and_version() {
-        let state_dir = tempfile::tempdir().unwrap();
-        let _guard = ENV_LOCK.lock().unwrap();
-        unsafe { std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path()) };
+        // No init() here (mirroring how a plain UpdaterModule::default() is
+        // never installed either): self.bus/self.registry stay None, so
+        // record_version_and_check_update is a no-op even if is_installed()
+        // somehow returned true on this machine.
         let mut module = UpdaterModule::default();
 
         let response = module.respond(OWNER, &[]).unwrap();
 
-        unsafe { std::env::remove_var("COMMITS_UPDATER_DIR") };
         assert_eq!(response[0], SUCCESS);
         assert!(response[1] == 0 || response[1] == 1);
         assert!(response[2] == 0 || response[2] == 1);
         assert_eq!(std::str::from_utf8(&response[3..]).unwrap(), CURRENT_VERSION);
     }
 
+    /// Wires a real `Persistence` module (see `wasm_extensions::persistence`)
+    /// into `bus`/`registry` at `dir`, so `UpdaterModule`'s own
+    /// `record_version_and_check_update` -- a `persistence/save` publish for
+    /// save, a direct `send` to the `persistence` endpoint for load -- has
+    /// somewhere real to round-trip through, the same as it would inside a
+    /// full engine. The returned `ModuleRegistration` must be kept alive for
+    /// as long as the endpoint needs to answer calls.
+    fn attach_persistence(bus: &Bus, registry: &Registry, services: &mut ServiceRegistry, dir: &std::path::Path) -> ModuleRegistration {
+        ModuleRegistration::attach(bus.clone(), registry.clone(), services, Persistence::new(dir, false)).unwrap()
+    }
+
     #[test]
     fn respond_reports_just_updated_exactly_once_after_the_version_changes() {
         // just_updated is only ever recorded for an installed run, so this
         // needs COMMITS_INSTALL_DIR set to match the running directory too,
-        // not just a state dir to record into.
+        // not just somewhere for persistence to save into.
         let state_dir = tempfile::tempdir().unwrap();
-        std::fs::write(state_dir.path().join("version"), "0.0.1").unwrap();
         let install_dir = running_directory().unwrap().parent().unwrap().to_path_buf();
         let _guard = ENV_LOCK.lock().unwrap();
-        unsafe {
-            std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path());
-            std::env::set_var("COMMITS_INSTALL_DIR", &install_dir);
-        }
+        unsafe { std::env::set_var("COMMITS_INSTALL_DIR", &install_dir) };
+
+        let bus = Bus::new();
+        let registry = Registry::new();
+        let mut services = ServiceRegistry::new();
+        services.provide(bus.clone()).unwrap();
+        services.provide(registry.clone()).unwrap();
+        let _persistence = attach_persistence(&bus, &registry, &mut services, state_dir.path());
+        // Seeds a previous save so the first query below reports a change.
+        bus.publish(Envelope {
+            topic: Save::TOPIC.into(),
+            sender: MODULE_NAME.into(),
+            correlation: None,
+            payload: Save { bytes: b"0.0.1" }.encode(),
+        });
+        bus.dispatch();
         let mut module = UpdaterModule::default();
+        module.init(&mut ModuleContext::new(&mut services)).unwrap();
 
         let first = module.respond(OWNER, &[]).unwrap();
+        bus.dispatch(); // flushes the save the first respond() call just queued
         let second = module.respond(OWNER, &[]).unwrap();
 
-        unsafe {
-            std::env::remove_var("COMMITS_UPDATER_DIR");
-            std::env::remove_var("COMMITS_INSTALL_DIR");
-        }
+        unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
         assert_eq!(first[2], 1, "the first response after a version change reports it");
         assert_eq!(second[2], 0, "a later response at the same version does not report it again");
     }
 
     #[test]
-    fn respond_never_creates_the_state_dir_for_a_non_installed_run() {
+    fn respond_never_records_a_version_for_a_non_installed_run() {
         let state_dir = tempfile::tempdir().unwrap();
         let elsewhere = tempfile::tempdir().unwrap();
         let _guard = ENV_LOCK.lock().unwrap();
-        unsafe {
-            std::env::set_var("COMMITS_UPDATER_DIR", state_dir.path());
-            std::env::set_var("COMMITS_INSTALL_DIR", elsewhere.path());
-        }
+        unsafe { std::env::set_var("COMMITS_INSTALL_DIR", elsewhere.path()) };
+
+        let bus = Bus::new();
+        let registry = Registry::new();
+        let mut services = ServiceRegistry::new();
+        services.provide(bus.clone()).unwrap();
+        services.provide(registry.clone()).unwrap();
+        let _persistence = attach_persistence(&bus, &registry, &mut services, state_dir.path());
         let mut module = UpdaterModule::default();
+        module.init(&mut ModuleContext::new(&mut services)).unwrap();
 
         let response = module.respond(OWNER, &[]).unwrap();
+        bus.dispatch();
 
-        unsafe {
-            std::env::remove_var("COMMITS_UPDATER_DIR");
-            std::env::remove_var("COMMITS_INSTALL_DIR");
-        }
+        unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
         assert_eq!(response[1], 0, "not installed");
         assert_eq!(response[2], 0, "never just-updated when not installed");
-        assert!(!state_dir.path().join("version").exists(), "a non-installed run must not write app/updater/version");
+        assert!(
+            !state_dir.path().join("updater.bin").exists(),
+            "a non-installed run must not save a version marker at all"
+        );
     }
 }
