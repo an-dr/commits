@@ -4,60 +4,78 @@ const COLOUR = /^\s*(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|rgba?\s*\(\d{1,3},\s*\d{1,3
 type SettingKind = "boolean" | "number" | "string" | "colours" | "columns";
 type SettingValue = boolean | number | string | readonly string[] | Readonly<Record<string, boolean>>;
 
+/** One of the groups a settings UI can show core definitions under. */
+export type SettingSection =
+  | "General"
+  | "Toolbar"
+  | "Commits Table"
+  | "Graph"
+  | "Status Bar"
+  | "Blame"
+  | "Branches";
+
 /** One setting declared by the MIT extension manifest. */
 export interface CoreSettingDefinition {
   readonly key: `${typeof PREFIX}${string}`;
   readonly kind: SettingKind;
+  readonly section: SettingSection;
+  readonly description: string;
   readonly defaultValue: SettingValue;
   readonly options?: readonly SettingValue[];
 }
 
 const shortcutOptions = ["UNASSIGNED", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => `CTRL/CMD + ${letter}`)];
-const setting = (key: string, kind: SettingKind, defaultValue: SettingValue, options?: readonly SettingValue[]): CoreSettingDefinition =>
-  ({ key: `${PREFIX}${key}`, kind, defaultValue, options });
+const setting = (
+  key: string,
+  kind: SettingKind,
+  section: SettingSection,
+  description: string,
+  defaultValue: SettingValue,
+  options?: readonly SettingValue[],
+): CoreSettingDefinition => ({ key: `${PREFIX}${key}`, kind, section, description, defaultValue, options });
 
 /** Complete configuration catalog from an-dr-com-mit-s/package.json. */
 export const CORE_SETTING_DEFINITIONS: readonly CoreSettingDefinition[] = [
-  setting("autoCenterCommitDetailsView", "boolean", true),
-  setting("scmButtons.fetch", "boolean", true),
-  setting("scmButtons.pull", "boolean", true),
-  setting("scmButtons.push", "boolean", true),
-  setting("repository.commits.committedVisual", "string", "Avatar", ["Avatar", "Initials"]),
-  setting("repository.commits.avatar.mode", "string", "Auto (Fetched then Pattern)", ["Auto (Fetched then Pattern)", "Fetched Only", "Procedural Pattern", "Disabled"]),
-  setting("repository.commits.avatar.size", "string", "Normal", ["Normal", "Small"]),
-  setting("repository.commits.avatar.shape", "string", "Circle", ["Circle", "Square"]),
-  setting("dateFormat", "string", "Date & Time", ["Date & Time", "Date Only", "Relative"]),
-  setting("dateType", "string", "Author Date", ["Author Date", "Commit Date"]),
-  setting("fetchAvatars", "boolean", true),
-  setting("graphColours", "colours", ["#6ba2f2", "#ca3a7d", "#f3b33e", "#61aea6", "#ac70f7"]),
-  setting("graphStyle", "string", "rounded", ["rounded", "angular"]),
-  setting("initialLoadCommits", "number", 300),
-  setting("loadMoreCommits", "number", 100),
-  setting("maxDepthOfRepoSearch", "number", 0),
-  setting("showCurrentBranchByDefault", "boolean", false),
-  setting("showStatusBarItem", "boolean", true),
-  setting("statusBarIconOnly", "boolean", true),
-  setting("showUncommittedChanges", "boolean", true),
-  setting("tabIconColourTheme", "string", "colour", ["colour", "grey"]),
-  setting("blame.inlineMessageEnabled", "boolean", false),
-  setting("inlineBlame.enabled", "boolean", false),
-  setting("blame.inlineMessageFormat", "string", "Blame ${author.name} (${time.ago})"),
-  setting("blame.inlineMessageNoCommit", "string", "Not Committed Yet"),
-  setting("blame.inlineMessageMargin", "number", 2),
-  setting("blame.currentUserAlias", "string", ""),
-  setting("blame.ignoreWhitespace", "boolean", false),
-  setting("blame.delayBlame", "number", 0),
-  setting("blame.maxLineCount", "number", 16_384),
-  setting("blame.extendedHoverInformation", "string", "off", ["off", "inline-status", "inline", "status"]),
-  setting("blame.detectMoveOrCopyFromOtherFiles", "number", 0, [0, 1, 2, 3]),
-  setting("logLevel", "string", "Info", ["Debug", "Info", "Warning", "Error"]),
-  setting("statusBarItem.dirtyIndicator", "string", "+N -M", ["+N -M", "*", "none"]),
-  setting("branchPanel.groupsFirst", "boolean", true),
-  setting("branchPanel.flattenSingleChildGroups", "boolean", true),
-  setting("dialog.repoInProgress.confirmAbort", "boolean", true),
-  setting("uiDensity", "string", "Normal", ["Big", "Normal", "Compact"]),
-  setting("repository.commits.columnVisibility", "columns", { Committed: true, ID: true }),
-  setting("keyboardShortcut.refresh", "string", "CTRL/CMD + R", shortcutOptions),
+  setting("autoCenterCommitDetailsView", "boolean", "General", "Keeps the selected commit's details centered in view when the graph scrolls.", true),
+  setting("scmButtons.fetch", "boolean", "Toolbar", "Shows the Fetch button in the source control toolbar.", true),
+  setting("scmButtons.pull", "boolean", "Toolbar", "Shows the Pull button in the source control toolbar.", true),
+  setting("scmButtons.push", "boolean", "Toolbar", "Shows the Push button in the source control toolbar.", true),
+  setting("repository.commits.committedVisual", "string", "Commits Table", "How each commit's author is shown in the Committed column: an avatar image or initials.", "Avatar", ["Avatar", "Initials"]),
+  setting("repository.commits.avatar.mode", "string", "Commits Table", "Where avatar images come from: fetched online, generated locally, or disabled.", "Auto (Fetched then Pattern)", ["Auto (Fetched then Pattern)", "Fetched Only", "Procedural Pattern", "Disabled"]),
+  setting("repository.commits.avatar.size", "string", "Commits Table", "Size of author avatars in the commits table.", "Normal", ["Normal", "Small"]),
+  setting("repository.commits.avatar.shape", "string", "Commits Table", "Shape of author avatars in the commits table.", "Circle", ["Circle", "Square"]),
+  setting("dateFormat", "string", "Commits Table", 'How commit dates are displayed: full date and time, date only, or relative (e.g. "3 days ago").', "Date & Time", ["Date & Time", "Date Only", "Relative"]),
+  setting("dateType", "string", "Commits Table", "Which Git date is shown: the author date or the commit date.", "Author Date", ["Author Date", "Commit Date"]),
+  setting("fetchAvatars", "boolean", "Commits Table", "Allows fetching author avatar images from Gravatar over the network.", true),
+  setting("graphColours", "colours", "Graph", "Colour palette cycled across the commit graph's branch lines.", ["#6ba2f2", "#ca3a7d", "#f3b33e", "#61aea6", "#ac70f7"]),
+  setting("graphStyle", "string", "Graph", "Corner style of the commit graph's branch lines: rounded or angular.", "rounded", ["rounded", "angular"]),
+  setting("initialLoadCommits", "number", "Graph", "How many commits to load when a repository is first opened.", 300),
+  setting("loadMoreCommits", "number", "Graph", "How many additional commits to load each time more are requested.", 100),
+  setting("maxDepthOfRepoSearch", "number", "General", "How many folder levels deep to search for repositories; 0 searches without a limit.", 0),
+  setting("showCurrentBranchByDefault", "boolean", "Graph", "Filters the graph to the current branch by default when a repository opens.", false),
+  setting("showStatusBarItem", "boolean", "Status Bar", "Shows a Commits item in the status bar.", true),
+  setting("statusBarIconOnly", "boolean", "Status Bar", "Shows only an icon in the status bar item, without a text label.", true),
+  setting("showUncommittedChanges", "boolean", "Graph", "Shows an entry for uncommitted changes at the top of the commit graph.", true),
+  setting("tabIconColourTheme", "string", "Status Bar", "Colour theme used for the status bar's icon.", "colour", ["colour", "grey"]),
+  setting("blame.inlineMessageEnabled", "boolean", "Blame", "Shows an inline blame message at the cursor in the editor.", false),
+  setting("inlineBlame.enabled", "boolean", "Blame", "Enables the inline blame feature.", false),
+  setting("blame.inlineMessageFormat", "string", "Blame", "Template for the inline blame message text.", "Blame ${author.name} (${time.ago})"),
+  setting("blame.inlineMessageNoCommit", "string", "Blame", "Inline blame text shown for lines that have not been committed yet.", "Not Committed Yet"),
+  setting("blame.inlineMessageMargin", "number", "Blame", "Left margin, in characters, before the inline blame message.", 2),
+  setting("blame.currentUserAlias", "string", "Blame", "Name shown for your own commits in blame, in place of your Git author name.", ""),
+  setting("blame.ignoreWhitespace", "boolean", "Blame", "Ignores whitespace-only changes when attributing blame.", false),
+  setting("blame.delayBlame", "number", "Blame", "Milliseconds to wait after the cursor stops moving before showing inline blame.", 0),
+  setting("blame.maxLineCount", "number", "Blame", "Skips inline blame for files with more than this many lines.", 16_384),
+  setting("blame.extendedHoverInformation", "string", "Blame", "What extra detail the blame hover shows: status, commit message, both, or neither.", "off", ["off", "inline-status", "inline", "status"]),
+  setting("blame.detectMoveOrCopyFromOtherFiles", "number", "Blame", "How hard to look for a line's origin in other files when it was moved or copied.", 0, [0, 1, 2, 3]),
+  setting("logLevel", "string", "General", "Minimum severity of log messages written to the output channel.", "Info", ["Debug", "Info", "Warning", "Error"]),
+  setting("statusBarItem.dirtyIndicator", "string", "Status Bar", "How uncommitted changes are indicated on the status bar item.", "+N -M", ["+N -M", "*", "none"]),
+  setting("branchPanel.groupsFirst", "boolean", "Branches", "Lists branch groups before individual branches in the branches panel.", true),
+  setting("branchPanel.flattenSingleChildGroups", "boolean", "Branches", "Collapses a branch group that contains only one branch into that branch.", true),
+  setting("dialog.repoInProgress.confirmAbort", "boolean", "General", "Asks for confirmation before aborting an in-progress Git operation (merge, rebase, etc.).", true),
+  setting("uiDensity", "string", "General", "Overall spacing and sizing of the interface.", "Normal", ["Big", "Normal", "Compact"]),
+  setting("repository.commits.columnVisibility", "columns", "Commits Table", "Which optional columns (Committed, ID) are shown in the commits table.", { Committed: true, ID: true }),
+  setting("keyboardShortcut.refresh", "string", "General", "Keyboard shortcut that refreshes the commit graph.", "CTRL/CMD + R", shortcutOptions),
 ];
 
 export type DisplayMode = "system" | "light" | "dark";
