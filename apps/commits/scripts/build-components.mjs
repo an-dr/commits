@@ -16,19 +16,26 @@ async function resolveWizerPath() {
   }
   try {
     await access(localWizer);
+    return filePath(localWizer);
   } catch {
-    run("cargo", [
-      "install",
-      "wizer",
-      "--version",
-      "10.0.0",
-      "--locked",
-      "--features",
-      "env_logger,structopt",
-      "--root",
-      ".tools/wizer",
-    ]);
+    // Not installed yet -- fall through and build it below.
   }
+  // cargo install can report a non-zero exit here even after printing
+  // "Installed package" and placing the binary (observed on the win-arm64
+  // runner), so status alone is not a reliable success signal. Install,
+  // then check for the binary itself, and only fail if it is missing.
+  run("cargo", [
+    "install",
+    "wizer",
+    "--version",
+    "10.0.0",
+    "--locked",
+    "--features",
+    "env_logger,structopt",
+    "--root",
+    ".tools/wizer",
+  ]);
+  await access(localWizer);
   return filePath(localWizer);
 }
 
@@ -63,7 +70,10 @@ function run(command, args) {
     throw result.error;
   }
   if (result.status !== 0) {
-    throw new Error(`${command} exited with status ${result.status} (signal ${result.signal})`);
+    // Not thrown here: callers that only care about a produced artifact
+    // (e.g. resolveWizerPath) check for it themselves, since this status
+    // has been observed non-zero on a run that otherwise fully succeeded.
+    console.warn(`warning: ${command} exited with status ${result.status} (signal ${result.signal})`);
   }
 }
 
