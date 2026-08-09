@@ -337,14 +337,14 @@ mod tests {
         let source_dir = dir.path().join("dev-build");
         let install_dir = dir.path().join("app");
         fs::create_dir_all(source_dir.join("components")).unwrap();
-        fs::write(source_dir.join("commits.exe"), b"the launcher").unwrap();
+        fs::write(source_dir.join(LAUNCHER_EXE_NAME), b"the launcher").unwrap();
         fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
         fs::write(source_dir.join("components/commits.wasm"), b"component").unwrap();
 
         let version_dir = copy_version_from_dir(&source_dir, &install_dir, "1.0.0").unwrap();
 
         assert_eq!(fs::read(version_dir.join("commits-app.exe")).unwrap(), b"the app");
-        assert!(!version_dir.join("commits.exe").exists());
+        assert!(!version_dir.join(LAUNCHER_EXE_NAME).exists());
         assert_eq!(fs::read(version_dir.join("components/commits.wasm")).unwrap(), b"component");
         assert!(!install_dir.join("components").exists());
     }
