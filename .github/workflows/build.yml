@@ -1,11 +1,20 @@
 name: build
 
 # Windows x64 is the repo's only verified-working platform (see README) and
-# is a required check. Windows arm64 has a dedicated wizer bootstrap already
-# (patch-wizer-package.mjs, tooling/wizer-win32-arm64) so it is reasonably
-# likely to work, and Linux has no precedent anywhere in this repo -- both
-# are wired up here but allowed to fail (continue-on-error) until someone
-# confirms a green run and this comment can be updated to drop that.
+# is a required check. Linux is wired up but allowed to fail
+# (continue-on-error) until someone confirms a green run and this comment can
+# be updated to drop that.
+#
+# Windows arm64 is commented out below rather than deleted. It never passed a
+# single run: `npm run build:wasm` dies inside componentize-js, a fraction of
+# a second after it spawns the wizer that `cargo install` has just built
+# successfully. What made that hard to see is that componentize-js hands wizer
+# the parent's own stdout stream, so the reason never reaches the log -- the
+# step just ends, exit code 1, in silence. The instrumentation that found this
+# much is still in apps/commits/scripts/build-components.mjs, and the same
+# arm64 path runs on an arm64 developer machine, where it works. Re-enable the
+# matrix entry to pick the hunt back up; the wizer cache steps below are
+# already keyed to it.
 
 on:
   push:
@@ -25,9 +34,9 @@ jobs:
           - name: windows-x64
             os: windows-latest
             required: true
-          - name: windows-arm64
-            os: windows-11-arm
-            required: false
+          # - name: windows-arm64
+          #   os: windows-11-arm
+          #   required: false
           - name: linux-x64
             os: ubuntu-latest
             required: false
@@ -63,7 +72,41 @@ jobs:
       # lockfile to already list every platform's variants.
       - run: npm install
 
-      - run: npm run build
+      # win-arm64 has no prebuilt wizer, so `npm run build:wasm` builds one
+      # with `cargo install` -- five minutes of wasmtime on that runner, on
+      # every single run. The key carries the version the build script pins,
+      # so bumping it there invalidates this without anyone remembering to.
+      # Restore and save are separate so the save runs even when a later step
+      # fails: the whole point is that a red arm64 run must not also mean
+      # another five minutes of wasmtime on the next attempt.
+      - name: Restore the bootstrapped wizer
+        id: wizer-cache
+        if: matrix.name == 'windows-arm64'
+        uses: actions/cache/restore@v4
+        with:
+          path: .tools/wizer
+          key: wizer-10.0.0-${{ matrix.name }}
+
+      # Run as three steps rather than one `npm run build`, so a failure names
+      # the stage it happened in. This is not cosmetic: windows-arm64 has been
+      # failing here with exit code 1 and no output at all, and a step named
+      # "build wasm components" is the difference between knowing that much
+      # and knowing nothing.
+      - name: Build the page
+        run: npm run build:web
+
+      - name: Build the wasm components
+        run: npm run build:wasm
+
+      - name: Save the bootstrapped wizer
+        if: always() && matrix.name == 'windows-arm64' && steps.wizer-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .tools/wizer
+          key: wizer-10.0.0-${{ matrix.name }}
+
+      - name: Build the host executables
+        run: npm run build:host
 
       - run: npm run check
 
@@ -76,3 +119,38 @@ jobs:
       - name: Assemble dist
         if: matrix.name == 'windows-x64'
         run: npm run dist
+
+      # What `npm run dist` assembles is already the runnable layout -- unzip
+      # and run commits.exe -- so this uploads it as-is rather than packaging
+      # it again. Not a release: no tag, no signing, no version negotiation,
+      # just the build this commit produced.
+      #
+      # The SHA is in the name because the download is a bare zip once saved,
+      # with nothing inside it saying which commit it came from.
+      - name: Upload the runnable build
+        if: matrix.name == 'windows-x64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: commits-windows-x64-${{ github.sha }}
+          path: dist/app
+          if-no-files-found: error
+          retention-days: 30
+
+      # Linux has no install layout to assemble (dist.ps1 is Windows-only), so
+      # this is the build's output rather than something to double-click: the
+      # executables, the components they load, and the page they serve. Named
+      # so nobody downloads it expecting the Windows experience.
+      - name: Upload the linux build output
+        if: matrix.name == 'linux-x64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: commits-linux-x64-build-output-${{ github.sha }}
+          path: |
+            target/release/commits-app
+            target/release/commits
+            target/release/commits-askpass
+            target/release/commits-editor
+            dist/extensions
+            dist/ui
+          if-no-files-found: error
+          retention-days: 30
