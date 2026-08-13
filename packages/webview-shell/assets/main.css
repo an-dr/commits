@@ -20,10 +20,10 @@ body {
 }
 #view {
   position: fixed;
-  /* Starts below the fixed #topBar rather than containing it, so the files
-     panel (which insets #view on the right) never reaches the toolbar --
-     every button up there keeps the same screen position regardless of
-     what's open below it. */
+  /* Starts below the fixed #topBar, which is a sibling rather than a child
+     (see #topBar): the files panel insets #view on the right but never
+     reaches the toolbar, so every button up there keeps the same screen
+     position regardless of what's open below it. */
   top: var(--top-bar-height);
   left: 0;
   right: var(--files-panel-width, 0px);
@@ -35,9 +35,14 @@ body {
 #view:focus {
   outline: none;
 }
-/* Fixed and full width -- unlike #view below it, the toolbar never insets
+/* Fixed and full width -- unlike #view beside it, the toolbar never insets
    for the files panel, so its buttons never shift or fold away just because
-   that panel opened. */
+   that panel opened.
+   A sibling of #view rather than a child of it: #view is position:fixed and so
+   always opens a stacking context, which would cap this z-index inside it and
+   leave anything the toolbar drops below itself -- the app menu -- painting
+   under #filesPanel. As a sibling, this 15 is compared against the panels'
+   own z-indexes, which is what it was always meant to mean. */
 #topBar {
   position: fixed;
   top: 0;
