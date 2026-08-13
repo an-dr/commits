@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use base64::Engine;
-use bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
+use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use commits_ipc::native::{NativeResult, OsRequest};
 
 use crate::{OsBackend, OsModule, REQUEST_TOPIC, RESULT_TOPIC};

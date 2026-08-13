@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bus = { path = "../../vendor/bones/core/bus" }
+# A native module joins the engine through the same facade an embedder
+# uses (bones ADR-030); default features off so this crate never drags
+# in the presentation stack the host composes for itself.
+bones-engine = { path = "../../vendor/bones/crates/bones-engine", default-features = false }
 commits-ipc = { path = "../../ipc/rust" }
 notify = "8.2"
 

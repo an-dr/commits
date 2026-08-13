@@ -1,19 +1,24 @@
-import { log } from "bones:core/host-api@0.1.0";
+import { log } from "bones:extension/host-api@1.0.0";
 
-export function init(): void {
-  log("info", "hello from the TypeScript WASM component");
-}
+// The ABI exports live in the `bones:extension/extension-api` interface
+// rather than at world level, so the guest hands the host one namespace
+// object instead of four bare functions.
+export const extensionApi = {
+  init(): void {
+    log("info", "hello from the TypeScript WASM component");
+  },
 
-export function shutdown(): void {
-  log("info", "hello TypeScript component stopped");
-}
+  shutdown(): void {
+    log("info", "hello TypeScript component stopped");
+  },
 
-export function onTick(_dt: number): void {}
+  onTick(_dt: number): void {},
 
-export function onMessage(
-  _topic: string,
-  _sender: string,
-  _payload: Uint8Array,
-): Uint8Array | undefined {
-  return undefined;
-}
+  onMessage(
+    _topic: string,
+    _sender: string,
+    _payload: Uint8Array,
+  ): Uint8Array | undefined {
+    return undefined;
+  },
+};

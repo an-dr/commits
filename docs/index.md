@@ -16,4 +16,3 @@
 
 The `vendor/bones` documentation remains the authority for engine protocols
 and runtime behavior. Product-specific decisions live here.
-

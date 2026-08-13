@@ -4,15 +4,13 @@ import { parseSubmodulePaths } from "./submodule-status";
 describe("parseSubmodulePaths", () => {
   it("reads nested submodule paths from --recursive output", () => {
     const stdout = [
-      " 6d769aa0f01d86acd112cf59869bfbc5f79abd1d vendor/bones (heads/main)",
-      " e425e3d2f92c96d2146f83a1b23de235c75d1758 vendor/bones/agents (heads/main)",
+      " 7db87137f0bbec0c75a94ab93c7544764af84517 vendor/bones (abi-v1.0.0)",
       " 0200cd23a33886a189787b2845fc9834a0530587 vendor/bones/vendor/pubsub-bus (v3.1.0-1-g0200cd2)",
       "",
     ].join("\n");
 
     expect(parseSubmodulePaths(stdout)).toEqual([
       "vendor/bones",
-      "vendor/bones/agents",
       "vendor/bones/vendor/pubsub-bus",
     ]);
   });

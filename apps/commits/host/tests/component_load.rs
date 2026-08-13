@@ -2,9 +2,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
-use bus::{BudgetLimits, Bus, EndpointBudget, Registry, Respond};
-use logging::Logger;
-use wasm_extensions::host::{new_engine, DisplayInfo, ExtensionTimeouts, Host};
+use bones_engine::bus::{BudgetLimits, Bus, EndpointBudget, Registry, Respond};
+use bones_engine::logging::Logger;
+use bones_kernel::wasm_extensions::host::{new_engine, DisplayInfo, ExtensionTimeouts, Host};
 
 /// The budgets `apps/commits/host/src/main.rs` gives the engine. Loading here
 /// under the same allowances is the point of the test: the defaults are not

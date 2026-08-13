@@ -9,7 +9,7 @@
 - Fixed-layout TypeScript `Reader`/`Writer` and web protocol messages, verified
   against fixtures emitted by the Rust bones message implementation.
 - Host-agnostic `CommitsCore` behind `HostPort`; only the bones adapter imports
-  `bones:core/host-api`.
+  `bones:extension/host-api`.
 - Browser `acquireVsCodeApi` compatibility shim translating bones
   `CustomEvent` messages into the original extension's `message` event shape.
 - Typed `{ command, ... }` echo request/response visible in the page.

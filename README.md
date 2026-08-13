@@ -67,6 +67,21 @@ git submodule update --init --recursive
 npm install
 ```
 
+A clone that predates the bones 1.0 pin also carries a nested `agents`
+submodule that the 1.0 tree no longer has. Git cannot drop it on its own — it
+reports `unable to rmdir agents: Directory not empty` and leaves an untracked
+directory that reads as part of the checkout. Clear it once, from the
+repository root:
+
+```powershell
+Remove-Item -Recurse -Force vendor\bones\agents -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .git\modules\vendor\bones\modules\agents -ErrorAction SilentlyContinue
+git -C vendor\bones config --remove-section submodule.agents
+```
+
+The last line prints `no such section` on a clone that never had it, which is
+the harmless case — nothing to clear.
+
 On Windows ARM64, `npm run build` bootstraps a repository-local `wizer`
 10.0.0 because the upstream npm package has no prebuilt ARM64 executable.
 That first build is slow; later builds reuse `.tools/wizer/bin/wizer.exe`.

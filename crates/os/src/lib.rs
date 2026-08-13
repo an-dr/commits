@@ -4,7 +4,7 @@ use std::thread;
 use std::time::Duration;
 
 use base64::Engine;
-use bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_ipc::native::{NativeResult, OsRequest};
 
 pub mod rendezvous;

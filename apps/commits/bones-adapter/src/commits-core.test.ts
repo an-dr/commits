@@ -96,8 +96,7 @@ describe("CommitsCore MIT webview host", () => {
     core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
 
     completeGit(host, core, "submodule", [
-      " 6d769aa0f01d86acd112cf59869bfbc5f79abd1d vendor/bones (heads/main)",
-      " e425e3d2f92c96d2146f83a1b23de235c75d1758 vendor/bones/agents (heads/main)",
+      " 7db87137f0bbec0c75a94ab93c7544764af84517 vendor/bones (abi-v1.0.0)",
       " 0200cd23a33886a189787b2845fc9834a0530587 vendor/bones/vendor/pubsub-bus (v3.1.0-1-g0200cd2)",
     ].join("\n"));
 
@@ -106,7 +105,6 @@ describe("CommitsCore MIT webview host", () => {
       repos: {
         "C:/repo": { columnWidths: null },
         "C:/repo/vendor/bones": { columnWidths: null },
-        "C:/repo/vendor/bones/agents": { columnWidths: null },
         "C:/repo/vendor/bones/vendor/pubsub-bus": { columnWidths: null },
       },
       lastActiveRepo: "C:/repo",

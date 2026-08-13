@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use bus::{Envelope, Handler, Module, ModuleContext};
+use bones_engine::bus::{Envelope, Handler, Module, ModuleContext};
 use tempfile::NamedTempFile;
 
 /// Bus endpoint for the standalone application's user-facing settings file.

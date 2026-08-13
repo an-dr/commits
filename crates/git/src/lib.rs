@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_ipc::native::{GitRequest, GitRun};
 
 mod limiter;

@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
+use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use commits_ipc::native::{GitResult, GitRun};
 
 use crate::{GitModule, COMPLETED_TOPIC, REQUEST_TOPIC};

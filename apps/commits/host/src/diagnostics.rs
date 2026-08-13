@@ -17,7 +17,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use logging::{Level, LogSink, Logger};
+use bones_engine::logging::{Level, LogSink, Logger};
 
 /// Category the engine logs its own extension bookkeeping under.
 const ENGINE: &str = "engine";

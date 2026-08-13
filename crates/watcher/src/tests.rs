@@ -2,7 +2,7 @@ use std::fs;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
+use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use commits_ipc::native::WatchRequest;
 use tempfile::tempdir;
 

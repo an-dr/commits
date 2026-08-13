@@ -367,8 +367,66 @@ dependencies = [
 ]
 
 [[package]]
+name = "bones-engine"
+version = "1.0.0"
+dependencies = [
+ "bones-kernel",
+ "bones-messages",
+ "bones-module-renderer",
+ "bones-module-ui",
+ "bones-module-web",
+ "wasmtime",
+]
+
+[[package]]
+name = "bones-kernel"
+version = "1.0.0"
+dependencies = [
+ "bones-messages",
+ "pubsub-bus",
+ "sdl3",
+ "wasmtime",
+ "wasmtime-wasi",
+]
+
+[[package]]
 name = "bones-messages"
-version = "0.1.0"
+version = "1.0.0"
+
+[[package]]
+name = "bones-module-renderer"
+version = "1.0.0"
+dependencies = [
+ "ab_glyph",
+ "bones-kernel",
+ "bones-messages",
+ "epaint_default_fonts",
+ "sdl3",
+ "send_wrapper",
+]
+
+[[package]]
+name = "bones-module-ui"
+version = "1.0.0"
+dependencies = [
+ "bones-kernel",
+ "bones-messages",
+ "egui",
+ "sdl3",
+]
+
+[[package]]
+name = "bones-module-web"
+version = "1.0.0"
+dependencies = [
+ "bones-kernel",
+ "bones-messages",
+ "raw-window-handle",
+ "sdl3",
+ "send_wrapper",
+ "serde_json",
+ "wry",
+]
 
 [[package]]
 name = "bumpalo"
@@ -377,13 +435,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 dependencies = [
  "allocator-api2",
-]
-
-[[package]]
-name = "bus"
-version = "0.1.0"
-dependencies = [
- "pubsub-bus",
 ]
 
 [[package]]
@@ -558,19 +609,17 @@ name = "commits-app"
 version = "1.0.0"
 dependencies = [
  "base64",
+ "bones-engine",
+ "bones-kernel",
  "bones-messages",
- "bus",
  "commits-git",
  "commits-ipc",
  "commits-os",
  "commits-upgrader",
  "commits-watcher",
  "dirs",
- "logging",
  "rfd",
- "runner",
  "tempfile",
- "wasm-extensions",
  "wasmtime",
  "winresource",
 ]
@@ -579,7 +628,7 @@ dependencies = [
 name = "commits-git"
 version = "0.1.0"
 dependencies = [
- "bus",
+ "bones-engine",
  "commits-ipc",
 ]
 
@@ -597,7 +646,7 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "base64",
- "bus",
+ "bones-engine",
  "commits-ipc",
  "native-tls",
  "open",
@@ -623,7 +672,7 @@ dependencies = [
 name = "commits-watcher"
 version = "0.1.0"
 dependencies = [
- "bus",
+ "bones-engine",
  "commits-ipc",
  "notify",
  "tempfile",
@@ -636,13 +685,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
 dependencies = [
  "crossbeam-utils",
-]
-
-[[package]]
-name = "contract"
-version = "0.1.0"
-dependencies = [
- "wasmtime",
 ]
 
 [[package]]
@@ -2259,10 +2301,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
-name = "logging"
-version = "0.1.0"
-
-[[package]]
 name = "mach2"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2812,15 +2850,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
 
 [[package]]
-name = "platform"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "bus",
- "sdl3",
-]
-
-[[package]]
 name = "png"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3151,19 +3180,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "renderer"
-version = "0.1.0"
-dependencies = [
- "ab_glyph",
- "bones-messages",
- "bus",
- "epaint_default_fonts",
- "logging",
- "sdl3",
- "send_wrapper",
-]
-
-[[package]]
 name = "rfd"
 version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3192,21 +3208,6 @@ name = "rpkg-config"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a2d2f3481209a6b42eec2fbb49063fb4e8d35b57023401495d4fe0f85c817f0"
-
-[[package]]
-name = "runner"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "bus",
- "logging",
- "platform",
- "renderer",
- "ui",
- "wasm-extensions",
- "wasmtime",
- "web",
-]
 
 [[package]]
 name = "rustc-demangle"
@@ -4036,18 +4037,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ui"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "bus",
- "egui",
- "logging",
- "renderer",
- "sdl3",
-]
-
-[[package]]
 name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4248,18 +4237,6 @@ checksum = "09480d646178e5fdd12bb06e812d0af9a3a191dbc9cd697fdc86687beade7393"
 dependencies = [
  "leb128fmt",
  "wasmparser 0.254.0",
-]
-
-[[package]]
-name = "wasm-extensions"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "bus",
- "contract",
- "logging",
- "wasmtime",
- "wasmtime-wasi",
 ]
 
 [[package]]
@@ -4665,21 +4642,6 @@ dependencies = [
  "dlib",
  "log",
  "pkg-config",
-]
-
-[[package]]
-name = "web"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "bus",
- "logging",
- "platform",
- "raw-window-handle",
- "sdl3",
- "send_wrapper",
- "serde_json",
- "wry",
 ]
 
 [[package]]

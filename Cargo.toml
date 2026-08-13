@@ -10,7 +10,7 @@ members = [
 ]
 exclude = [
     "vendor/bones",
-    "vendor/bones/shared/bones-messages",
+    "vendor/bones/crates/bones-messages",
 ]
 
 # Wasmtime + WebView2 exhaust the Windows ARM64 linker PDB limit with full
@@ -21,3 +21,21 @@ debug = 0
 
 [profile.test]
 debug = 0
+
+# SDL3 is compiled from source by these crates' build scripts, which ask cmake
+# for a build type derived from the profile they are built under. Left at the
+# dev defaults that resolves to `Debug`, and on Windows a Debug SDL links the
+# debug CRT (/MDd) while rustc links the release one in every profile -- the
+# mismatch behind `LNK4098: defaultlib 'MSVCRTD' conflicts`. Two CRTs in one
+# process have separate heaps, so this is worth removing rather than silencing.
+#
+# bones carries the same stanzas in its own workspace root, but `vendor/bones`
+# is excluded from this workspace (see `exclude` above), so those settings never
+# apply to our builds: the profile that governs sdl3-sys here is this one.
+[profile.dev.package.sdl3-sys]
+opt-level = 2
+debug = false
+
+[profile.dev.package.sdl3-image-sys]
+opt-level = 2
+debug = false

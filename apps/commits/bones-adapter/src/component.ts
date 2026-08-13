@@ -13,17 +13,17 @@ const PANEL = "main";
 const host = new BonesHostPort();
 const core = new CommitsCore(host);
 
-export function init(): void {
+function init(): void {
   core.start();
 }
 
-export function shutdown(): void {
+function shutdown(): void {
   core.stop();
 }
 
-export function onTick(_dt: number): void {}
+function onTick(_dt: number): void {}
 
-export function onMessage(
+function onMessage(
   topic: string,
   _sender: string,
   payload: Uint8Array,
@@ -63,4 +63,9 @@ export function onMessage(
   }
   return undefined;
 }
+
+// The ABI exports live in the `bones:extension/extension-api` interface
+// rather than at world level, so the guest hands the host one namespace
+// object instead of four bare functions.
+export const extensionApi = { init, shutdown, onTick, onMessage };
 

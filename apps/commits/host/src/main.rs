@@ -23,7 +23,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     watch_startup_health(failures);
     let page = page::PageModule::new(logger.clone());
     let splash = splash::SplashModule::new(logger.clone());
-    runner::Engine::new()
+    bones_engine::Engine::new()
         .logger(logger)
         // `commits.wasm` is ~12 MB carrying an embedded JavaScript engine, so
         // `instantiate` + `init` needs far more than the engine's one second

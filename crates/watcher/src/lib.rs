@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_ipc::native::{WatchEvent, WatchRequest};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 

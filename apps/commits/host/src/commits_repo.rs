@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use bus::{Envelope, Handler, Module, ModuleContext};
+use bones_engine::bus::{Envelope, Handler, Module, ModuleContext};
 
 /// Bus endpoint reporting the fixed local clone of the commits project's own
 /// repository, at `~/.commits/repo`.
@@ -146,7 +146,7 @@ mod tests {
         let mut module = CommitsRepoModule::new(parent.join("repo"));
 
         assert!(!parent.exists());
-        Module::init(&mut module, &mut bus::ModuleContext::new(&mut bus::ServiceRegistry::new())).unwrap();
+        Module::init(&mut module, &mut bones_engine::bus::ModuleContext::new(&mut bones_engine::bus::ServiceRegistry::new())).unwrap();
 
         assert!(parent.is_dir());
     }

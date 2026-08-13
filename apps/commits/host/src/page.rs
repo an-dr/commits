@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bus::{Envelope, Handler, Module, ModuleContext};
-use logging::Logger;
+use bones_engine::bus::{Envelope, Handler, Module, ModuleContext};
+use bones_engine::logging::Logger;
 
 /// Bus endpoint name the component addresses with a direct `send`.
 pub const ENDPOINT: &str = "page";

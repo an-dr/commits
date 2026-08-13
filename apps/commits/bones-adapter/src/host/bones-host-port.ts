@@ -3,7 +3,7 @@ import {
   publish,
   send,
   subscribe as hostSubscribe,
-} from "bones:core/host-api@0.1.0";
+} from "bones:extension/host-api@1.0.0";
 import {
   encodeClosePanel,
   encodeOpenPanel,

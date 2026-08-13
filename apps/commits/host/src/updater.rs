@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use bones_messages::persistence::{Save, ENDPOINT as PERSISTENCE_ENDPOINT};
 use bones_messages::{EncodeMessage, Message};
-use bus::{Bus, Envelope, Handler, Module, ModuleContext, Registry};
+use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext, Registry};
 use commits_ipc::native::{UpdaterRequest, UpdaterResult};
 use commits_os::{OsBackend, SystemOsBackend};
 
@@ -21,7 +21,7 @@ const FAILURE: u8 = 1;
 /// This module's own bus registration name -- also the `sender` stamped on
 /// its persistence save/load calls (see [`UpdaterModule::record_version_and_check_update`]),
 /// so its version marker lives at `state/updater.bin`
-/// (`wasm_extensions::persistence::Persistence`), distinct from any other
+/// (`bones_kernel::wasm_extensions::persistence::Persistence`), distinct from any other
 /// module's or extension's own save file, and with no directory of its own
 /// to manage: `state/` already exists for exactly this purpose.
 const MODULE_NAME: &str = "updater";
@@ -313,8 +313,8 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
-    use bus::{Bus, ModuleRegistration, ServiceRegistry};
-    use wasm_extensions::persistence::Persistence;
+    use bones_engine::bus::{Bus, ModuleRegistration, ServiceRegistry};
+    use bones_kernel::wasm_extensions::persistence::Persistence;
 
     use super::*;
 
@@ -556,7 +556,7 @@ mod tests {
         assert_eq!(std::str::from_utf8(&response[3..]).unwrap(), CURRENT_VERSION);
     }
 
-    /// Wires a real `Persistence` module (see `wasm_extensions::persistence`)
+    /// Wires a real `Persistence` module (see `bones_kernel::wasm_extensions::persistence`)
     /// into `bus`/`registry` at `dir`, so `UpdaterModule`'s own
     /// `record_version_and_check_update` -- a `persistence/save` publish for
     /// save, a direct `send` to the `persistence` endpoint for load -- has

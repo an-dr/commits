@@ -102,7 +102,7 @@ Establish that the toolchain works before porting anything.
 | --- | --- | --- |
 | 0.1 | Repo scaffolding: workspace, layout above, build scripts, licence/attribution for the MIT `vscode-git-graph` lineage | `cargo build` and `npm run build` succeed on an empty skeleton |
 | 0.2 | Rust host app embedding bones as a library with the `web` module enabled | `commits(.exe)` launches, opens an empty wry panel, exits cleanly |
-| 0.3 | **TS → WASM spike**: a trivial TypeScript extension built with `jco componentize` against `vendor/bones/wit/core.wit` | `hello.wasm` loads in our app and logs through `host-api::log` |
+| 0.3 | **TS → WASM spike**: a trivial TypeScript extension built with `jco componentize` against `vendor/bones/wit/extension.wit` | `hello.wasm` loads in our app and logs through `host-api::log` |
 | 0.4 | TS port of the bones fixed-layout codec (`Reader`/`Writer`, little-endian, no serde) plus the `web` message types | TS unit tests round-trip against Rust-generated fixtures |
 | 0.5 | Decision gate + ADR: componentised-JS viability (binary size, cold start, per-message latency) | ADR recording measured numbers and the fallback (move hot parsing into a native module) |
 

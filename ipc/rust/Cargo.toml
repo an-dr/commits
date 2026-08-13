@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bones-messages = { path = "../../vendor/bones/shared/bones-messages" }
+bones-messages = { path = "../../vendor/bones/crates/bones-messages" }
 serde_json = "1.0"
 

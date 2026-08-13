@@ -13,8 +13,8 @@
 
 use bones_messages::web::{ClosePanel, Command, OpenPanel, PanelOpened, PanelSource};
 use bones_messages::{DecodeMessage, Message};
-use bus::{Envelope, Handler, Module, ModuleContext, Registry};
-use logging::Logger;
+use bones_engine::bus::{Envelope, Handler, Module, ModuleContext, Registry};
+use bones_engine::logging::Logger;
 
 /// Bus endpoint name, and so the panel owner the web module records.
 pub const ENDPOINT: &str = "splash";

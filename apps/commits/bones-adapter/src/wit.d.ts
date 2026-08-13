@@ -1,4 +1,4 @@
-declare module "bones:core/host-api@0.1.0" {
+declare module "bones:extension/host-api@1.0.0" {
   export function log(
     level: "debug" | "info" | "warn" | "error",
     message: string,

@@ -55,7 +55,7 @@ async function buildComponent(source, output, wizerPath) {
   const options = {
     disableFeatures: ["stdio", "random", "clocks", "http", "fetch-event"],
     sourceName: `${basename(source, ".ts")}.js`,
-    witPath: filePath(new URL("vendor/bones/wit/core.wit", root)),
+    witPath: filePath(new URL("vendor/bones/wit/extension.wit", root)),
     worldName: "extension",
   };
   if (wizerPath !== undefined) options.wizerBin = wizerPath;
