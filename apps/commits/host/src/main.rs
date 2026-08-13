@@ -4,6 +4,7 @@
 
 mod commits_repo;
 mod diagnostics;
+mod launch;
 mod page;
 mod settings;
 mod splash;
@@ -66,6 +67,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(commits_os::OsModule::default())
         .module(settings::SettingsModule::default())
         .module(commits_repo::CommitsRepoModule::default())
+        .module(launch::LaunchModule::default())
         .module(updater::UpdaterModule::default())
         .run()?;
     // Reached only once the engine loop returns without error -- a clean

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GitResult, GitRun, NativeResult, OsAction, UpdaterAction } from "@commits/ipc/native";
 import { CommitsCore } from "./commits-core";
-import type { CommitsRepoStatus, HostPort, InstallStatus, LogLevel, PageSource, SettingsIoResult } from "./host/host-port";
+import type { CommitsRepoStatus, HostPort, InstallStatus, LaunchRepository, LogLevel, PageSource, SettingsIoResult } from "./host/host-port";
 
 class StubHost implements HostPort {
   readonly closed: string[] = [];
@@ -21,6 +21,7 @@ class StubHost implements HostPort {
   commitsRepoStatusValue: CommitsRepoStatus =
     { ok: true, exists: false, path: "C:/commits/repo", parentPath: "C:/commits", error: "" };
   installStatusValue: InstallStatus = { ok: true, installed: true, justUpdated: false, version: "0.2.0", error: "" };
+  launchValue: LaunchRepository = { kind: "none" };
 
   closePanel(panel: string): void { this.closed.push(panel); }
   log(level: LogLevel, message: string): void { this.logs.push([level, message]); }
@@ -35,6 +36,7 @@ class StubHost implements HostPort {
   }
   loadSavedState(): Uint8Array<ArrayBufferLike> { return this.savedState; }
   commitsRepoStatus(): CommitsRepoStatus { return this.commitsRepoStatusValue; }
+  launchRepository(): LaunchRepository { return this.launchValue; }
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void { this.savedState = value; }
   runGit(request: GitRun): void { this.gitRequests.push(request); }
   respondPrompt(id: string, value: string): void { this.promptReplies.push(`${id}:${value}`); }
@@ -47,6 +49,20 @@ class StubHost implements HostPort {
   installStatus(): InstallStatus { return this.installStatusValue; }
   sendPageMessage(panel: string, message: unknown): void { this.sent.push([panel, message]); }
   subscribe(topic: string): void { this.topics.push(topic); }
+}
+
+function isLoadRepos(message: unknown): boolean {
+  return typeof message === "object" && message !== null && (message as { command?: string }).command === "loadRepos";
+}
+
+function isRecentRepositories(message: unknown): boolean {
+  return typeof message === "object" && message !== null
+    && (message as { command?: string }).command === "standaloneRecentRepositories";
+}
+
+function isRepositoryRequired(message: unknown): boolean {
+  return typeof message === "object" && message !== null
+    && (message as { command?: string }).command === "standaloneRepositoryRequired";
 }
 
 describe("CommitsCore MIT webview host", () => {
@@ -553,7 +569,12 @@ describe("CommitsCore MIT webview host", () => {
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
-    expect(host.sent).toContainEqual(["main", { command: "standaloneRepositoryRequired", recent: [] }]);
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneRepositoryRequired",
+      recent: [],
+      lastActive: "",
+      error: "",
+    }]);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneChooseRepository" }));
     expect(host.osRequests).toEqual([{ requestId: 50_000, action: "pick-folder", value: undefined }]);
@@ -592,12 +613,7 @@ describe("CommitsCore MIT webview host", () => {
     // before the standalone page reports readiness. A dropped query is never
     // retried, so the view would wait for a reply that never comes.
     const host = new StubHost();
-    host.savedState = new TextEncoder().encode(
-      JSON.stringify({
-        settings: {},
-        state: { version: 1, lastActiveRepository: "C:/repo", selectedCommit: null, find: "", findIsCaseSensitive: false, findIsRegex: false },
-      }),
-    );
+    host.launchValue = { kind: "repository", path: "C:/repo" };
     const core = new CommitsCore(host);
     core.start();
 
@@ -637,6 +653,180 @@ describe("CommitsCore MIT webview host", () => {
     expect(saved.state.recentRepositories).toEqual(["C:/one", "C:/two"]);
   });
 
+  it("opens the repository named on the command line", () => {
+    const host = new StubHost();
+    host.launchValue = { kind: "repository", path: "C:/from-cli" };
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    expect(host.sent).toContainEqual(["main", expect.objectContaining({
+      command: "loadRepos",
+      repos: expect.objectContaining({ "C:/from-cli": expect.anything() }),
+      lastActiveRepo: "C:/from-cli",
+    })]);
+  });
+
+  it("leaves the remembered repository on the chooser rather than opening it", () => {
+    // The whole point of asking for a path is that nothing reattaches on its
+    // own. The remembered one is still offered -- as the first recent entry.
+    const host = new StubHost();
+    host.savedState = new TextEncoder().encode(JSON.stringify({
+      settings: {},
+      state: {
+        version: 1,
+        lastActiveRepository: "C:/last",
+        recentRepositories: ["C:/last", "C:/older"],
+        selectedCommit: null,
+        find: "",
+        findIsCaseSensitive: false,
+        findIsRegex: false,
+      },
+    }));
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneRepositoryRequired",
+      recent: ["C:/last", "C:/older"],
+      lastActive: "C:/last",
+      error: "",
+    }]);
+    expect(host.sent.some(([, message]) => isLoadRepos(message))).toBe(false);
+  });
+
+  it("carries the reason a command-line path was refused to the chooser", () => {
+    const host = new StubHost();
+    host.launchValue = { kind: "rejected", reason: "there is nothing at C:/nope" };
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneRepositoryRequired",
+      recent: [],
+      lastActive: "",
+      error: "there is nothing at C:/nope",
+    }]);
+    expect(host.logs).toContainEqual(["warn", "ignoring the repository given on the command line: there is nothing at C:/nope"]);
+  });
+
+  it("says why only once, since reopening the chooser is not about the argument", () => {
+    const host = new StubHost();
+    host.launchValue = { kind: "rejected", reason: "C:/file.txt is a file, not a repository folder" };
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    const chooserMessages = host.sent
+      .filter(([, message]) => isRepositoryRequired(message))
+      .map(([, message]) => (message as { error: string }).error);
+    expect(chooserMessages).toEqual(["C:/file.txt is a file, not a repository folder", ""]);
+  });
+
+  it("answers a branch load even with no repository open", () => {
+    // The view allows one branch load in flight and drops later requests
+    // until this one replies. Silence here wedges it on "Loading ..." for the
+    // rest of the session, including after a repository is finally chosen.
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "loadBranches", showRemoteBranches: true, hard: false }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "loadBranches",
+      branches: [],
+      head: null,
+      hard: false,
+      isRepo: false,
+    }]);
+  });
+
+  it("answers a commit load even with no repository open", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "loadCommits", branchName: "", maxCommits: 300, showRemoteBranches: true, hard: false }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "loadCommits",
+      commits: [],
+      head: null,
+      moreCommitsAvailable: false,
+      hard: false,
+    }]);
+  });
+
+  it("loads the repository chosen after an empty start", () => {
+    // The whole chooser path end to end: nothing open, the view asks and is
+    // answered, then a repository arrives and actually loads.
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "loadBranches", showRemoteBranches: true, hard: false }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/picked" }));
+    core.receivePageJson(JSON.stringify({ command: "loadBranches", showRemoteBranches: true, hard: false }));
+
+    expect(host.gitRequests.some((request) => request.cwd === "C:/picked")).toBe(true);
+  });
+
+  it("records a backslash command-line path the way every other path is written", () => {
+    // A shell hands over C:\repo; everything else here uses C:/repo. Left
+    // unnormalised the same repository takes two recent rows.
+    const host = new StubHost();
+    host.launchValue = { kind: "repository", path: "C:\\code\\thing" };
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneRecentRepositories",
+      recent: ["C:/code/thing"],
+      lastActive: "C:/code/thing",
+    }]);
+  });
+
+  it("publishes the recent list for the menu, outside the chooser message", () => {
+    // The menu needs this list exactly when a repository is open, which is
+    // when the chooser's own message is never sent.
+    const host = new StubHost();
+    host.launchValue = { kind: "repository", path: "C:/opened" };
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneRecentRepositories",
+      recent: ["C:/opened"],
+      lastActive: "C:/opened",
+    }]);
+  });
+
+  it("republishes the recent list when another repository is opened", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/first" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/second" }));
+
+    const published = host.sent
+      .filter(([, message]) => isRecentRepositories(message))
+      .map(([, message]) => (message as { recent: readonly string[] }).recent);
+    expect(published[published.length - 1]).toEqual(["C:/second", "C:/first"]);
+  });
+
   it("offers recent repositories when none can be opened", () => {
     const host = new StubHost();
     host.savedState = new TextEncoder().encode(JSON.stringify({
@@ -659,6 +849,8 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneRepositoryRequired",
       recent: ["C:/one", "C:/two"],
+      lastActive: "",
+      error: "",
     }]);
   });
 

@@ -51,6 +51,8 @@ export class CommitsCore {
   private state: PersistentState = DEFAULT_PERSISTENT_STATE;
   private settings: SettingsDocument = DEFAULT_SETTINGS;
   private settingsError = "";
+  /** Why the path on the command line was refused, shown once on the chooser. */
+  private launchError = "";
   private currentRepository: string | null = null;
   private commitsRepoPath: string | null = null;
   private commitsRepoParentPath: string | null = null;
@@ -154,6 +156,7 @@ export class CommitsCore {
         this.send({ command: "standaloneSettings", settings: this.settings, error: this.settingsError });
         return;
       case "standaloneViewReady":
+        this.sendRecentRepositories();
         this.sendCurrentRepositories();
         this.sendCommitsRepoStatus();
         return;
@@ -190,36 +193,60 @@ export class CommitsCore {
       case "saveRepoState":
         return;
       case "loadBranches":
-        if (this.currentRepository !== null) {
-          this.graph.loadBranches(
-            {
-              command: "loadBranches",
-              repo: this.currentRepository,
-              showRemoteBranches: value.showRemoteBranches !== false,
-              hard: value.hard === true,
-            },
-            (response) => this.send(response),
-          );
+        // Answered even with nothing open. The view holds one in-flight
+        // branch load at a time and drops later requests until this one
+        // replies, so staying silent here wedges it on "Loading ..." for the
+        // rest of the session -- including after a repository is finally
+        // chosen. `isRepo: false` is the view's own word for "that is not a
+        // repository", and it responds by re-asking for the repository list.
+        if (this.currentRepository === null) {
+          this.send({
+            command: "loadBranches",
+            branches: [],
+            head: null,
+            hard: value.hard === true,
+            isRepo: false,
+          });
+          return;
         }
+        this.graph.loadBranches(
+          {
+            command: "loadBranches",
+            repo: this.currentRepository,
+            showRemoteBranches: value.showRemoteBranches !== false,
+            hard: value.hard === true,
+          },
+          (response) => this.send(response),
+        );
         return;
       case "loadCommits":
         if (typeof value.repo === "string") this.selectRepository(value.repo, false);
-        if (this.currentRepository !== null) {
-          this.graph.loadCommits(
-            {
-              command: "loadCommits",
-              repo: this.currentRepository,
-              branchName: typeof value.branchName === "string" ? value.branchName : "",
-              branches: Array.isArray(value.branches)
-                ? value.branches.filter((branch): branch is string => typeof branch === "string")
-                : undefined,
-              maxCommits: typeof value.maxCommits === "number" ? value.maxCommits : 300,
-              showRemoteBranches: value.showRemoteBranches !== false,
-              hard: value.hard === true,
-            },
-            (response) => this.send(response),
-          );
+        // Same one-in-flight rule as loadBranches above, and the same
+        // consequence for staying silent.
+        if (this.currentRepository === null) {
+          this.send({
+            command: "loadCommits",
+            commits: [],
+            head: null,
+            moreCommitsAvailable: false,
+            hard: value.hard === true,
+          });
+          return;
         }
+        this.graph.loadCommits(
+          {
+            command: "loadCommits",
+            repo: this.currentRepository,
+            branchName: typeof value.branchName === "string" ? value.branchName : "",
+            branches: Array.isArray(value.branches)
+              ? value.branches.filter((branch): branch is string => typeof branch === "string")
+              : undefined,
+            maxCommits: typeof value.maxCommits === "number" ? value.maxCommits : 300,
+            showRemoteBranches: value.showRemoteBranches !== false,
+            hard: value.hard === true,
+          },
+          (response) => this.send(response),
+        );
         return;
       case "commitDetails":
         if (this.currentRepository !== null && typeof value.commitHash === "string") {
@@ -588,7 +615,15 @@ export class CommitsCore {
   /** Re-announces repository availability without redoing discovery. */
   private sendCurrentRepositories(): void {
     if (this.repositories.all().length === 0) {
-      this.send({ command: "standaloneRepositoryRequired", recent: this.state.recentRepositories });
+      this.send({
+        command: "standaloneRepositoryRequired",
+        recent: this.state.recentRepositories,
+        lastActive: this.state.lastActiveRepository ?? "",
+        error: this.launchError,
+      });
+      // Said once. Reopening the chooser later in the same session is not
+      // still about the argument this process started with.
+      this.launchError = "";
     } else {
       this.sendRepos();
     }
@@ -615,10 +650,27 @@ export class CommitsCore {
       this.host.log("warn", `could not resolve the commits repo path: ${commitsRepo.error}`);
     }
     this.repositories.discover();
-    if (this.state.lastActiveRepository !== null) {
-      this.repositories.addExternal(this.state.lastActiveRepository);
-      this.currentRepository = this.state.lastActiveRepository;
+    // The command line decides what opens; nothing else does. A remembered
+    // repository is offered on the chooser rather than opened behind the
+    // user's back, so starting the app never silently reattaches to whatever
+    // was last in use -- which is the whole point of asking for a path.
+    const launch = this.host.launchRepository();
+    if (launch.kind === "repository") {
+      // Through addExternal and its normalised path, not by assignment: a
+      // repository opened from the command line joins the recent list like
+      // any other, and `C:\repo` from a shell must land on the same entry as
+      // the `C:/repo` everything else here uses -- otherwise one repository
+      // occupies two rows that disagree about which is current.
+      const repository = this.repositories.addExternal(launch.path);
+      if (repository !== null) this.selectRepository(repository.path);
+    } else if (launch.kind === "rejected") {
+      this.launchError = launch.reason;
+      this.host.log("warn", `ignoring the repository given on the command line: ${launch.reason}`);
     }
+    // A host that hands over repositories -- VS Code's workspace folders --
+    // still opens one, because there the user already chose them by opening
+    // the workspace. Standalone supplies none, which is what leaves the
+    // chooser in front of them.
     if (this.repositories.all().length > 0) this.currentRepository ??= this.repositories.all()[0].path;
     // An unconfigured URL means self-update is intentionally off, not a
     // transient failure worth reporting.
@@ -723,7 +775,24 @@ export class CommitsCore {
         lastActiveRepository: path,
         recentRepositories: withMostRecent(this.state.recentRepositories, path),
       });
+      this.sendRecentRepositories();
     }
+  }
+
+  /**
+   * Publishes the recent list on its own message.
+   *
+   * The chooser's own message only fires when nothing is open, and the menu
+   * needs this list precisely when something is -- so it cannot ride on that
+   * one, and putting it on `loadRepos` would tie a menu concern to the graph's
+   * payload.
+   */
+  private sendRecentRepositories(): void {
+    this.send({
+      command: "standaloneRecentRepositories",
+      recent: this.state.recentRepositories,
+      lastActive: this.state.lastActiveRepository ?? "",
+    });
   }
 
   private sendRepos(): void {

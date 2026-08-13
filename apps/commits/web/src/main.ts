@@ -31,12 +31,14 @@ type StandaloneMessage =
 interface StandaloneResponse {
   command:
     | "standaloneRepositoryRequired"
+    | "standaloneRecentRepositories"
     | "standaloneSettings"
     | "standaloneSettingsSaved"
     | "standaloneCommitsRepoStatus"
     | "standaloneUpdateStatus"
     | "standaloneInstallStatus";
   recent?: readonly string[];
+  lastActive?: string;
   settings?: SettingsDocument;
   error?: string;
   requestId?: number;
@@ -88,8 +90,10 @@ async function boot(): Promise<void> {
     try {
       const data = JSON.parse((event as CustomEvent<string>).detail) as ResponseMessage | StandaloneResponse;
       if (data.command === "standaloneRepositoryRequired") {
-        renderRecentRepositories(data.recent ?? []);
-        showRepositoryOverlay();
+        rememberRecentRepositories(data.recent ?? [], data.lastActive ?? "");
+        showRepositoryOverlay(data.error ?? "");
+      } else if (data.command === "standaloneRecentRepositories") {
+        rememberRecentRepositories(data.recent ?? [], data.lastActive ?? "");
       } else if (data.command === "loadRepos" && Object.keys(data.repos).length > 0) {
         hideRepositoryOverlay();
       } else if (data.command === "standaloneSettings") {
@@ -159,6 +163,13 @@ function appMenuHtml(): string {
       <button type="button" id="standaloneMenuButton" class="iconBtn" aria-haspopup="true" aria-expanded="false" title="Menu">${toolbarIcons.menu}</button>
       <ul class="standaloneMenuList" hidden>
         <li><button type="button" id="standaloneMenuOpenRepo">Open&hellip;</button></li>
+        <li class="standaloneMenuGroup" id="standaloneMenuRecentGroup" hidden>
+          <button type="button" class="standaloneMenuTitle" aria-haspopup="true">
+            <span>Recent</span>
+            <span class="standaloneMenuChevron" aria-hidden="true">&rsaquo;</span>
+          </button>
+          <ul class="standaloneMenuSubList" id="standaloneMenuRecentList"></ul>
+        </li>
         <li class="standaloneMenuSeparator" role="separator"></li>
         <li><button type="button" id="standaloneSettingsButton" disabled>Settings</button></li>
         <li class="standaloneMenuGroup">
@@ -280,6 +291,7 @@ function wireAppMenu(): void {
     // A flyout left open would reappear with the menu next time it opens.
     if (!open) closeGroups();
   };
+  closeAppMenu = () => setMenuOpen(false);
 
   menuButton.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -389,6 +401,7 @@ function repositoryOverlayHtml(): string {
         <button id="standaloneChooseRepo" type="button">Choose…</button>
         <button type="submit">Open</button>
       </div>
+      <p id="standaloneRepoError" hidden></p>
       <h2 id="standaloneRecentTitle">Recent</h2>
       <ul id="standaloneRecentRepos" hidden></ul>
     </form>
@@ -400,7 +413,10 @@ function wireRepositoryOverlay(): void {
   const input = document.getElementById("standaloneRepoPath") as HTMLInputElement;
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const path = input.value.trim();
+    // Empty means "the one I was in": the placeholder already says which,
+    // so Enter reopens it without anyone having to type or click it. Nothing
+    // opens on its own -- this is still a keystroke the user made.
+    const path = input.value.trim() || lastActiveRepository;
     if (path) post({ command: "standaloneOpenRepository", path });
   });
   document.getElementById("standaloneChooseRepo")!.addEventListener("click", () => {
@@ -432,8 +448,76 @@ function renderRecentRepositories(recent: readonly string[]): void {
   }
 }
 
-function showRepositoryOverlay(): void {
+/**
+ * The chooser's contents, kept here because the screen is opened from two
+ * places -- startup, which brings them along, and the menu, which does not.
+ * Rendering only on arrival left the menu's chooser permanently empty.
+ */
+let recentRepositories: readonly string[] = [];
+let lastActiveRepository = "";
+/** Closes the app menu from outside it; wired once by `wireAppMenu`. */
+let closeAppMenu = (): void => undefined;
+
+function rememberRecentRepositories(recent: readonly string[], lastActive: string): void {
+  recentRepositories = recent;
+  lastActiveRepository = lastActive;
+  renderRecentRepositories(recent);
+  renderRecentMenu(recent);
+}
+
+/**
+ * Fills the menu's Recent flyout, and hides the whole group when there is
+ * nothing to list -- an empty flyout that opens onto nothing is worse than no
+ * entry at all.
+ *
+ * Paths are set as text, never markup: they reach here from persisted state,
+ * which is to say from whatever the user once opened.
+ */
+function renderRecentMenu(recent: readonly string[]): void {
+  const group = document.getElementById("standaloneMenuRecentGroup")!;
+  const list = document.getElementById("standaloneMenuRecentList")!;
+  group.hidden = recent.length === 0;
+  list.replaceChildren();
+  for (const path of recent) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = shortRepositoryName(path);
+    button.title = path;
+    button.addEventListener("click", () => {
+      closeAppMenu();
+      post({ command: "standaloneOpenRepository", path });
+    });
+    item.append(button);
+    list.append(item);
+  }
+}
+
+/**
+ * The folder name, which is what distinguishes one entry from another at a
+ * glance; the full path stays on the tooltip. A menu is too narrow for
+ * `C:/long/path/to/repo`, and truncating from the left hides exactly the part
+ * that identifies it.
+ */
+function shortRepositoryName(path: string): string {
+  const parts = path.split(/[\\/]/).filter((part) => part.length > 0);
+  return parts.length > 0 ? parts[parts.length - 1] : path;
+}
+
+function showRepositoryOverlay(reason = ""): void {
+  const error = document.getElementById("standaloneRepoError")!;
+  error.textContent = reason;
+  error.hidden = reason.length === 0;
+  // Re-rendered on every open: the list changes as repositories are opened,
+  // and this screen is the only place it is shown.
+  renderRecentRepositories(recentRepositories);
+  const input = document.getElementById("standaloneRepoPath") as HTMLInputElement;
+  // Named, not filled in: an empty box with a placeholder invites typing,
+  // while a pre-filled path has to be cleared before anything else can be
+  // typed. Enter on the empty box takes it (see wireRepositoryOverlay).
+  input.placeholder = lastActiveRepository || "C:/path/to/repository";
   document.getElementById("standaloneRepoOverlay")!.hidden = false;
+  input.focus();
 }
 
 function hideRepositoryOverlay(): void {

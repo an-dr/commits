@@ -19,6 +19,18 @@ export interface CommitsRepoStatus {
   readonly error: string;
 }
 
+/**
+ * What `commits <path>` asked for, as the host resolved it.
+ *
+ * Three cases rather than a nullable path: "started with no argument" and
+ * "started with an argument I refused" lead to the same screen but not the
+ * same message, and only the host can tell them apart.
+ */
+export type LaunchRepository =
+  | { readonly kind: "none" }
+  | { readonly kind: "repository"; readonly path: string }
+  | { readonly kind: "rejected"; readonly reason: string };
+
 export interface InstallStatus {
   readonly ok: boolean;
   /** Whether this run's own directory is the canonical install location. */
@@ -56,6 +68,8 @@ export interface HostPort {
   saveSettings(value: Uint8Array<ArrayBufferLike>): SettingsIoResult;
   /** Whether the commits project's own clone (`~/.commits/repo`) exists, and its resolved path. */
   commitsRepoStatus(): CommitsRepoStatus;
+  /** The repository named on the command line, already resolved and checked by the host. */
+  launchRepository(): LaunchRepository;
   /** Raw bytes persisted by bones in this component's file-backed save slot. */
   loadSavedState(): Uint8Array<ArrayBufferLike>;
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void;

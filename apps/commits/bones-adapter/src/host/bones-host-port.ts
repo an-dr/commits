@@ -9,7 +9,7 @@ import {
   encodeOpenPanel,
   encodeSendJson,
 } from "@commits/ipc/web";
-import type { CommitsRepoStatus, HostPort, InstallStatus, LogLevel, PageSource, SettingsIoResult } from "./host-port";
+import type { CommitsRepoStatus, HostPort, InstallStatus, LaunchRepository, LogLevel, PageSource, SettingsIoResult } from "./host-port";
 import {
   encodeGitRun,
   encodeOsRequest,
@@ -99,6 +99,29 @@ export class BonesHostPort implements HostPort {
     } catch (error) {
       return failed(String(error));
     }
+  }
+
+  /**
+   * Asks the host what the command line named. The first byte says which of
+   * the three cases this is; the rest is the path or the reason.
+   *
+   * A failed send is reported as "none" rather than as a refusal: the host
+   * not answering says nothing about what the user typed, and inventing a
+   * reason to show them would be worse than showing the plain chooser.
+   */
+  launchRepository(): LaunchRepository {
+    let response: Uint8Array;
+    try {
+      response = send("launch", new Uint8Array());
+    } catch (error) {
+      hostLog("warn", `could not read the launch argument: ${String(error)}`);
+      return { kind: "none" };
+    }
+    if (response.length === 0) return { kind: "none" };
+    const text = new TextDecoder().decode(response.slice(1));
+    if (response[0] === 1) return { kind: "repository", path: text };
+    if (response[0] === 2) return { kind: "rejected", reason: text };
+    return { kind: "none" };
   }
 
   runGit(request: GitRun): void {

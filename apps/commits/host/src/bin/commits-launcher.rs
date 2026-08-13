@@ -32,16 +32,22 @@ fn main() {
         eprintln!("could not resolve the launcher's own directory");
         std::process::exit(1);
     };
-    launch_and_supervise(&install_dir);
+    // Everything after the launcher's own name belongs to the app, not to
+    // the launcher: this process is a supervisor that happens to be the name
+    // users type, so `commits C:/repo` has to reach `commits-app` unread.
+    // The launcher deliberately interprets nothing, so a future app argument
+    // needs no change here.
+    let app_args: Vec<String> = std::env::args().skip(1).collect();
+    launch_and_supervise(&install_dir, &app_args);
 }
 
-fn launch_and_supervise(install_dir: &Path) {
+fn launch_and_supervise(install_dir: &Path, app_args: &[String]) {
     let Some(version_dir) = commits_upgrader::current_version_dir(install_dir) else {
         eprintln!("no version is installed under {}", install_dir.display());
         std::process::exit(1);
     };
     let exe = version_dir.join(MAIN_EXE_NAME);
-    match spawn_and_confirm_healthy(&exe) {
+    match spawn_and_confirm_healthy(&exe, app_args) {
         // Healthy: leave it running detached. A Windows child outlives its
         // parent by default, so the launcher exiting here does not affect it.
         Ok(_child) if wait_for_health() => return,
@@ -67,7 +73,9 @@ fn launch_and_supervise(install_dir: &Path) {
     // One relaunch of the previous version, without supervising it again --
     // if a previously-working version still fails, that is a deeper problem
     // than a startup health check is meant to solve.
-    if let Err(error) = spawn_detached(&previous_dir.join(MAIN_EXE_NAME), None) {
+    // The fallback runs the same command the user typed: rolling back a
+    // version must not also drop the repository they asked to open.
+    if let Err(error) = spawn_detached(&previous_dir.join(MAIN_EXE_NAME), None, app_args) {
         eprintln!("could not relaunch the previous version: {error}");
     }
 }
@@ -95,10 +103,10 @@ fn remove_version_dir_with_retry(version_dir: &Path) -> Result<(), String> {
 
 /// Spawns `exe` with a fresh marker path and returns the child so the
 /// caller can kill and reap it if [`wait_for_health`] reports it unhealthy.
-fn spawn_and_confirm_healthy(exe: &Path) -> std::io::Result<Child> {
+fn spawn_and_confirm_healthy(exe: &Path, app_args: &[String]) -> std::io::Result<Child> {
     let marker_path = health_marker_path();
     let _ = std::fs::remove_file(&marker_path);
-    spawn_detached(exe, Some(&marker_path))
+    spawn_detached(exe, Some(&marker_path), app_args)
 }
 
 /// Waits up to [`HEALTH_TIMEOUT`] for the just-spawned child's health
@@ -131,8 +139,9 @@ fn health_marker_path() -> std::path::PathBuf {
 /// this, where a caller redirecting the launcher's stderr to a file hung
 /// waiting for that file's handle count to reach zero long after the
 /// launcher process itself had exited.
-fn spawn_detached(exe: &Path, marker_path: Option<&Path>) -> std::io::Result<Child> {
+fn spawn_detached(exe: &Path, marker_path: Option<&Path>, app_args: &[String]) -> std::io::Result<Child> {
     let mut command = Command::new(exe);
+    command.args(app_args);
     command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     if let Some(marker_path) = marker_path {
         command.env("COMMITS_HEALTH_MARKER", marker_path);

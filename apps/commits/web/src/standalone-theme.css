@@ -110,6 +110,22 @@ body {
   padding: 7px 14px;
 }
 
+/* Why the path on the command line was refused. Sits between the input and
+   the recent list, where the eye already is after a start that did not open
+   what was asked for. */
+#standaloneRepoError {
+  margin: 10px 0 0;
+  padding: 7px 9px;
+  border-radius: var(--input-radius);
+  background: color-mix(in srgb, var(--vscode-gitDecoration-deletedResourceForeground) 12%, transparent);
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+  font-size: 12px;
+}
+
+#standaloneRepoError[hidden] {
+  display: none;
+}
+
 #standaloneRecentTitle {
   margin: 18px 0 6px;
   font-size: 11px;

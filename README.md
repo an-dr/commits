@@ -112,8 +112,25 @@ npm run dist
 .\dist\app\commits.exe
 ```
 
-The packaged app opens the Git Graph table and branch sidebar. If no repository
-was restored, its Bones-specific overlay lets you choose or enter one.
+## Opening a repository
+
+`commits` takes one optional argument: the repository to open.
+
+```powershell
+commits C:\path\to\repository
+commits .
+```
+
+A relative path resolves against the shell's working directory, so `commits .`
+opens the folder you are standing in. The path must be a git repository; a
+missing folder, a file, or a folder without a `.git` leaves the app on the
+chooser saying which of those it was, rather than failing to start.
+
+Started with no argument, it opens the chooser rather than reattaching to
+whatever was last in use. The chooser lists recent repositories, and its input
+is pre-labelled with the last one — pressing Enter on the empty box reopens it,
+so the common case is still one keystroke. The same list is under **Recent** in
+the menu, for switching without leaving the graph.
 
 ## Troubleshooting a blank window
 
