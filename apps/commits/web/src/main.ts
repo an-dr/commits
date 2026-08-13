@@ -195,9 +195,90 @@ function wireAppMenu(): void {
   const menuButton = document.getElementById("standaloneMenuButton") as HTMLButtonElement;
   const list = wrap.querySelector<HTMLUListElement>(".standaloneMenuList")!;
 
+  // Hovering a group opens its flyout; leaving it closes on a delay rather
+  // than immediately. The delay is not politeness -- the flyout opens to the
+  // left and its first item sits below the parent row, so the pointer is
+  // always outside the group for part of the trip, and an immediate close
+  // makes the items unreachable by any straight path. Re-entering (which
+  // includes entering the flyout itself, a descendant) cancels the pending
+  // close.
+  // Long enough for a hesitant hand: the measured traverse from the parent
+  // row to the furthest item is a little over 200ms moved briskly, and only
+  // part of that is spent outside the group, so this leaves room to slow down
+  // or pause without the flyout vanishing mid-reach.
+  const CLOSE_DELAY_MS = 400;
+  const groups = Array.from(list.querySelectorAll<HTMLLIElement>(".standaloneMenuGroup"));
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const cancelClose = (): void => {
+    if (closeTimer !== undefined) {
+      clearTimeout(closeTimer);
+      closeTimer = undefined;
+    }
+  };
+  const closeGroups = (): void => {
+    cancelClose();
+    for (const group of groups) group.classList.remove("is-open");
+  };
+  const scheduleClose = (group: HTMLLIElement): void => {
+    if (closeTimer !== undefined) return;
+    closeTimer = setTimeout(() => {
+      group.classList.remove("is-open");
+      closeTimer = undefined;
+    }, CLOSE_DELAY_MS);
+  };
+
+  /**
+   * Whether the pointer is still plausibly on its way to `group`'s flyout:
+   * inside the box that encloses both the parent row and the flyout, which
+   * is the corridor the pointer has to cross between them. Tested from
+   * coordinates rather than with a transparent bridge element, so nothing
+   * here swallows a click meant for what is underneath.
+   */
+  const withinReach = (group: HTMLLIElement, x: number, y: number): boolean => {
+    const sub = group.querySelector<HTMLUListElement>(".standaloneMenuSubList");
+    if (sub === null) return false;
+    const row = group.getBoundingClientRect();
+    const flyout = sub.getBoundingClientRect();
+    return (
+      x >= Math.min(row.left, flyout.left) &&
+      x <= Math.max(row.right, flyout.right) &&
+      y >= Math.min(row.top, flyout.top) &&
+      y <= Math.max(row.bottom, flyout.bottom)
+    );
+  };
+
+  for (const group of groups) {
+    group.addEventListener("pointerenter", () => {
+      // Cancelling the pending close would otherwise strand a sibling's
+      // flyout open, since one timer serves them all. Entering any group
+      // shuts the others outright -- there is no journey to protect there.
+      cancelClose();
+      for (const other of groups) {
+        if (other !== group) other.classList.remove("is-open");
+      }
+      group.classList.add("is-open");
+    });
+    // Covers leaving in one quick flick, where no further move arrives inside
+    // the corridor to keep it alive.
+    group.addEventListener("pointerleave", () => scheduleClose(group));
+  }
+
+  // The corridor rule proper: while a flyout is open, every move that is
+  // still heading for it cancels the pending close, so hesitating on the way
+  // costs nothing. Only leaving the corridor starts the clock.
+  document.addEventListener("pointermove", (event) => {
+    const open = groups.find((group) => group.classList.contains("is-open"));
+    if (open === undefined) return;
+    if (withinReach(open, event.clientX, event.clientY)) cancelClose();
+    else scheduleClose(open);
+  });
+
   const setMenuOpen = (open: boolean): void => {
     list.hidden = !open;
     menuButton.setAttribute("aria-expanded", String(open));
+    // A flyout left open would reappear with the menu next time it opens.
+    if (!open) closeGroups();
   };
 
   menuButton.addEventListener("click", (event) => {

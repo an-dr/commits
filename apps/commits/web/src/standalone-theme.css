@@ -364,7 +364,9 @@ body {
   top: -3px;
   right: 100%;
   min-width: 170px;
-  margin: 0 2px 0 0;
+  /* Flush against the parent item. A gap here is a strip belonging to
+     neither, and crossing it drops the :hover that keeps this open. */
+  margin: 0;
   padding: 3px;
   border: 1px solid var(--vscode-input-border);
   border-radius: 6px;
@@ -373,13 +375,19 @@ body {
   list-style: none;
 }
 
-/* Three ways in: hovering the group, a descendant already holding focus, or
-   File itself just having received focus — the last one exists because a
-   display:none element can't be tabbed into, so focus-within alone could
-   never fire from a cold Tab; focusing File first makes its items reachable,
-   then focus-within keeps them visible as Tab moves into them. */
+/* Four ways in: hovering the group, a descendant already holding focus, File
+   itself just having received focus, or the lingering class the pointer
+   handlers set. The focus one exists because a display:none element can't be
+   tabbed into, so focus-within alone could never fire from a cold Tab;
+   focusing File first makes its items reachable, then focus-within keeps them
+   visible as Tab moves into them.
+   `is-open` is what makes the flyout reachable at all with a mouse: the first
+   item sits below the About row and to its left, so every path to one leaves
+   the group's own box on the way. :hover alone closes the flyout mid-journey
+   (see wireAppMenu). */
 .standaloneMenuGroup:hover .standaloneMenuSubList,
 .standaloneMenuGroup:focus-within .standaloneMenuSubList,
+.standaloneMenuGroup.is-open .standaloneMenuSubList,
 .standaloneMenuTitle:focus ~ .standaloneMenuSubList {
   display: block;
 }
