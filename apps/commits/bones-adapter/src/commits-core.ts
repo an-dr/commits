@@ -397,6 +397,23 @@ export class CommitsCore {
           (status) => this.send({ command: "mergeBranch", status }),
         );
         return;
+      case "createBranch":
+        this.workingTreeActions.createBranch(
+          this.currentRepository ?? "",
+          asString(value.branchName),
+          asString(value.commitHash),
+          value.checkout === true,
+          (status) => this.send({ command: "createBranch", status }),
+        );
+        return;
+      case "inProgressAction":
+        this.workingTreeActions.inProgressAction(
+          this.currentRepository ?? "",
+          asInProgressType(value.operationType),
+          value.action === "abort" ? "abort" : "continue",
+          (status) => this.send({ command: "inProgressAction", status }),
+        );
+        return;
       case "checkoutCommit":
         this.workingTreeActions.checkoutCommit(
           this.currentRepository ?? "",
@@ -485,11 +502,7 @@ export class CommitsCore {
         }
         return;
       default:
-        if (isMutationCommand(value.command)) {
-          this.send({ command: value.command, status: "This Git action is not available in the standalone host yet." });
-        } else {
-          this.host.log("debug", `ignored unsupported MIT view command: ${value.command}`);
-        }
+        this.host.log("debug", `ignored unsupported MIT view command: ${value.command}`);
     }
   }
 
@@ -1015,6 +1028,15 @@ function asString(value: unknown): string {
  * Change kind of a file, defaulting to a modification: that reads both
  * endpoints, which is the safe assumption for an unrecognised kind.
  */
+/**
+ * Which operation is part-way through. Merge is the safe reading of anything
+ * unrecognised: every operation accepts `--abort`, and continuing a merge
+ * cannot rewrite history the way continuing a rebase can.
+ */
+function asInProgressType(value: unknown): "rebase" | "merge" | "cherry-pick" | "revert" {
+  return value === "rebase" || value === "cherry-pick" || value === "revert" ? value : "merge";
+}
+
 /** A parent index the page sent; anything unusable means "no mainline given". */
 function asNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -1037,8 +1059,3 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isMutationCommand(command: string): command is RequestMessage["command"] {
-  return [
-    "createBranch", "inProgressAction",
-  ].includes(command);
-}

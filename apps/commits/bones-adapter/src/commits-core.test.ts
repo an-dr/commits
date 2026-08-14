@@ -1037,17 +1037,17 @@ describe("CommitsCore MIT webview host", () => {
     ]);
   });
 
-  it("still refuses a Git action it does not implement", () => {
+  it("ignores a command it does not recognise instead of answering it", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
-    core.receivePageJson(JSON.stringify({ command: "createBranch", repo: "C:/repo" }));
+    core.receivePageJson(JSON.stringify({ command: "notARealCommand", repo: "C:/repo" }));
 
-    const reply = host.sent
-      .map(([, message]) => message as { command: string; status?: string | null })
-      .find((message) => message.command === "createBranch");
-    expect(reply?.status).toContain("not available in the standalone host yet");
+    expect(host.logs).toContainEqual([
+      "debug",
+      "ignored unsupported MIT view command: notARealCommand",
+    ]);
   });
 
   it("checks out a branch", () => {
@@ -1748,6 +1748,44 @@ describe("CommitsCore MIT webview host", () => {
 
     expect(host.sent.some(([, message]) => (message as { command?: string }).command === "fetchAvatar"))
       .toBe(false);
+  });
+
+  it("creates a branch at a commit, checking it out only when asked", () => {
+    const run = (checkout: boolean): string[] | undefined => {
+      const host = new StubHost();
+      const core = new CommitsCore(host);
+      core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+      core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+      core.receivePageJson(JSON.stringify({
+        command: "createBranch", repo: "C:/repo", branchName: "feature", commitHash: "abc", checkout,
+      }));
+      return host.gitRequests.at(-1)?.args;
+    };
+
+    expect(run(false)).toEqual(["branch", "feature", "abc"]);
+    expect(run(true)).toEqual(["checkout", "-b", "feature", "abc"]);
+  });
+
+  it("continues or aborts using the in-flight operation's own command", () => {
+    const cases: Array<[string, string, string[]]> = [
+      ["rebase", "continue", ["rebase", "--continue"]],
+      ["merge", "abort", ["merge", "--abort"]],
+      ["cherry-pick", "continue", ["cherry-pick", "--continue"]],
+      ["revert", "abort", ["revert", "--abort"]],
+    ];
+
+    for (const [operationType, action, args] of cases) {
+      const host = new StubHost();
+      const core = new CommitsCore(host);
+      core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+      core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+      core.receivePageJson(JSON.stringify({
+        command: "inProgressAction", repo: "C:/repo", operationType, action,
+      }));
+
+      expect(host.gitRequests.at(-1)?.args, operationType).toEqual(args);
+    }
   });
 
   it("runs each commit-targeted mutation against native git", () => {

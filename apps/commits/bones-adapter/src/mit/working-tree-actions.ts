@@ -150,6 +150,46 @@ export class WorkingTreeActions {
     this.send(repo, createNewCommit ? ["merge", branchName, "--no-ff"] : ["merge", branchName], deliver);
   }
 
+  /** Creates a branch at a commit, optionally checking it out in one step. */
+  createBranch(
+    repo: string,
+    branchName: string,
+    commitHash: string,
+    checkout: boolean,
+    deliver: (status: string | null) => void,
+  ): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(
+      repo,
+      checkout ? ["checkout", "-b", branchName, commitHash] : ["branch", branchName, commitHash],
+      deliver,
+    );
+  }
+
+  /**
+   * Carries on or abandons an operation the repository is part-way through.
+   *
+   * The command is the operation's own name, so a rebase continues with
+   * `git rebase --continue` and a cherry-pick with `git cherry-pick --continue`.
+   * No `--no-edit` is passed: `--continue` does not accept it, and an editor
+   * Git opens is answered by the app's own GIT_EDITOR helper.
+   */
+  inProgressAction(
+    repo: string,
+    operationType: "rebase" | "merge" | "cherry-pick" | "revert",
+    action: "continue" | "abort",
+    deliver: (status: string | null) => void,
+  ): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, [operationType, `--${action}`], deliver, 120_000);
+  }
+
   /** Moves HEAD onto a commit, leaving the working tree detached there. */
   checkoutCommit(repo: string, commitHash: string, deliver: (status: string | null) => void): void {
     if (repo === "") {
