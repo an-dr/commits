@@ -197,6 +197,12 @@ export type ResponseUtilityAction =
 
 export type ResponseRefresh = {
   command: "refresh";
+  /**
+   * How much to reread. Absent means everything, which is what a host that
+   * does not distinguish the two sends. "worktree" leaves history alone, for a
+   * change that cannot have moved it.
+   */
+  scope?: "all" | "worktree";
 };
 
 /** Asks for the operation the repository is part-way through. */

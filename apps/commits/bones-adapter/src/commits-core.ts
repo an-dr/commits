@@ -826,14 +826,19 @@ export class CommitsCore {
   }
 
   /**
-   * A change reached the repository from outside the app. Increment 4 turns
-   * this into a coalesced refresh; for now it records what arrived.
+   * A change reached the repository from outside the app. The event is already
+   * one per burst -- the native watcher settles the storm a single `git commit`
+   * produces -- so this only decides how much of the read state it invalidates.
+   *
+   * A metadata change moved the refs, so history is reread. A worktree change
+   * cannot alter history, so only the working tree panel is: saving a file must
+   * not cost a `git log` of the whole repository.
    */
   receiveWatchEvent(event: WatchEvent): void {
     if (event.requestId !== this.watchRequestId || event.repository !== this.watchedRepository) {
       return;
     }
-    this.host.log("info", `watch ${event.kind}: ${event.path}`);
+    this.send({ command: "refresh", scope: event.kind === "full" ? "all" : "worktree" });
   }
 
   private selectRepository(path: string, persist = true): void {

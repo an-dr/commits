@@ -798,6 +798,16 @@ class GitGraphView {
     Object.assign(this.config, config);
   }
 
+  /**
+   * Re-reads the working tree when its panel is the one on screen. Kept apart
+   * from `refresh`, which the staging actions already pair with their own read.
+   */
+  public refreshWorkingTreeIfOpen() {
+    if (this.workingTreeOpen && this.currentRepo !== null) {
+      sendMessage({ command: "workingTreeChanges", repo: this.currentRepo });
+    }
+  }
+
   public refresh(hard: boolean) {
     if (hard) {
       if (this.expandedCommit !== null) {
@@ -2315,7 +2325,12 @@ window.addEventListener("message", (event) => {
       refreshGraphOrDisplayError(msg.status, l10n.unableToRenameBranch);
       break;
     case "refresh":
-      gitGraph.refresh(false);
+      // Soft on purpose: a change from outside the app must not throw away the
+      // scroll position or the commit the user was reading.
+      if (msg.scope !== "worktree") {
+        gitGraph.refresh(false);
+      }
+      gitGraph.refreshWorkingTreeIfOpen();
       break;
     case "remoteOperation": {
       const remoteOperationErrors = { fetch: l10n.unableToFetch, pull: l10n.unableToPull, push: l10n.unableToPush };

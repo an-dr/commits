@@ -1786,13 +1786,46 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.watchRequests.filter((request) => request.action === "start")).toHaveLength(1);
   });
 
+  it("rereads everything when the refs moved outside the app", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
+    completeFindRepositories(host, core, ["C:/repo"]);
+
+    core.receiveWatchEvent({
+      requestId: 1,
+      kind: "full",
+      repository: "C:/repo",
+      path: "C:/repo/.git/refs/heads/main",
+    });
+
+    expect(host.sent).toContainEqual(["main", { command: "refresh", scope: "all" }]);
+  });
+
+  it("rereads only the working tree when a file changed on disk", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
+    completeFindRepositories(host, core, ["C:/repo"]);
+
+    core.receiveWatchEvent({
+      requestId: 1,
+      kind: "lightweight",
+      repository: "C:/repo",
+      path: "C:/repo/src/main.ts",
+    });
+
+    expect(host.sent).toContainEqual(["main", { command: "refresh", scope: "worktree" }]);
+  });
+
   it("ignores a watch event left over from a repository it no longer watches", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
     completeFindRepositories(host, core, ["C:/repo"]);
-    const before = host.logs.length;
 
     core.receiveWatchEvent({
       requestId: 99,
@@ -1801,7 +1834,9 @@ describe("CommitsCore MIT webview host", () => {
       path: "C:/gone/.git/HEAD",
     });
 
-    expect(host.logs).toHaveLength(before);
+    expect(
+      host.sent.some(([, message]) => (message as { command?: string }).command === "refresh")
+    ).toBe(false);
   });
 });
 

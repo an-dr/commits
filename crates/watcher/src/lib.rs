@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, RecvTimeoutError};
+use std::time::Duration;
 
 use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_ipc::native::{WatchEvent, WatchRequest};
@@ -8,6 +10,36 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 pub const REQUEST_TOPIC: &str = "watcher/request";
 pub const FULL_TOPIC: &str = "repo/full-refresh";
 pub const LIGHTWEIGHT_TOPIC: &str = "repo/lightweight-refresh";
+
+/// How long the tree must be quiet before a burst is reported as one event.
+/// One `git commit` writes the index, several refs, a reflog and its objects;
+/// reporting each separately would refresh the graph a dozen times over.
+const QUIET_PERIOD: Duration = Duration::from_millis(150);
+
+/// Directory names whose churn never changes what the app displays. A build
+/// writing thousands of files under `target/` must not reach the guest at all,
+/// which is the difference between an idle app and one refreshing continuously.
+const IGNORED_DIRECTORIES: [&str; 5] = ["target", "node_modules", "dist", ".tools", ".venv"];
+
+/// Whether a changed path is worth telling the guest about.
+///
+/// `.git/objects` is excluded for the same reason as a build directory: writing
+/// a commit's objects says nothing the refs it then updates will not say, and a
+/// large fetch writes a great many of them.
+pub fn is_interesting(path: &Path) -> bool {
+    let mut components = path.components().map(|c| c.as_os_str().to_string_lossy());
+    let mut previous_was_git_dir = false;
+    for component in &mut components {
+        if IGNORED_DIRECTORIES.contains(&component.as_ref()) {
+            return false;
+        }
+        if previous_was_git_dir && (component == "objects" || component == "lfs") {
+            return false;
+        }
+        previous_was_git_dir = component == ".git";
+    }
+    true
+}
 
 pub struct WatcherModule {
     bus: Option<Bus>,
@@ -29,26 +61,59 @@ impl WatcherModule {
         let request_id = request.request_id;
         let repository_text = request.repository.clone();
         let metadata_for_events = metadata.clone();
+        let (sender, receiver) = mpsc::channel::<(bool, String)>();
+        // The burst settles on its own thread rather than in the notify
+        // callback, which must return promptly, and rather than in the guest,
+        // which is event-driven under a watchdog budget and has no timers.
+        std::thread::spawn(move || {
+            while let Ok((mut full, mut path)) = receiver.recv() {
+                loop {
+                    match receiver.recv_timeout(QUIET_PERIOD) {
+                        Ok((next_full, next_path)) => {
+                            // A metadata change outranks a worktree one: it is
+                            // the reason the whole graph has to be reread.
+                            if next_full && !full {
+                                full = true;
+                                path = next_path;
+                            }
+                        }
+                        Err(RecvTimeoutError::Timeout) => break,
+                        Err(RecvTimeoutError::Disconnected) => return,
+                    }
+                }
+                let message = WatchEvent {
+                    request_id,
+                    kind: u8::from(!full),
+                    repository: repository_text.clone(),
+                    path,
+                };
+                if let Ok(payload) = message.encode() {
+                    bus.publish(Envelope {
+                        topic: if full { FULL_TOPIC } else { LIGHTWEIGHT_TOPIC }.into(),
+                        sender: "watcher".into(),
+                        correlation: Some(u64::from(request_id)),
+                        payload,
+                    });
+                }
+            }
+        });
         let mut watcher =
             notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
                 let Ok(event) = result else { return };
                 for path in event.paths {
+                    if !is_interesting(&path) {
+                        continue;
+                    }
                     let full = metadata_for_events
                         .iter()
                         .any(|root| path.starts_with(root));
-                    let message = WatchEvent {
-                        request_id,
-                        kind: u8::from(!full),
-                        repository: repository_text.clone(),
-                        path: path.to_string_lossy().into_owned(),
-                    };
-                    if let Ok(payload) = message.encode() {
-                        bus.publish(Envelope {
-                            topic: if full { FULL_TOPIC } else { LIGHTWEIGHT_TOPIC }.into(),
-                            sender: "watcher".into(),
-                            correlation: Some(u64::from(request_id)),
-                            payload,
-                        });
+                    // A closed channel means the watch was stopped; the watcher
+                    // itself is dropped with it, so there is nothing to report.
+                    if sender
+                        .send((full, path.to_string_lossy().into_owned()))
+                        .is_err()
+                    {
+                        return;
                     }
                 }
             })
