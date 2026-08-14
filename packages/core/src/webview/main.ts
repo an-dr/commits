@@ -1004,6 +1004,44 @@ class GitGraphView {
       ? this.commits.length
       : this.commits.filter((commit) => this.matchesCommitFilter(commit)).length;
   }
+  /**
+   * The real row pitch and the centre of the first row, read off the table.
+   *
+   * Only rows the graph actually draws a node for count: a row a filter hides
+   * is out of the flow, and the details panel of an expanded commit is not a
+   * commit. Two adjacent drawn rows are enough, because the rows are uniform --
+   * a ref label is held to its row's line box so it cannot make one taller.
+   *
+   * Returns null when there is nothing to measure, leaving the caller to fall
+   * back on the computed grid.
+   */
+  private measureRowGrid(): { pitch: number; firstCentre: number } | null {
+    const rows = this.tableElem.querySelectorAll<HTMLElement>(
+      "tr.commit:not(.filterHidden), tr.unsavedChanges:not(.filterHidden)"
+    );
+    if (rows.length === 0) {
+      return null;
+    }
+    const tableTop = this.tableElem.getBoundingClientRect().top;
+    const first = rows[0].getBoundingClientRect();
+    const firstCentre = first.top - tableTop + first.height / 2;
+    if (rows.length === 1) {
+      return { pitch: first.height, firstCentre };
+    }
+    // The smallest gap across the first few pairs, because an expanded commit
+    // puts its details panel between two rows and inflates exactly one gap.
+    let pitch = Infinity;
+    for (let i = 1; i < rows.length && i <= 4; i++) {
+      const gap = rows[i].getBoundingClientRect().top - rows[i - 1].getBoundingClientRect().top;
+      if (gap > 0 && gap < pitch) {
+        pitch = gap;
+      }
+    }
+    // A collapsed or mid-animation table can report zero; the computed grid is
+    // a better guess than a pitch of nothing.
+    return Number.isFinite(pitch) ? { pitch, firstCentre } : null;
+  }
+
   private renderGraph() {
     let colHeadersElem = document.getElementById("tableColHeaders");
     if (colHeadersElem === null) {
@@ -1016,17 +1054,27 @@ class GitGraphView {
       expandedCommitElem !== null
         ? expandedCommitElem.getBoundingClientRect().height
         : this.config.grid.expandY;
-    // Rows the filter hides are out of the table's flow, so the row height must
-    // be divided among the rows actually on screen or the graph drifts.
-    const drawnRows = this.graphRowCount();
-    this.config.grid.y =
-      drawnRows > 0
-        ? (this.tableElem.children[0].clientHeight -
-            headerHeight -
-            (this.expandedCommit !== null ? this.config.grid.expandY : 0)) /
-          drawnRows
-        : this.config.grid.y;
-    this.config.grid.offsetY = headerHeight + this.config.grid.y / 2;
+    // Measured from the rows themselves rather than derived from the table's
+    // height. Dividing a total by a row count is only right when every input is
+    // exact -- the header's height, the density's line box, the rows a filter
+    // hides, anything else the table holds -- and any error there is multiplied
+    // by the row index, so nodes drift further off centre the further down they
+    // are. Two adjacent rows give the true pitch, whatever the density.
+    const measured = this.measureRowGrid();
+    if (measured !== null) {
+      this.config.grid.y = measured.pitch;
+      this.config.grid.offsetY = measured.firstCentre;
+    } else {
+      const drawnRows = this.graphRowCount();
+      this.config.grid.y =
+        drawnRows > 0
+          ? (this.tableElem.children[0].clientHeight -
+              headerHeight -
+              (this.expandedCommit !== null ? this.config.grid.expandY : 0)) /
+            drawnRows
+          : this.config.grid.y;
+      this.config.grid.offsetY = headerHeight + this.config.grid.y / 2;
+    }
     this.graph.render(this.expandedCommit);
   }
   private renderTable() {
