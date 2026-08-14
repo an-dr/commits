@@ -397,6 +397,45 @@ export class CommitsCore {
           (status) => this.send({ command: "mergeBranch", status }),
         );
         return;
+      case "checkoutCommit":
+        this.workingTreeActions.checkoutCommit(
+          this.currentRepository ?? "",
+          asString(value.commitHash),
+          (status) => this.send({ command: "checkoutCommit", status }),
+        );
+        return;
+      case "cherrypickCommit":
+        this.workingTreeActions.cherrypickCommit(
+          this.currentRepository ?? "",
+          asString(value.commitHash),
+          asNumber(value.parentIndex),
+          (status) => this.send({ command: "cherrypickCommit", status }),
+        );
+        return;
+      case "revertCommit":
+        this.workingTreeActions.revertCommit(
+          this.currentRepository ?? "",
+          asString(value.commitHash),
+          asNumber(value.parentIndex),
+          (status) => this.send({ command: "revertCommit", status }),
+        );
+        return;
+      case "resetToCommit":
+        this.workingTreeActions.resetToCommit(
+          this.currentRepository ?? "",
+          asString(value.commitHash),
+          asResetMode(value.resetMode),
+          (status) => this.send({ command: "resetToCommit", status }),
+        );
+        return;
+      case "mergeCommit":
+        this.workingTreeActions.mergeCommit(
+          this.currentRepository ?? "",
+          asString(value.commitHash),
+          value.createNewCommit === true,
+          (status) => this.send({ command: "mergeCommit", status }),
+        );
+        return;
       case "addTag":
         this.workingTreeActions.addTag(
           this.currentRepository ?? "",
@@ -976,6 +1015,19 @@ function asString(value: unknown): string {
  * Change kind of a file, defaulting to a modification: that reads both
  * endpoints, which is the safe assumption for an unrecognised kind.
  */
+/** A parent index the page sent; anything unusable means "no mainline given". */
+function asNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * The reset mode, defaulting to the one that cannot lose work. A malformed
+ * value must never be read as "hard".
+ */
+function asResetMode(value: unknown): "soft" | "mixed" | "hard" {
+  return value === "soft" || value === "hard" ? value : "mixed";
+}
+
 function asFileChangeType(value: unknown): GitFileChangeType {
   const letter = asString(value).toUpperCase();
   return letter === "A" || letter === "D" || letter === "R" ? letter : "M";
@@ -987,7 +1039,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isMutationCommand(command: string): command is RequestMessage["command"] {
   return [
-    "createBranch", "checkoutCommit", "cherrypickCommit", "revertCommit",
-    "resetToCommit", "mergeCommit", "inProgressAction",
+    "createBranch", "inProgressAction",
   ].includes(command);
 }

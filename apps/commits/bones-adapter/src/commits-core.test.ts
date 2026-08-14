@@ -1042,11 +1042,11 @@ describe("CommitsCore MIT webview host", () => {
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
-    core.receivePageJson(JSON.stringify({ command: "resetToCommit", repo: "C:/repo" }));
+    core.receivePageJson(JSON.stringify({ command: "createBranch", repo: "C:/repo" }));
 
     const reply = host.sent
       .map(([, message]) => message as { command: string; status?: string | null })
-      .find((message) => message.command === "resetToCommit");
+      .find((message) => message.command === "createBranch");
     expect(reply?.status).toContain("not available in the standalone host yet");
   });
 
@@ -1748,6 +1748,66 @@ describe("CommitsCore MIT webview host", () => {
 
     expect(host.sent.some(([, message]) => (message as { command?: string }).command === "fetchAvatar"))
       .toBe(false);
+  });
+
+  it("runs each commit-targeted mutation against native git", () => {
+    const cases: Array<[Record<string, unknown>, string[]]> = [
+      [{ command: "checkoutCommit", commitHash: "abc" }, ["checkout", "abc"]],
+      [{ command: "cherrypickCommit", commitHash: "abc", parentIndex: 0 }, ["cherry-pick", "abc"]],
+      [{ command: "revertCommit", commitHash: "abc", parentIndex: 0 }, ["revert", "--no-edit", "abc"]],
+      [{ command: "resetToCommit", commitHash: "abc", resetMode: "hard" }, ["reset", "--hard", "abc"]],
+      [{ command: "mergeCommit", commitHash: "abc", createNewCommit: false }, ["merge", "abc"]],
+    ];
+
+    for (const [message, args] of cases) {
+      const host = new StubHost();
+      const core = new CommitsCore(host);
+      core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+      core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+      core.receivePageJson(JSON.stringify({ ...message, repo: "C:/repo" }));
+
+      expect(host.gitRequests.at(-1)?.args, String(message.command)).toEqual(args);
+    }
+  });
+
+  it("names the mainline only when a merge is being replayed", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "cherrypickCommit", repo: "C:/repo", commitHash: "abc", parentIndex: 2,
+    }));
+
+    expect(host.gitRequests.at(-1)?.args).toEqual(["cherry-pick", "-m", "2", "abc"]);
+  });
+
+  it("merges without fast-forward when a merge commit was asked for", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "mergeCommit", repo: "C:/repo", commitHash: "abc", createNewCommit: true,
+    }));
+
+    expect(host.gitRequests.at(-1)?.args).toEqual(["merge", "abc", "--no-ff"]);
+  });
+
+  it("never reads a malformed reset mode as the one that discards work", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "resetToCommit", repo: "C:/repo", commitHash: "abc", resetMode: "obliterate",
+    }));
+
+    expect(host.gitRequests.at(-1)?.args).toEqual(["reset", "--mixed", "abc"]);
   });
 
   it("creates an annotated tag with its message", () => {

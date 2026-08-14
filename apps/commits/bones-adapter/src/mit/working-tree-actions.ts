@@ -150,6 +150,88 @@ export class WorkingTreeActions {
     this.send(repo, createNewCommit ? ["merge", branchName, "--no-ff"] : ["merge", branchName], deliver);
   }
 
+  /** Moves HEAD onto a commit, leaving the working tree detached there. */
+  checkoutCommit(repo: string, commitHash: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["checkout", commitHash], deliver);
+  }
+
+  /**
+   * Replays a commit onto the current branch. A merge has no single parent to
+   * diff against, so `parentIndex` names the side to treat as mainline; it is
+   * zero for an ordinary commit, where the option is not allowed at all.
+   */
+  cherrypickCommit(
+    repo: string,
+    commitHash: string,
+    parentIndex: number,
+    deliver: (status: string | null) => void,
+  ): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    const args = ["cherry-pick"];
+    if (parentIndex > 0) args.push("-m", String(parentIndex));
+    args.push(commitHash);
+    this.send(repo, args, deliver);
+  }
+
+  /** Undoes a commit with a new one. `--no-edit` keeps Git out of an editor. */
+  revertCommit(
+    repo: string,
+    commitHash: string,
+    parentIndex: number,
+    deliver: (status: string | null) => void,
+  ): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    const args = ["revert", "--no-edit"];
+    if (parentIndex > 0) args.push("-m", String(parentIndex));
+    args.push(commitHash);
+    this.send(repo, args, deliver);
+  }
+
+  /**
+   * Moves the current branch to a commit. The mode decides how much goes with
+   * it, and "hard" is the one that discards work, so it is never a default.
+   */
+  resetToCommit(
+    repo: string,
+    commitHash: string,
+    resetMode: "soft" | "mixed" | "hard",
+    deliver: (status: string | null) => void,
+  ): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["reset", `--${resetMode}`, commitHash], deliver);
+  }
+
+  /** Merges a commit into the current branch. */
+  mergeCommit(
+    repo: string,
+    commitHash: string,
+    createNewCommit: boolean,
+    deliver: (status: string | null) => void,
+  ): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(
+      repo,
+      createNewCommit ? ["merge", commitHash, "--no-ff"] : ["merge", commitHash],
+      deliver,
+    );
+  }
+
   /**
    * Creates a tag on a commit. An annotated tag carries a message and its own
    * object; a lightweight one is just a ref, and Git rejects `-m` for it, so
