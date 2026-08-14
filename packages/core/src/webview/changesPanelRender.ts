@@ -1,31 +1,32 @@
 import type { GitWorkingTreeChange } from "../data-source/models";
+import { buildFileTree, renderFileTree } from "./fileTree";
 import { resolveFileIcon } from "./utils/fileIcons";
 import { escapeHtml } from "./utils/html";
 import { svgIcons, toolbarIcons } from "./utils/icons";
 
 /**
- * The working tree is a flat list of files rather than a folder tree: a change
- * set is normally small, and the path beside each name says where it lives.
+ * One changed file, rendered as a leaf of the same tree a commit's file list
+ * uses. The folder above it says where it lives, so the row carries only what
+ * is specific to the working tree: which side of the index it is on, its
+ * status, its counts, and the actions that move it.
  */
-function renderRow(change: GitWorkingTreeChange): string {
-  const slash = change.path.lastIndexOf("/");
-  const name = slash < 0 ? change.path : change.path.slice(slash + 1);
-  const directory = slash < 0 ? "" : change.path.slice(0, slash);
+function renderRow(change: GitWorkingTreeChange, name: string): string {
   const renamedFrom =
     change.oldPath === undefined ? "" : ` ${ARROW} ${escapeHtml(change.oldPath)}`;
   return (
-    `<div class="changesFile" data-path="${escapeHtml(change.path)}"` +
+    `<li class="changesFile ${change.staged ? "staged" : "unstaged"}"` +
+    ` data-path="${escapeHtml(change.path)}"` +
     ` data-staged="${change.staged}" data-status="${change.status}"` +
     ` title="${escapeHtml(change.path)}${renamedFrom}">` +
     `<span class="changesFileIcon">${resolveFileIcon(viewState.fileIcons, name) ?? svgIcons.file}</span>` +
     `<span class="changesFileName ${change.status}">${escapeHtml(name)}</span>` +
-    (directory === ""
-      ? ""
-      : `<span class="changesFileDir">${escapeHtml(directory)}</span>`) +
+    `<span class="changesFileStaged" title="${escapeHtml(
+      change.staged ? l10n.changesStagedSection : l10n.changesUnstagedSection
+    )}"></span>` +
     renderCounts(change) +
     `<span class="changesFileStatus" title="${statusTitle(change.status)}">${change.status}</span>` +
     renderActions(change) +
-    `</div>`
+    `</li>`
   );
 }
 
@@ -75,18 +76,18 @@ function statusTitle(status: GitWorkingTreeChange["status"]): string {
   }
 }
 
-function renderSection(label: string, changes: readonly GitWorkingTreeChange[]): string {
-  if (changes.length === 0) {
-    return "";
+/**
+ * Applies remembered folds to a freshly built tree. Staging a file re-reads the
+ * whole working tree, so without this every fold would spring open under the
+ * user on each action.
+ */
+function applyClosedFolders(folder: GitFolder, closed: ReadonlySet<string>): void {
+  for (const entry of Object.values(folder.contents)) {
+    if (entry.type === "folder") {
+      entry.open = !closed.has(entry.folderPath);
+      applyClosedFolders(entry, closed);
+    }
   }
-  const rows = changes
-    .toSorted((left, right) => left.path.localeCompare(right.path, undefined, { numeric: true }))
-    .map(renderRow)
-    .join("");
-  return (
-    `<div class="changesSectionHeader">${escapeHtml(label)}` +
-    `<span class="changesSectionCount">${changes.length}</span></div>${rows}`
-  );
 }
 
 /**
@@ -107,10 +108,16 @@ export function renderChangesFooter(message: string, amend: boolean): string {
   );
 }
 
-/** Builds the working-tree body: what is staged, then what is not. */
+/**
+ * Builds the working-tree body as one folder tree covering every change, staged
+ * and unstaged alike, each row saying which side of the index it is on. It is
+ * the same tree a commit's file list renders, so a path sits in the same place
+ * whichever of the two the user is looking at.
+ */
 export function renderChangesPanel(
   changes: readonly GitWorkingTreeChange[],
-  error: string | null
+  error: string | null,
+  closedFolders: ReadonlySet<string> = new Set()
 ): string {
   if (error !== null) {
     return `<div class="changesMessage">${escapeHtml(error)}</div>`;
@@ -118,14 +125,7 @@ export function renderChangesPanel(
   if (changes.length === 0) {
     return `<div class="changesMessage">${escapeHtml(l10n.changesNothingToCommit)}</div>`;
   }
-  return (
-    renderSection(
-      l10n.changesStagedSection,
-      changes.filter((change) => change.staged)
-    ) +
-    renderSection(
-      l10n.changesUnstagedSection,
-      changes.filter((change) => !change.staged)
-    )
-  );
+  const tree = buildFileTree(changes.map((change) => change.path));
+  applyClosedFolders(tree, closedFolders);
+  return renderFileTree(tree, (index, name) => renderRow(changes[index], name));
 }

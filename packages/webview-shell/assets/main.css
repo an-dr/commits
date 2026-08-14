@@ -765,24 +765,9 @@ svg.fileIcon {
   fill-opacity: 0.6;
   margin-right: 8px;
 }
-/* Working tree panel */
-.changesSectionHeader {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 8px 3px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  opacity: 0.75;
-}
-.changesSectionCount {
-  padding: 0 5px;
-  border-radius: 8px;
-  background: var(--vscode-badge-background, rgba(128, 128, 128, 0.3));
-  color: var(--vscode-badge-foreground, inherit);
-  font-size: 10px;
-}
+/* Working tree panel. The rows are leaves of the same tree the commit file
+   list renders, so the folder markup above them carries the indent and these
+   rules cover only what a working-tree row adds. */
 .changesFile {
   display: flex;
   align-items: center;
@@ -818,13 +803,19 @@ svg.fileIcon {
 .changesFileName.U {
   color: var(--vscode-gitDecoration-untrackedResourceForeground, var(--vscode-gitDecoration-addedResourceForeground));
 }
-.changesFileDir {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  direction: rtl;
-  opacity: 0.6;
+/* Which side of the index the row is on. A filled dot is staged, a hollow ring
+   is not, so the distinction survives without a section heading above it. */
+.changesFileStaged {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--vscode-gitDecoration-modifiedResourceForeground, currentColor);
+  border-radius: 50%;
+  opacity: 0.75;
+}
+.changesFile.staged .changesFileStaged {
+  background: var(--vscode-gitDecoration-addedResourceForeground, currentColor);
+  border-color: var(--vscode-gitDecoration-addedResourceForeground, currentColor);
 }
 .changesFileCounts {
   margin-left: auto;

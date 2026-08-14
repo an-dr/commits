@@ -88,6 +88,11 @@ class GitGraphView {
   /** True while the panel shows the working tree rather than a revision. */
   private workingTreeOpen = false;
   private workingTree: GitWorkingTreeChange[] = [];
+  /**
+   * Folders the user has collapsed in the working tree, by path. Staging re-reads
+   * the tree and rebuilds it, so the folds live here rather than in the markup.
+   */
+  private workingTreeClosedFolders = new Set<string>();
   /** Kept across re-reads of the tree so typing is never lost to a refresh. */
   private commitMessage = "";
   private commitAmend = false;
@@ -1774,7 +1779,7 @@ class GitGraphView {
       return;
     }
     this.workingTree = changes;
-    this.filesPanel.setContent(renderChangesPanel(changes, error));
+    this.filesPanel.setContent(renderChangesPanel(changes, error, this.workingTreeClosedFolders));
     this.filesPanel.setFooter(renderChangesFooter(this.commitMessage, this.commitAmend));
     this.registerChangesPanelListeners();
     this.registerCommitListeners();
@@ -1839,6 +1844,24 @@ class GitGraphView {
 
   /** A working-tree row opens in the docked panel, as a commit's file does. */
   private registerChangesPanelListeners() {
+    // The working tree gets its own folder handler: the commit view's is bound
+    // to that view's tree object, and only one of the two occupies the panel.
+    addListenerToClass("gitFolder", "click", (e: Event) => {
+      const sourceElem = <HTMLElement>(<Element>e.target).closest(".gitFolder")!;
+      const parent = sourceElem.parentElement!;
+      parent.classList.toggle("closed");
+      const isOpen = !parent.classList.contains("closed");
+      parent.children[0].children[0].innerHTML = isOpen
+        ? svgIcons.openFolder
+        : svgIcons.closedFolder;
+      parent.children[1].classList.toggle("hidden");
+      const folderPath = decodeURIComponent(sourceElem.dataset.folderpath!);
+      if (isOpen) {
+        this.workingTreeClosedFolders.delete(folderPath);
+      } else {
+        this.workingTreeClosedFolders.add(folderPath);
+      }
+    });
     addListenerToClass("changesFileBtn", "click", (e: Event) => {
       // The row itself opens the diff, so an action on it must not also open one.
       e.stopPropagation();

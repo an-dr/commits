@@ -26,7 +26,7 @@ describe("renderChangesPanel", () => {
     expect(html).toContain('data-staged="false"');
   });
 
-  it("counts the files in each section", () => {
+  it("marks each row staged or unstaged, having no section to say it", () => {
     const html = renderChangesPanel(
       [
         change({ path: "one.ts", staged: true }),
@@ -36,15 +36,17 @@ describe("renderChangesPanel", () => {
       null
     );
 
-    expect(html).toContain('<span class="changesSectionCount">2</span>');
-    expect(html).toContain('<span class="changesSectionCount">1</span>');
+    expect([...html.matchAll(/class="changesFile staged"/g)].length).toBe(2);
+    expect([...html.matchAll(/class="changesFile unstaged"/g)].length).toBe(1);
   });
 
-  it("shows a file's own name apart from the folder holding it", () => {
+  it("nests a file under one folder per path segment", () => {
     const html = renderChangesPanel([change({ path: "src/deep/file.ts" })], null);
 
     expect(html).toContain(">file.ts<");
-    expect(html).toContain(">src&#x2F;deep<");
+    expect(html).toContain(">src<");
+    expect(html).toContain(">deep<");
+    expect(html).not.toContain("changesFileDir");
   });
 
   it("shows line counts only when Git reported them", () => {
@@ -71,8 +73,14 @@ describe("renderChangesPanel", () => {
       [change({ path: "staged.ts", staged: true }), change({ path: "live.ts", staged: false })],
       null
     );
-    const stagedRow = html.slice(html.indexOf("staged.ts"), html.indexOf("live.ts"));
-    const unstagedRow = html.slice(html.indexOf("live.ts"));
+    // One tree orders by name, so the rows are found by path rather than by
+    // assuming the staged one comes first.
+    const rowFor = (path: string): string => {
+      const start = html.indexOf(`data-path="${path}"`);
+      return html.slice(start, html.indexOf("</li>", start));
+    };
+    const stagedRow = rowFor("staged.ts");
+    const unstagedRow = rowFor("live.ts");
 
     expect(stagedRow).toContain('data-action="unstage"');
     expect(stagedRow).not.toContain('data-action="discard"');
