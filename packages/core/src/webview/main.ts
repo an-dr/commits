@@ -1062,13 +1062,16 @@ class GitGraphView {
         refHtml =
           this.commits[i].refs[j].type === "tag"
             ? renderTagPill(this.commits[i].refs[j].name)
-            : '<span class="gitRef ' +
+            : // Only the checked-out branch carries an icon; every other label
+              // is its name in a rectangle, so the one marked row stands out
+              // instead of competing with a glyph on each of its neighbours.
+              '<span class="gitRef ' +
               this.commits[i].refs[j].type +
               (refActive ? " active" : "") +
               '" data-name="' +
               refName +
               '">' +
-              svgIcons.branch +
+              (refActive ? svgIcons.currentBranch : "") +
               '<span class="gitRefName" data-fullref="' +
               refName +
               '">' +
@@ -1106,7 +1109,6 @@ class GitGraphView {
         '"><td><span class="description" style="padding-left:' +
         messageIndent +
         'px">' +
-        (this.commits[i].hash === this.commitHead ? '<span class="commitHeadDot"></span>' : "") +
         refs +
         (this.commits[i].hash === this.commitHead ? "<b>" + message + "</b>" : message) +
         "</span></td>" +

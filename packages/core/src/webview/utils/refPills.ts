@@ -1,9 +1,12 @@
 import { escapeHtml } from "./html";
-import { svgIcons } from "./icons";
 
 /** Rendering variants for a tag badge. */
 export interface RenderTagPillOptions {
-  /** Collapse to the icon-only compact form, where space is tight. */
+  /**
+   * Collapse to the tighter form, where space is short. The badge keeps its
+   * name: the shape is what says "tag" now, and a badge with the icon removed
+   * and the name dropped would be an empty sliver.
+   */
   compact?: boolean;
   /** "annotated" or "lightweight", emitted as data-tagtype when known. */
   tagType?: string;
@@ -18,6 +21,10 @@ export interface RenderTagPillOptions {
  *
  * The `.gitRef.tag` markup contract is shared by every surface that shows tag
  * badges, so it lives in one place rather than being repeated per view.
+ *
+ * A tag carries no icon: `.gitRef.tag` is cut to a pennant with a pointed left
+ * edge, so its shape distinguishes it from a branch's rectangle. That leaves
+ * the one icon in the graph meaning exactly one thing -- the branch HEAD is on.
  */
 export function renderTagPill(name: string, options: RenderTagPillOptions = {}): string {
   const escapedName = escapeHtml(name);
@@ -28,7 +35,6 @@ export function renderTagPill(name: string, options: RenderTagPillOptions = {}):
     `<span class="gitRef tag${options.compact ? " compact" : ""}" data-name="${escapedName}"` +
     `${tagTypeAttr} data-drag-ref-type="tag" data-drag-ref-name="${escapedName}"` +
     `${draggableAttr} title="${title}">` +
-    svgIcons.tag +
     `<span class="gitRefName" data-fullref="${escapedName}">${escapedName}</span></span>`
   );
 }
