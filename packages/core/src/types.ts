@@ -10,6 +10,9 @@ import {
 export type GitRepoSet = { [repo: string]: GitRepoState };
 export type GitRepoState = {
   columnWidths: number[] | null;
+  /** Indentation level in the repo selector. Omitted when the host has no
+   *  opinion, which leaves the view to infer nesting from the paths. */
+  depth?: number;
 };
 
 export type GitGraphViewState = {

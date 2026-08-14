@@ -45,6 +45,9 @@ impl OsBackend for StubBackend {
             .cloned()
             .unwrap_or_else(|| Err(format!("no stub response for {url}")))
     }
+    fn find_repositories(&self, _path: &str) -> Result<Option<String>, String> {
+        Err("unused".into())
+    }
 }
 
 fn stub_fetch_result(content_type: &str, bytes: &[u8]) -> String {

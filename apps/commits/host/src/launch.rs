@@ -10,9 +10,9 @@ const NONE: u8 = 0;
 const REPOSITORY: u8 = 1;
 const REJECTED: u8 = 2;
 
-/// Answers what `commits <path>` asked for: an absolute repository path, a
-/// reason that path was refused, or nothing at all when the app was started
-/// without an argument.
+/// Answers what `commits <path>` asked for: the repositories found at or
+/// below that path, a reason it was refused, or nothing at all when the app
+/// was started without an argument.
 ///
 /// The check lives here rather than in the component because the component is
 /// a sandboxed WASM guest with no filesystem access at all -- it cannot tell
@@ -27,7 +27,8 @@ pub struct LaunchModule {
 enum Outcome {
     /// No argument: an ordinary double-click or shortcut start.
     Absent,
-    Repository(PathBuf),
+    /// Every repository at or below the argument, the one to open first.
+    Repositories(Vec<PathBuf>),
     Rejected(String),
 }
 
@@ -54,8 +55,12 @@ impl LaunchModule {
     }
 }
 
-/// Resolves `argument` against `working_dir` and reports whether it names a
-/// git repository.
+/// Resolves `argument` against `working_dir` and reports the git repositories
+/// it holds.
+///
+/// A folder that is not a repository itself is still accepted when it contains
+/// some, which is how a folder of unrelated clones opens: the whole set is
+/// reported, and the guest opens the first.
 ///
 /// A relative path is resolved against the process's working directory, not
 /// the executable's, so `commits .` means the folder the user is standing in
@@ -91,12 +96,11 @@ fn check(argument: &str, working_dir: Option<&Path>) -> Outcome {
     if !absolute.is_dir() {
         return Outcome::Rejected(format!("{display} is a file, not a repository folder"));
     }
-    // A worktree or submodule has `.git` as a file rather than a directory,
-    // so existence is the test, not `is_dir`.
-    if !absolute.join(".git").exists() {
-        return Outcome::Rejected(format!("{display} is not a git repository"));
+    let found = commits_os::discover::find_repositories(Path::new(&display));
+    if found.is_empty() {
+        return Outcome::Rejected(format!("there is no git repository in {display}"));
     }
-    Outcome::Repository(PathBuf::from(display))
+    Outcome::Repositories(found)
 }
 
 /// Drops Windows' `\\?\` verbatim prefix, which `canonicalize` adds and no
@@ -123,16 +127,24 @@ impl Module for LaunchModule {
         Ok(())
     }
 
-    /// One byte of kind, then the path or the reason. The guest asks once at
-    /// startup and needs all three cases distinguishable: open it, show the
-    /// chooser with this reason, or show the chooser with nothing to say.
+    /// One byte of kind, then the payload. The guest asks once at startup and
+    /// needs all three cases distinguishable: open these, show the chooser
+    /// with this reason, or show the chooser with nothing to say. Repositories
+    /// are newline-separated, the first being the one to open.
     fn respond(&mut self, sender: &str, _payload: &[u8]) -> Option<Vec<u8>> {
         if sender != OWNER {
             return Some(encode(REJECTED, "the launch argument is private to the commits component"));
         }
         Some(match &self.outcome {
             Outcome::Absent => encode(NONE, ""),
-            Outcome::Repository(path) => encode(REPOSITORY, &path.to_string_lossy()),
+            Outcome::Repositories(paths) => encode(
+                REPOSITORY,
+                &paths
+                    .iter()
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ),
             Outcome::Rejected(reason) => encode(REJECTED, reason),
         })
     }
@@ -220,14 +232,46 @@ mod tests {
     }
 
     #[test]
-    fn rejects_a_folder_that_is_not_a_repository() {
+    fn rejects_a_folder_with_no_repository_anywhere_below_it() {
         let directory = tempfile::tempdir().unwrap();
         let mut module = LaunchModule::from_argument(&directory.path().to_string_lossy(), None);
 
         let (kind, text) = decode(&module.respond("commits", &[]).unwrap());
 
         assert_eq!(kind, REJECTED);
-        assert!(text.contains("not a git repository"), "{text}");
+        assert!(text.contains("no git repository"), "{text}");
+    }
+
+    #[test]
+    fn accepts_a_folder_of_unrelated_repositories_and_lists_them_all() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(directory.path().join("alpha/.git")).unwrap();
+        std::fs::create_dir_all(directory.path().join("beta/.git")).unwrap();
+        let mut module = LaunchModule::from_argument(&directory.path().to_string_lossy(), None);
+
+        let (kind, text) = decode(&module.respond("commits", &[]).unwrap());
+
+        assert_eq!(kind, REPOSITORY);
+        let paths: Vec<&str> = text.lines().collect();
+        assert_eq!(paths.len(), 2, "{text}");
+        assert!(Path::new(paths[0]).ends_with("alpha"), "{text}");
+        assert!(Path::new(paths[1]).ends_with("beta"), "{text}");
+    }
+
+    #[test]
+    fn lists_a_repository_cloned_inside_the_one_that_was_named() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = repository(directory.path());
+        std::fs::create_dir_all(path.join("nested/.git")).unwrap();
+        let mut module = LaunchModule::from_argument(&path.to_string_lossy(), None);
+
+        let (kind, text) = decode(&module.respond("commits", &[]).unwrap());
+
+        assert_eq!(kind, REPOSITORY);
+        let paths: Vec<&str> = text.lines().collect();
+        assert_eq!(paths.len(), 2, "{text}");
+        assert!(Path::new(paths[0]).ends_with("repo"), "{text}");
+        assert!(Path::new(paths[1]).ends_with("nested"), "{text}");
     }
 
     #[test]

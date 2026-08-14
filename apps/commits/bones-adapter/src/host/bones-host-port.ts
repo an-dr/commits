@@ -103,7 +103,8 @@ export class BonesHostPort implements HostPort {
 
   /**
    * Asks the host what the command line named. The first byte says which of
-   * the three cases this is; the rest is the path or the reason.
+   * the three cases this is; the rest is the newline-separated repositories
+   * found there, or the reason nothing was.
    *
    * A failed send is reported as "none" rather than as a refusal: the host
    * not answering says nothing about what the user typed, and inventing a
@@ -119,7 +120,7 @@ export class BonesHostPort implements HostPort {
     }
     if (response.length === 0) return { kind: "none" };
     const text = new TextDecoder().decode(response.slice(1));
-    if (response[0] === 1) return { kind: "repository", path: text };
+    if (response[0] === 1) return { kind: "repository", paths: text.split("\n").filter((path) => path !== "") };
     if (response[0] === 2) return { kind: "rejected", reason: text };
     return { kind: "none" };
   }

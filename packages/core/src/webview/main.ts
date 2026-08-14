@@ -218,7 +218,9 @@ class GitGraphView {
     // Sorted so a submodule's path (a string-prefixed extension of its
     // parent's) always lands right after its parent and before any sibling,
     // which is what lets the dropdown render this as a tree by indentation
-    // alone, with no separate hierarchy to keep in sync.
+    // alone, with no separate hierarchy to keep in sync. A host that knows
+    // which of those nested paths are really owned by their parent says so
+    // with `depth`; without it, containment is the only thing to go on.
     let sortedPaths = [...repoPaths].sort(),
       options = [],
       repoComps,
@@ -226,9 +228,11 @@ class GitGraphView {
     for (i = 0; i < sortedPaths.length; i++) {
       const path = sortedPaths[i];
       repoComps = path.split("/");
-      const depth = sortedPaths.filter(
-        (other) => other !== path && path.startsWith(other + "/")
-      ).length;
+      const stated = repos[path].depth;
+      const depth =
+        typeof stated === "number"
+          ? stated
+          : sortedPaths.filter((other) => other !== path && path.startsWith(other + "/")).length;
       options.push({ name: repoComps[repoComps.length - 1], value: path, depth });
     }
     this.repoDropdown.setOptions(options, this.currentRepo);

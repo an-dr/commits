@@ -71,7 +71,8 @@ export type OsAction =
   | "pick-folder"
   | "read-file"
   | "reveal-directory"
-  | "fetch-url";
+  | "fetch-url"
+  | "find-repositories";
 
 /**
  * Value of a `read-file` request: the repository the read is confined to, then
@@ -96,6 +97,7 @@ export function encodeOsRequest(
     "read-file": 5,
     "reveal-directory": 6,
     "fetch-url": 7,
+    "find-repositories": 8,
   };
   return new Writer().u32(requestId).u8(tag[action]).string(value).finish();
 }

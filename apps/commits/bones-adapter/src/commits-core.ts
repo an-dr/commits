@@ -35,6 +35,7 @@ type StandaloneRequest =
 
 type PendingOs =
   | { readonly kind: "chooseRepository" }
+  | { readonly kind: "findRepositories"; readonly folder: string }
   | { readonly kind: "copy"; readonly type: string }
   | { readonly kind: "openExternalUrl" }
   | { readonly kind: "revealCommitsRepoFolder" }
@@ -51,8 +52,9 @@ export class CommitsCore {
   private state: PersistentState = DEFAULT_PERSISTENT_STATE;
   private settings: SettingsDocument = DEFAULT_SETTINGS;
   private settingsError = "";
-  /** Why the path on the command line was refused, shown once on the chooser. */
-  private launchError = "";
+  /** Why the last folder offered -- on the command line or from the picker --
+   *  held nothing to open, shown once on the chooser. */
+  private chooserError = "";
   private currentRepository: string | null = null;
   private commitsRepoPath: string | null = null;
   private commitsRepoParentPath: string | null = null;
@@ -167,7 +169,7 @@ export class CommitsCore {
         this.chooseRepository();
         return;
       case "standaloneOpenRepository":
-        if (typeof value.path === "string") this.openRepository(value.path);
+        if (typeof value.path === "string") this.openFolder(value.path);
         return;
       case "standaloneCloneCommitsRepo":
         this.cloneCommitsRepo();
@@ -445,8 +447,10 @@ export class CommitsCore {
       if (result.error) this.host.log("warn", result.error);
       pending.deliver(result.accepted ? result.value : null);
     } else if (pending.kind === "chooseRepository") {
-      if (result.accepted && result.value) this.openRepository(result.value);
+      if (result.accepted && result.value) this.openFolder(result.value);
       else if (result.error) this.host.log("warn", result.error);
+    } else if (pending.kind === "findRepositories") {
+      this.finishFindRepositories(pending.folder, result);
     } else if (pending.kind === "copy") {
       this.send({ command: "copyToClipboard", type: pending.type, success: result.accepted });
     } else if (pending.kind === "revealCommitsRepoFolder") {
@@ -601,7 +605,7 @@ export class CommitsCore {
   /** Opens ~/.commits/repo the same way any other repository is opened. */
   private openCommitsRepo(): void {
     if (!this.commitsRepoExists || this.commitsRepoPath === null) return;
-    this.openRepository(this.commitsRepoPath);
+    this.openFolder(this.commitsRepoPath);
   }
 
   /** Reveals ~/.commits/repo in the OS's native file manager. */
@@ -619,11 +623,11 @@ export class CommitsCore {
         command: "standaloneRepositoryRequired",
         recent: this.state.recentRepositories,
         lastActive: this.state.lastActiveRepository ?? "",
-        error: this.launchError,
+        error: this.chooserError,
       });
       // Said once. Reopening the chooser later in the same session is not
       // still about the argument this process started with.
-      this.launchError = "";
+      this.chooserError = "";
     } else {
       this.sendRepos();
     }
@@ -661,10 +665,9 @@ export class CommitsCore {
       // any other, and `C:\repo` from a shell must land on the same entry as
       // the `C:/repo` everything else here uses -- otherwise one repository
       // occupies two rows that disagree about which is current.
-      const repository = this.repositories.addExternal(launch.path);
-      if (repository !== null) this.selectRepository(repository.path);
+      this.addRepositories(launch.paths);
     } else if (launch.kind === "rejected") {
-      this.launchError = launch.reason;
+      this.chooserError = launch.reason;
       this.host.log("warn", `ignoring the repository given on the command line: ${launch.reason}`);
     }
     // A host that hands over repositories -- VS Code's workspace folders --
@@ -760,11 +763,44 @@ export class CommitsCore {
     this.host.requestOs(requestId, "pick-folder");
   }
 
-  private openRepository(path: string): void {
-    const repository = this.repositories.addExternal(path);
-    if (repository === null) return;
-    this.selectRepository(repository.path);
+  /**
+   * Opens a folder the user pointed at, whatever it turns out to hold: the
+   * repository itself, the repositories inside it, or both. Only the host can
+   * look, so this asks it and finishes in `finishFindRepositories`.
+   */
+  private openFolder(path: string): void {
+    const requestId = this.nextOsRequestId++;
+    this.pendingOs.set(requestId, { kind: "findRepositories", folder: path });
+    this.host.requestOs(requestId, "find-repositories", path);
+  }
+
+  private finishFindRepositories(folder: string, result: NativeResult): void {
+    const paths = result.accepted ? result.value.split("\n").filter((path) => path !== "") : [];
+    if (paths.length === 0) {
+      this.chooserError = result.error || `there is no git repository in ${folder}`;
+      this.host.log("warn", `nothing to open in ${folder}`);
+      this.sendCurrentRepositories();
+      return;
+    }
+    this.addRepositories(paths);
     this.sendRepos();
+  }
+
+  /**
+   * Registers every repository found under one folder and opens the first.
+   *
+   * Through addExternal and its normalised paths: `C:\repo` from a shell must
+   * land on the same entry as the `C:/repo` everything else here uses --
+   * otherwise one repository occupies two rows that disagree about which is
+   * current.
+   */
+  private addRepositories(paths: readonly string[]): void {
+    let first: string | null = null;
+    for (const path of paths) {
+      const repository = this.repositories.addExternal(path);
+      if (repository !== null && first === null) first = repository.path;
+    }
+    if (first !== null) this.selectRepository(first);
   }
 
   private selectRepository(path: string, persist = true): void {
@@ -795,13 +831,38 @@ export class CommitsCore {
     });
   }
 
+  /**
+   * Publishes the repository list with the nesting each row should show.
+   *
+   * Depth is stated rather than left to the view's path-prefix rule: a
+   * repository that merely sits inside another one -- a clone someone put
+   * there, not a submodule of it -- is its own project and belongs at the
+   * left margin. Only submodules, which the parent really does own, indent.
+   *
+   * Submodules are discovered for the open repository alone, never for the
+   * whole list. `git submodule status --recursive` costs seconds on a cold
+   * disk and the git runner allows four at a time, so asking it of every row
+   * would leave a folder of forty clones queueing scans for the best part of
+   * a minute -- ahead of the commit query the view is waiting on. An
+   * undiscovered repository simply sits at the left margin until it is
+   * opened, which is where a repository belongs anyway.
+   */
   private sendRepos(): void {
+    const repos: Record<string, { columnWidths: number[] | null; depth: number }> = {};
     if (this.currentRepository !== null) this.discoverSubmodulesIfNeeded(this.currentRepository);
-    const repos: Record<string, { columnWidths: number[] | null }> = {};
     for (const repository of this.repositories.all()) {
-      repos[repository.path] = { columnWidths: null };
-      for (const submodulePath of this.submodulePaths.get(repository.path) ?? []) {
-        repos[submodulePath] = { columnWidths: null };
+      repos[repository.path] = { columnWidths: null, depth: 0 };
+    }
+    for (const repository of this.repositories.all()) {
+      const submodules = this.submodulePaths.get(repository.path) ?? [];
+      for (const submodulePath of submodules) {
+        // A submodule of a submodule is one level deeper again, which its own
+        // path already says: `--recursive` reports both, and the nested one
+        // is a path extension of the outer one.
+        const nesting = submodules.filter(
+          (other) => other !== submodulePath && submodulePath.startsWith(`${other}/`),
+        ).length;
+        repos[submodulePath] = { columnWidths: null, depth: nesting + 1 };
       }
     }
     this.send({ command: "loadRepos", repos, lastActiveRepo: this.currentRepository });

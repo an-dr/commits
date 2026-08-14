@@ -7,6 +7,7 @@ use base64::Engine;
 use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_ipc::native::{NativeResult, OsRequest};
 
+pub mod discover;
 pub mod rendezvous;
 
 pub const REQUEST_TOPIC: &str = "os/request";
@@ -47,6 +48,11 @@ pub trait OsBackend: Send + Sync {
     /// this URL" outcome, e.g. a Gravatar that does not exist — rather than an
     /// error; other failures (network, non-2xx, oversized body) are `Err`.
     fn fetch_url(&self, url: &str) -> Result<Option<String>, String>;
+    /// Lists every git repository at or below one folder, newline-separated,
+    /// with the folder itself first when it is one. A folder holding no
+    /// repository at all is reported as absent rather than as an error: it is
+    /// a normal answer to "what is in here".
+    fn find_repositories(&self, path: &str) -> Result<Option<String>, String>;
 }
 
 pub struct SystemOsBackend;
@@ -131,6 +137,19 @@ impl OsBackend for SystemOsBackend {
             "{content_type};base64,{}",
             base64::engine::general_purpose::STANDARD.encode(body)
         )))
+    }
+    fn find_repositories(&self, path: &str) -> Result<Option<String>, String> {
+        let found = discover::find_repositories(std::path::Path::new(path));
+        if found.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(
+            found
+                .iter()
+                .map(|repository| repository.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ))
     }
 }
 
@@ -276,6 +295,7 @@ fn execute(backend: &dyn OsBackend, request: &OsRequest) -> NativeResult {
             .open_directory(&request.value)
             .map(|_| Some(String::new())),
         7 => backend.fetch_url(&request.value),
+        8 => backend.find_repositories(&request.value),
         _ => Err("unknown OS action".into()),
     };
     match outcome {

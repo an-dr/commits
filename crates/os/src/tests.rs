@@ -46,6 +46,9 @@ impl OsBackend for StubBackend {
             .then(|| Some("image/png;base64,c3R1Yg==".to_string()))
             .ok_or("only https URLs may be fetched".into())
     }
+    fn find_repositories(&self, path: &str) -> Result<Option<String>, String> {
+        Ok((path == "C:/code").then(|| String::from("C:/code/alpha\nC:/code/beta")))
+    }
 }
 
 #[test]
@@ -75,6 +78,7 @@ fn publishes_results_for_every_capability() {
         (7, 6, "C:/repo"),
         (8, 6, "not-a-directory"),
         (9, 7, "https://example.com/avatar.png"),
+        (10, 8, "C:/code"),
     ] {
         module.handle(&Envelope {
             topic: REQUEST_TOPIC.into(),
@@ -90,12 +94,12 @@ fn publishes_results_for_every_capability() {
         });
     }
     let deadline = Instant::now() + Duration::from_secs(3);
-    while results.lock().unwrap().len() < 9 && Instant::now() < deadline {
+    while results.lock().unwrap().len() < 10 && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
         bus.dispatch();
     }
     let results = results.lock().unwrap();
-    assert_eq!(results.len(), 9);
+    assert_eq!(results.len(), 10);
     assert!(results
         .iter()
         .any(|result| result.request_id == 1 && result.accepted));
@@ -116,6 +120,9 @@ fn publishes_results_for_every_capability() {
     assert!(results
         .iter()
         .any(|result| result.request_id == 9 && result.value == "image/png;base64,c3R1Yg=="));
+    assert!(results
+        .iter()
+        .any(|result| result.request_id == 10 && result.value == "C:/code/alpha\nC:/code/beta"));
 }
 
 /// The read is confined to one repository, and an unreadable entry inside it is

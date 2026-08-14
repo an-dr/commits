@@ -25,10 +25,15 @@ export interface CommitsRepoStatus {
  * Three cases rather than a nullable path: "started with no argument" and
  * "started with an argument I refused" lead to the same screen but not the
  * same message, and only the host can tell them apart.
+ *
+ * `paths` holds every repository the host found at or below the argument --
+ * one for a plain checkout, several when the argument is a folder of clones
+ * or a checkout with unrelated repositories inside it. The first is the one
+ * to open.
  */
 export type LaunchRepository =
   | { readonly kind: "none" }
-  | { readonly kind: "repository"; readonly path: string }
+  | { readonly kind: "repository"; readonly paths: readonly string[] }
   | { readonly kind: "rejected"; readonly reason: string };
 
 export interface InstallStatus {

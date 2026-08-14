@@ -86,7 +86,7 @@ describe("CommitsCore MIT webview host", () => {
 
     expect(host.sent).toContainEqual(["main", {
       command: "loadRepos",
-      repos: { "C:/repo": { columnWidths: null } },
+      repos: { "C:/repo": { columnWidths: null, depth: 0 } },
       lastActiveRepo: "C:/repo",
     }]);
   });
@@ -119,9 +119,9 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.sent).toContainEqual(["main", {
       command: "loadRepos",
       repos: {
-        "C:/repo": { columnWidths: null },
-        "C:/repo/vendor/bones": { columnWidths: null },
-        "C:/repo/vendor/bones/vendor/pubsub-bus": { columnWidths: null },
+        "C:/repo": { columnWidths: null, depth: 0 },
+        "C:/repo/vendor/bones": { columnWidths: null, depth: 1 },
+        "C:/repo/vendor/bones/vendor/pubsub-bus": { columnWidths: null, depth: 2 },
       },
       lastActiveRepo: "C:/repo",
     }]);
@@ -150,6 +150,78 @@ describe("CommitsCore MIT webview host", () => {
     completeGit(host, core, "submodule", "");
 
     expect(host.sent.length).toBe(sentBefore);
+  });
+
+  it("opens every repository a chosen folder holds and selects the first", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/code" }));
+    expect(host.osRequests).toContainEqual({ requestId: 50_000, action: "find-repositories", value: "C:/code" });
+    completeFindRepositories(host, core, ["C:/code/alpha", "C:/code/beta"]);
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "loadRepos",
+      repos: {
+        "C:/code/alpha": { columnWidths: null, depth: 0 },
+        "C:/code/beta": { columnWidths: null, depth: 0 },
+      },
+      lastActiveRepo: "C:/code/alpha",
+    }]);
+  });
+
+  it("keeps a repository cloned inside another at the left margin", () => {
+    // Only a submodule belongs to its parent. An unrelated clone that happens
+    // to sit inside one is its own project, so it is listed, not indented.
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
+    completeFindRepositories(host, core, ["C:/repo", "C:/repo/tools/other"]);
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "loadRepos",
+      repos: {
+        "C:/repo": { columnWidths: null, depth: 0 },
+        "C:/repo/tools/other": { columnWidths: null, depth: 0 },
+      },
+      lastActiveRepo: "C:/repo",
+    }]);
+  });
+
+  it("scans for submodules only in the repository it opens", () => {
+    // `git submodule status --recursive` costs seconds per repository and the
+    // git runner allows four at a time. Asking it of every row would leave a
+    // folder of clones queueing scans ahead of the commit query the view is
+    // waiting on, which reads as a window stuck on "Loading ...".
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    const found = Array.from({ length: 40 }, (_, index) => `C:/code/repo-${index}`);
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/code" }));
+    completeFindRepositories(host, core, found);
+
+    const scans = host.gitRequests.filter((request) => request.args[0] === "submodule");
+    expect(scans.map((request) => request.cwd)).toEqual(["C:/code/repo-0"]);
+  });
+
+  it("returns to the chooser when the folder holds no repository", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/empty" }));
+    completeFindRepositories(host, core, []);
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "standaloneRepositoryRequired",
+      recent: [],
+      lastActive: "",
+      error: "there is no git repository in C:/empty",
+    }]);
   });
 
   it("reports the commits repo status once the view is ready", () => {
@@ -280,10 +352,11 @@ describe("CommitsCore MIT webview host", () => {
     core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
 
     core.receivePageJson(JSON.stringify({ command: "standaloneOpenCommitsRepo" }));
+    completeFindRepositories(host, core, ["C:/home/.commits/repo"]);
 
     expect(host.sent).toContainEqual(["main", {
       command: "loadRepos",
-      repos: { "C:/home/.commits/repo": { columnWidths: null } },
+      repos: { "C:/home/.commits/repo": { columnWidths: null, depth: 0 } },
       lastActiveRepo: "C:/home/.commits/repo",
     }]);
   });
@@ -613,7 +686,7 @@ describe("CommitsCore MIT webview host", () => {
     // before the standalone page reports readiness. A dropped query is never
     // retried, so the view would wait for a reply that never comes.
     const host = new StubHost();
-    host.launchValue = { kind: "repository", path: "C:/repo" };
+    host.launchValue = { kind: "repository", paths: ["C:/repo"] };
     const core = new CommitsCore(host);
     core.start();
 
@@ -655,7 +728,7 @@ describe("CommitsCore MIT webview host", () => {
 
   it("opens the repository named on the command line", () => {
     const host = new StubHost();
-    host.launchValue = { kind: "repository", path: "C:/from-cli" };
+    host.launchValue = { kind: "repository", paths: ["C:/from-cli"] };
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
@@ -774,6 +847,7 @@ describe("CommitsCore MIT webview host", () => {
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     core.receivePageJson(JSON.stringify({ command: "loadBranches", showRemoteBranches: true, hard: false }));
     core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/picked" }));
+    completeFindRepositories(host, core, ["C:/picked"]);
     core.receivePageJson(JSON.stringify({ command: "loadBranches", showRemoteBranches: true, hard: false }));
 
     expect(host.gitRequests.some((request) => request.cwd === "C:/picked")).toBe(true);
@@ -783,7 +857,7 @@ describe("CommitsCore MIT webview host", () => {
     // A shell hands over C:\repo; everything else here uses C:/repo. Left
     // unnormalised the same repository takes two recent rows.
     const host = new StubHost();
-    host.launchValue = { kind: "repository", path: "C:\\code\\thing" };
+    host.launchValue = { kind: "repository", paths: ["C:\\code\\thing"] };
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
@@ -800,7 +874,7 @@ describe("CommitsCore MIT webview host", () => {
     // The menu needs this list exactly when a repository is open, which is
     // when the chooser's own message is never sent.
     const host = new StubHost();
-    host.launchValue = { kind: "repository", path: "C:/opened" };
+    host.launchValue = { kind: "repository", paths: ["C:/opened"] };
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
@@ -819,7 +893,9 @@ describe("CommitsCore MIT webview host", () => {
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/first" }));
+    completeFindRepositories(host, core, ["C:/first"]);
     core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/second" }));
+    completeFindRepositories(host, core, ["C:/second"]);
 
     const published = host.sent
       .filter(([, message]) => isRecentRepositories(message))
@@ -1591,6 +1667,7 @@ describe("CommitsCore MIT webview host", () => {
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
     core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/second" }));
+    completeFindRepositories(host, core, ["C:/second"]);
 
     const loadRepos = host.sent
       .map(([, message]) => message as { command: string; lastActiveRepo?: string | null })
@@ -1644,6 +1721,22 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.logs).toContainEqual(["warn", "ignored malformed page JSON"]);
   });
 });
+
+/** Answers the newest repository scan the way the host reports what it found. */
+function completeFindRepositories(host: StubHost, core: CommitsCore, paths: readonly string[]): void {
+  const request = [...host.osRequests]
+    .reverse()
+    .find((candidate) => (candidate as { action: OsAction }).action === "find-repositories") as
+    | { requestId: number }
+    | undefined;
+  if (request === undefined) throw new Error("missing find-repositories request");
+  core.receiveOsResult({
+    requestId: request.requestId,
+    accepted: paths.length > 0,
+    value: paths.join("\n"),
+    error: "",
+  });
+}
 
 function completeGit(host: StubHost, core: CommitsCore, command: string, stdout: string): void {
   const request = host.gitRequests.find((candidate) => candidate.args[0] === command);
