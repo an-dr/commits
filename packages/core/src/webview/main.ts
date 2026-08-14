@@ -25,6 +25,7 @@ import {
   showSelectDialog
 } from "./dialog";
 import { Dropdown } from "./dropdown";
+import { buildFileTree, renderFileTree } from "./fileTree";
 import { DEFAULT_FILES_PANEL_WIDTH, FilesPanel } from "./filesPanel";
 import { FindWidget } from "./findWidget";
 import { FullDiffPanel } from "./fullDiffPanel";
@@ -2371,114 +2372,48 @@ function detailRowHtml(template: string, valueHtml: string) {
 }
 
 function generateGitFileTree(gitFiles: GitFileChange[]) {
-  let contents: GitFolderContents = {},
-    i,
-    j,
-    path,
-    cur: GitFolder;
-  let files: GitFolder = {
-    type: "folder",
-    name: "",
-    folderPath: "",
-    contents: contents,
-    open: true
-  };
-  for (i = 0; i < gitFiles.length; i++) {
-    cur = files;
-    path = gitFiles[i].newFilePath.split("/");
-    for (j = 0; j < path.length; j++) {
-      if (j < path.length - 1) {
-        if (typeof cur.contents[path[j]] === "undefined") {
-          contents = {};
-          cur.contents[path[j]] = {
-            type: "folder",
-            name: path[j],
-            folderPath: path.slice(0, j + 1).join("/"),
-            contents: contents,
-            open: true
-          };
-        }
-        cur = <GitFolder>cur.contents[path[j]];
-      } else {
-        cur.contents[path[j]] = { type: "file", name: path[j], index: i };
-      }
-    }
-  }
-  return files;
+  return buildFileTree(gitFiles.map((gitFile) => gitFile.newFilePath));
+}
+/**
+ * One row of a commit's file list. The shared tree owns the folders around it;
+ * this owns only what the row itself says, which is the part the working tree's
+ * changes panel renders differently while keeping the same tree.
+ */
+function renderCommitFileRow(gitFile: GitFileChange, name: string): string {
+  return (
+    '<li class="gitFile ' +
+    gitFile.type +
+    (gitFile.additions !== null && gitFile.deletions !== null ? " gitDiffPossible" : "") +
+    '" data-oldfilepath="' +
+    encodeURIComponent(gitFile.oldFilePath) +
+    '" data-newfilepath="' +
+    encodeURIComponent(gitFile.newFilePath) +
+    '" data-type="' +
+    gitFile.type +
+    '"' +
+    (gitFile.additions === null || gitFile.deletions === null
+      ? ' title="' + l10n.tooltipBinaryFile + '"'
+      : "") +
+    '><span class="gitFileIcon">' +
+    (resolveFileIcon(viewState.fileIcons, name) ?? svgIcons.file) +
+    '</span><span class="gitFileName">' +
+    escapeHtml(name) +
+    "</span>" +
+    (gitFile.type === "R"
+      ? ' <span class="gitFileRename" title="' +
+        escapeHtml(
+          l10n.tooltipRenamedTo
+            .replace("{0}", gitFile.oldFilePath)
+            .replace("{1}", gitFile.newFilePath)
+        ) +
+        '">R</span>'
+      : "") +
+    renderGitFileAddDel(gitFile) +
+    "</li>"
+  );
 }
 function generateGitFileTreeHtml(folder: GitFolder, gitFiles: GitFileChange[]) {
-  let html =
-      (folder.name !== ""
-        ? '<span class="gitFolder" data-folderpath="' +
-          encodeURIComponent(folder.folderPath) +
-          '"><span class="gitFolderIcon">' +
-          (folder.open ? svgIcons.openFolder : svgIcons.closedFolder) +
-          '</span><span class="gitFolderName">' +
-          escapeHtml(folder.name) +
-          "</span></span>"
-        : "") +
-      '<ul class="gitFolderContents' +
-      (!folder.open ? " hidden" : "") +
-      '">',
-    keys = Object.keys(folder.contents),
-    i,
-    gitFile,
-    gitFolder;
-  keys.sort((a, b) =>
-    folder.contents[a].type === "folder" && folder.contents[b].type === "file"
-      ? -1
-      : folder.contents[a].type === "file" && folder.contents[b].type === "folder"
-        ? 1
-        : folder.contents[a].name < folder.contents[b].name
-          ? -1
-          : folder.contents[a].name > folder.contents[b].name
-            ? 1
-            : 0
-  );
-  for (i = 0; i < keys.length; i++) {
-    if (folder.contents[keys[i]].type === "folder") {
-      gitFolder = <GitFolder>folder.contents[keys[i]];
-      html +=
-        "<li" +
-        (!gitFolder.open ? ' class="closed"' : "") +
-        ">" +
-        generateGitFileTreeHtml(gitFolder, gitFiles) +
-        "</li>";
-    } else {
-      gitFile = gitFiles[(<GitFile>folder.contents[keys[i]]).index];
-      html +=
-        '<li class="gitFile ' +
-        gitFile.type +
-        (gitFile.additions !== null && gitFile.deletions !== null ? " gitDiffPossible" : "") +
-        '" data-oldfilepath="' +
-        encodeURIComponent(gitFile.oldFilePath) +
-        '" data-newfilepath="' +
-        encodeURIComponent(gitFile.newFilePath) +
-        '" data-type="' +
-        gitFile.type +
-        '"' +
-        (gitFile.additions === null || gitFile.deletions === null
-          ? ' title="' + l10n.tooltipBinaryFile + '"'
-          : "") +
-        '><span class="gitFileIcon">' +
-        (resolveFileIcon(viewState.fileIcons, folder.contents[keys[i]].name) ?? svgIcons.file) +
-        '</span><span class="gitFileName">' +
-        escapeHtml(folder.contents[keys[i]].name) +
-        "</span>" +
-        (gitFile.type === "R"
-          ? ' <span class="gitFileRename" title="' +
-            escapeHtml(
-              l10n.tooltipRenamedTo
-                .replace("{0}", gitFile.oldFilePath)
-                .replace("{1}", gitFile.newFilePath)
-            ) +
-            '">R</span>'
-          : "") +
-        renderGitFileAddDel(gitFile) +
-        "</li>";
-    }
-  }
-  return html + "</ul>";
+  return renderFileTree(folder, (index, name) => renderCommitFileRow(gitFiles[index], name));
 }
 /**
  * The change count beside a file's name: a binary file (additions/deletions
