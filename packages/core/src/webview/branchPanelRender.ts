@@ -221,12 +221,16 @@ function renderSection(
   // The name and its count are one unbreakable unit; only the detail beside
   // them gives way when the sidebar is narrow.
   const name = `<span class="branchPanelSectionName">${escapeHtml(label)} (${options.length})</span>`;
-  return `<div class="branchPanelSectionHeader">${name}${url}</div>${renderTree(
-    tree,
-    1,
-    model.collapsedFolders,
-    model.remoteInfo.upstreams
-  )}`;
+  // The header folds through the same mechanism as the folders beneath it: the
+  // section key can never collide with a folder path, because every folder path
+  // is already prefixed with it.
+  const collapsed = model.collapsedFolders.has(sectionKey);
+  const header =
+    `<div class="branchPanelSectionHeader branchPanelFolder" data-folder="${escapeHtml(sectionKey)}">` +
+    `<span class="branchPanelTwisty">${collapsed ? "▸" : "▾"}</span>${name}${url}</div>`;
+  return collapsed
+    ? header
+    : header + renderTree(tree, 1, model.collapsedFolders, model.remoteInfo.upstreams);
 }
 
 /**

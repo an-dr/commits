@@ -101,6 +101,15 @@ body.branchPanelHidden #branchPanelSidebar {
   font-weight: 700;
   -webkit-user-select: none;
   user-select: none;
+  cursor: pointer;
+}
+/* The header folds its section, so it carries the same twisty as a folder
+   without inheriting a folder's indent or weight. */
+.branchPanelSectionHeader .branchPanelTwisty {
+  flex: 0 0 auto;
+  margin-right: 2px;
+  font-size: 10px;
+  opacity: 0.8;
 }
 .branchPanelFilterInput {
   width: calc(100% - 12px);

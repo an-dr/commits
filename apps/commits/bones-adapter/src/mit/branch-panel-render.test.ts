@@ -152,6 +152,48 @@ describe("renderBranchPanel", () => {
   });
 });
 
+describe("foldable sections", () => {
+  const withTags = {
+    options: [
+      { name: "main", value: "main", selected: false, current: true },
+      { name: "v1.0.0", value: "tags/v1.0.0", selected: false, current: false },
+    ],
+  };
+
+  it("gives every section a twisty of its own", () => {
+    const html = render(withTags);
+
+    expect([...html.matchAll(/branchPanelSectionHeader branchPanelFolder/g)].length).toBe(2);
+    expect(html).toContain('data-folder="local"');
+    expect(html).toContain('data-folder="tags"');
+  });
+
+  it("lists tags in their own section", () => {
+    const html = render(withTags);
+
+    expect(html).toContain("Tags (1)");
+    expect(html).toContain(">v1.0.0<");
+  });
+
+  it("hides a collapsed section's refs but keeps its header", () => {
+    const html = render({ ...withTags, collapsedFolders: new Set(["tags"]) });
+
+    expect(html).toContain('data-folder="tags"');
+    expect(html).toContain("Tags (1)");
+    expect(html).not.toContain(">v1.0.0<");
+    // Folding one section leaves the others alone.
+    expect(html).toContain(">main<");
+  });
+
+  it("marks a collapsed section closed and an open one open", () => {
+    const collapsed = render({ ...withTags, collapsedFolders: new Set(["tags"]) });
+
+    const tagsHeader = collapsed.slice(collapsed.indexOf('data-folder="tags"'));
+    expect(tagsHeader).toContain("▸");
+    expect(render(withTags).slice(render(withTags).indexOf('data-folder="tags"'))).toContain("▾");
+  });
+});
+
 function render(overrides: Partial<BranchPanelRenderModel> = {}): string {
   return renderBranchPanel({
     options: [{ name: "main", value: "main", selected: false, current: true }],

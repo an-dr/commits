@@ -17,6 +17,8 @@ export const TAG_PREFIX = "tags/";
 export interface BranchPanelState {
   hidden: boolean;
   width: number;
+  /** Sections and folders the user has collapsed, by key. */
+  collapsed?: readonly string[];
 }
 
 export interface BranchPanelRenderOption {
@@ -72,7 +74,7 @@ export class BranchPanel {
   private width: number;
   private hidden: boolean;
   private filter = "";
-  private readonly collapsedFolders = new Set<string>();
+  private readonly collapsedFolders: Set<string>;
   private options: BranchPanelRenderOption[] = [];
   private head: BranchPanelHead = { branch: null, hash: null };
   private remoteInfo: BranchPanelRemoteInfo = NO_REMOTE_INFO;
@@ -96,6 +98,7 @@ export class BranchPanel {
     this.onAction = onAction;
     this.width = state?.width ?? DEFAULT_BRANCH_PANEL_WIDTH;
     this.hidden = state?.hidden ?? false;
+    this.collapsedFolders = new Set(state?.collapsed ?? []);
 
     this.toggle.innerHTML = toolbarIcons.sidebar;
     this.toggle.addEventListener("click", () => this.setHidden(!this.hidden));
@@ -148,7 +151,7 @@ export class BranchPanel {
   }
 
   public getState(): BranchPanelState {
-    return { hidden: this.hidden, width: this.width };
+    return { hidden: this.hidden, width: this.width, collapsed: [...this.collapsedFolders] };
   }
 
   private setHidden(hidden: boolean) {
@@ -211,6 +214,7 @@ export class BranchPanel {
         } else {
           this.collapsedFolders.add(folder.dataset.folder);
         }
+        this.onLayoutChange(this.getState());
         this.render();
         return;
       }
