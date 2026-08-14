@@ -65,6 +65,17 @@ $componentsDirFull = Join-Path $versionDirFull "components"
 
 New-Item -ItemType Directory -Path $componentsDirFull -Force | Out-Null
 
+# MIT requires its notice to accompany every copy of the software, and the
+# imported packages and compiled-in dependencies carry the same condition. The
+# text travels inside the version folder rather than beside the launcher because
+# that folder is the unit install.ps1 installs and the upgrader stages, so no
+# distribution path can deliver a build without it. Copied on every run, not
+# just -Part host, so a partial rebuild never strips it.
+foreach ($notice in @("LICENSE", "THIRD_PARTY_NOTICES.md")) {
+    Copy-Item (Join-Path $root $notice) (Join-Path $versionDirFull $notice) -Force
+}
+Write-Host "Updated the license notices in $versionDirFull"
+
 if ($Part -in @("web", "all")) {
     Invoke-Npm "build:web"
     Copy-Item (Join-Path $root "dist/ui/page.html") (Join-Path $versionDirFull "page.html") -Force

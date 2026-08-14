@@ -1,13 +1,16 @@
 # commits
 
 A standalone desktop Git client built on the
-[`bones`](vendor/bones) engine. The repository contains an unchanged MIT
-snapshot of `@an-dr/commits-core` in [`packages/core`](packages/core) and a
-reusable MIT webview shell in [`packages/webview-shell`](packages/webview-shell),
-while the GPL-licensed Bones host and its adapter live under
-[`apps/commits`](apps/commits). The adapter is compiled to a WebAssembly
-component and runs the same Git Graph webview used by the extension in a wry
-panel.
+[`bones`](vendor/bones) engine. The repository contains a snapshot of
+`@an-dr/commits-core` in [`packages/core`](packages/core) and a reusable webview
+shell in [`packages/webview-shell`](packages/webview-shell), while the Bones host
+and its adapter live under [`apps/commits`](apps/commits). The adapter is
+compiled to a WebAssembly component and runs the same Git Graph webview used by
+the extension in a wry panel.
+
+Everything here is MIT-licensed, including the vendored engine; see
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the upstream lineage and
+the dependency licenses that carry their own terms.
 
 Phases 0 and 1 provide the walking skeleton: the native app, TypeScript guest
 toolchain, shared binary codec, `HostPort`, VS Code page API shim, and a typed

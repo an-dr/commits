@@ -1,5 +1,10 @@
 # ADR-006: Serve the webview page from the host at run time
 
+> The license boundary named under Problem no longer exists: the repository is
+> MIT throughout as of
+> [ADR-011](ADR-011-relicense-the-repository-to-mit.md). The decision stands on
+> its build-time argument, which is unaffected.
+
 ## Problem
 
 The bundled page was generated into a TypeScript module that the component

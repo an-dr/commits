@@ -35,8 +35,10 @@ is therefore an adapter project, not a rewrite of the MIT view.
 ## Invariants
 
 1. No file under `packages/core` is modified.
-2. The repository root remains GPL-3.0; `packages/webview-shell` is MIT and
-   carries the upstream license and notice with copied CSS and localization.
+2. `packages/webview-shell` carries the upstream license and notice with the
+   copied CSS and localization. This invariant read "the repository root
+   remains GPL-3.0" while the plan ran; the root is MIT as of ADR-011, and the
+   whole repository now shares one license.
 3. No Node API or `simple-git` dependency enters the WASM component.
 4. Every native Git request remains correlated and bounded by a timeout.
 5. Unsupported mutating commands return an explicit error; they never appear

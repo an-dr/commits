@@ -2,6 +2,7 @@
 name = "commits-ipc"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 bones-messages = { path = "../../vendor/bones/crates/bones-messages" }
