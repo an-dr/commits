@@ -1918,7 +1918,9 @@ class GitGraphView {
     if (this.workingTreeOpen) {
       sendMessage({ command: "workingTreeChanges", repo: this.currentRepo! });
     }
-    this.refresh(true);
+    // Soft: committing adds a row at the top, and the user should stay where
+    // they were rather than be sent back through a loading state.
+    this.refresh(false);
   }
 
   /**
@@ -1933,7 +1935,8 @@ class GitGraphView {
     if (this.workingTreeOpen) {
       sendMessage({ command: "workingTreeChanges", repo: this.currentRepo! });
     }
-    this.refresh(true);
+    // Soft: staging a file changes a count, not the user's place in history.
+    this.refresh(false);
   }
 
   /** A working-tree row opens in the docked panel, as a commit's file does. */
@@ -2371,7 +2374,9 @@ window.addEventListener("message", (event) => {
       break;
     case "inProgressAction":
       if (msg.status === null) {
-        gitGraph.refresh(true);
+        // Continuing or aborting changes history, but the user is watching the
+        // same rows: reread without discarding where they were.
+        gitGraph.refresh(false);
       } else {
         showErrorDialog(l10n.repoInProgressActionFailed, msg.status, null);
       }
@@ -2452,9 +2457,17 @@ window.addEventListener("message", (event) => {
       break;
   }
 });
+/**
+ * Closes out a Git action the user ran from the graph: its error, or a reread.
+ *
+ * The reread is soft. Every ref action in the view arrives here, and a hard one
+ * would replace the table with a loading state and throw away the scroll
+ * position and the open commit each time a tag or branch changed. An expanded
+ * commit that the action removed is dropped by the load itself.
+ */
 function refreshGraphOrDisplayError(status: GitCommandStatus, errorMessage: string) {
   if (status === null) {
-    gitGraph.refresh(true);
+    gitGraph.refresh(false);
   } else {
     showErrorDialog(errorMessage, status, null);
   }
