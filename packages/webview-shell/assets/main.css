@@ -1046,9 +1046,24 @@ body.vscode-light #commitTable tr.commit.head td {
    text starts just past its own vertex rather than past the widest lane. */
 #commitTable tr.commit span.description {
   display: flex;
+  align-items: center;
 }
+/* A ref label must not make its row taller than a row without one.
+   The graph draws its nodes on a uniform pitch -- the table's height divided
+   by the number of rows -- so a single taller row pushes every node below it
+   off centre, and the error accumulates down the list.
+
+   The label takes the row's own line box rather than a fixed height, so this
+   holds at every density without repeating a number per mode: 19px plus a 2px
+   margin used to exceed the 20px and 18px boxes the compact modes set. */
 #commitTable tr.commit td span.description .gitRef {
   flex-shrink: 0;
+  height: auto;
+  margin-top: 0;
+}
+#commitTable tr.commit td span.description .gitRef .gitRefName {
+  height: auto;
+  line-height: inherit;
 }
 #commitTable tr.commit span.description .text {
   display: inline-block;
