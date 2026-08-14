@@ -1292,11 +1292,35 @@ describe("CommitsCore MIT webview host", () => {
     completeGitAt(host, core, 2, "main\u001forigin/main\nwork\u001f\n");
     completeGitAt(host, core, 3,
       "origin\thttps://github.com/an-dr/commits (fetch)\norigin\tssh://git@github.com/an-dr/commits (push)\n");
+    completeGitAt(host, core, 4, "v1.0.0\nv1.1.0\n");
 
     expect(host.sent).toContainEqual(["main", expect.objectContaining({
       command: "loadBranches",
       upstreams: { main: "origin/main" },
       remotes: { origin: "https://github.com/an-dr/commits" },
+      tags: ["v1.0.0", "v1.1.0"],
+    })]);
+  });
+
+  it("reports no tags rather than failing when the repository has none", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "loadBranches", showRemoteBranches: false, hard: false,
+    }));
+
+    completeGitAt(host, core, 0, "refs/heads/main\n");
+    completeGitAt(host, core, 1, "main\n");
+    completeGitAt(host, core, 2, "main\u001f\n");
+    completeGitAt(host, core, 3, "");
+    completeGitAt(host, core, 4, "");
+
+    expect(host.sent).toContainEqual(["main", expect.objectContaining({
+      command: "loadBranches",
+      tags: [],
     })]);
   });
 

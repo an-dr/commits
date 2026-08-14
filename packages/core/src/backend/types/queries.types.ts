@@ -57,6 +57,11 @@ type QueryPayloads = {
       upstreams?: { [branch: string]: string };
       /** Fetch URL of each remote, by remote name. */
       remotes?: { [remote: string]: string };
+      /**
+       * Tag names, for the panel's own section. Optional, so a host that does
+       * not report them gets the panel without it.
+       */
+      tags?: string[];
     };
   };
   loadCommits: {

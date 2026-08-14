@@ -200,6 +200,9 @@ export class MitGraphBackend {
           "refs/heads",
         ],
         remotes: ["remote", "--verbose"],
+        // The panel lists tags beside the branches; they are refs the user
+        // navigates by, not branches, so they travel in their own field.
+        tags: ["for-each-ref", "--format=%(refname:short)", "refs/tags"],
       },
       (results) => {
         const branchesResult = results.branches;
@@ -221,6 +224,7 @@ export class MitGraphBackend {
           isRepo: succeeded(branchesResult),
           upstreams: parseUpstreams(successText(results.upstreams)),
           remotes: parseRemotes(successText(results.remotes)),
+          tags: nonEmptyLines(successText(results.tags)),
         });
       },
     );

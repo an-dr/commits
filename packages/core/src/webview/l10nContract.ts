@@ -30,6 +30,7 @@ export interface LocalizedStrings {
   readonly repoInProgressAbortConfirm: string;
   readonly repoInProgressActionFailed: string;
   readonly branchPanelLocalBranches: string;
+  readonly branchPanelTags: string;
   readonly changesPanelTitle: string;
   readonly changesStagedSection: string;
   readonly changesStageFile: string;

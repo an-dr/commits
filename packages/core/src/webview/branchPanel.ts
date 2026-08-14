@@ -8,6 +8,12 @@ export const DEFAULT_BRANCH_PANEL_WIDTH = 220;
 const MIN_WIDTH = 140;
 const MAX_WIDTH = 600;
 
+/**
+ * Marks an option as a tag rather than a branch, so the panel can section them
+ * apart without a second list. Stripped before the name reaches the user.
+ */
+export const TAG_PREFIX = "tags/";
+
 export interface BranchPanelState {
   hidden: boolean;
   width: number;

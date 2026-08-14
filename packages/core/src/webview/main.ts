@@ -9,7 +9,12 @@ import type {
 } from "@an-dr/commits-core/backend/types";
 
 import type { GitWorkingTreeChange } from "@an-dr/commits-core/data-source/models";
-import { BranchPanel, NO_REMOTE_INFO, type BranchPanelRemoteInfo } from "./branchPanel";
+import {
+  BranchPanel,
+  NO_REMOTE_INFO,
+  TAG_PREFIX,
+  type BranchPanelRemoteInfo
+} from "./branchPanel";
 import { renderChangesFooter, renderChangesPanel } from "./changesPanelRender";
 import { CommitSelection, readSelectionGesture } from "./commitSelection";
 import { hideContextMenuIfOpen, isContextMenuOpen, showContextMenu } from "./contextMenu";
@@ -254,7 +259,8 @@ class GitGraphView {
     branchHead: string | null,
     hard: boolean,
     isRepo: boolean,
-    remoteInfo: BranchPanelRemoteInfo = NO_REMOTE_INFO
+    remoteInfo: BranchPanelRemoteInfo = NO_REMOTE_INFO,
+    tags: readonly string[] = []
   ) {
     if (!isRepo) {
       this.triggerLoadBranchesCallback(false, isRepo);
@@ -297,6 +303,11 @@ class GitGraphView {
             : this.gitBranches[i],
         value: this.gitBranches[i]
       });
+    }
+    // Tags are prefixed so the panel can tell them from branches without a
+    // second list; the prefix never reaches the name the user reads.
+    for (const tag of tags) {
+      options.push({ name: tag, value: `${TAG_PREFIX}${tag}` });
     }
     this.branchPanel.setOptions(options, this.currentBranches);
     this.branchPanel.setHead(this.gitBranchHead, this.commitHead);
@@ -2302,10 +2313,17 @@ window.addEventListener("message", (event) => {
       gitGraph.loadAvatar(msg.email, msg.image);
       break;
     case "loadBranches":
-      gitGraph.loadBranches(msg.branches, msg.head, msg.hard, msg.isRepo, {
-        upstreams: msg.upstreams ?? {},
-        remotes: msg.remotes ?? {}
-      });
+      gitGraph.loadBranches(
+        msg.branches,
+        msg.head,
+        msg.hard,
+        msg.isRepo,
+        {
+          upstreams: msg.upstreams ?? {},
+          remotes: msg.remotes ?? {}
+        },
+        msg.tags ?? []
+      );
       break;
     case "repoInProgress":
       gitGraph.renderRepoInProgress(msg.state);

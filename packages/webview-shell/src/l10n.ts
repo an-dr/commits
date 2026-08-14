@@ -36,6 +36,7 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     repoInProgressAbortConfirm: t("Abort the {0} operation?"),
     repoInProgressActionFailed: t("Unable to update the repository operation"),
     branchPanelLocalBranches: t("Local Branches"),
+    branchPanelTags: t("Tags"),
     changesPanelTitle: t("Working Tree"),
     changesStagedSection: t("Staged Changes"),
     changesStageFile: t("Stage file"),

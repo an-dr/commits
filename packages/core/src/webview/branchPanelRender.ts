@@ -1,8 +1,9 @@
-import type {
-  BranchPanelHead,
-  BranchPanelRemoteInfo,
-  BranchPanelRenderModel,
-  BranchPanelRenderOption
+import {
+  TAG_PREFIX,
+  type BranchPanelHead,
+  type BranchPanelRemoteInfo,
+  type BranchPanelRenderModel,
+  type BranchPanelRenderOption
 } from "./branchPanel";
 import { abbrevCommit } from "./utils/git";
 import { escapeHtml } from "./utils/html";
@@ -276,10 +277,17 @@ export function renderBranchPanel(model: BranchPanelRenderModel): string {
       option.value === "" && (filter === "" || l10n.showAll.toLocaleLowerCase().includes(filter))
   );
   const locals = model.options.filter(
-    (option) => option.value !== "" && !option.value.startsWith(REMOTE_PREFIX) && matches(option)
+    (option) =>
+      option.value !== "" &&
+      !option.value.startsWith(REMOTE_PREFIX) &&
+      !option.value.startsWith(TAG_PREFIX) &&
+      matches(option)
   );
   const remotes = model.options.filter(
     (option) => option.value.startsWith(REMOTE_PREFIX) && matches(option)
+  );
+  const tags = model.options.filter(
+    (option) => option.value.startsWith(TAG_PREFIX) && matches(option)
   );
   // While a filter narrows the panel to matching refs, the two rows that are
   // not refs would only be noise.
@@ -295,7 +303,8 @@ export function renderBranchPanel(model: BranchPanelRenderModel): string {
     head +
       (showAll ? renderItem(showAll, showAll.name, 0) : "") +
       renderSection(l10n.branchPanelLocalBranches, "local", locals, model) +
-      renderRemoteSections(remotes, model) ||
+      renderRemoteSections(remotes, model) +
+      renderSection(l10n.branchPanelTags, "tags", tags, model) ||
     `<div class="branchPanelEmpty">${escapeHtml(l10n.branchPanelNoMatchingBranches)}</div>`
   );
 }
