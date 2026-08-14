@@ -68,6 +68,31 @@ describe("renderChangesPanel", () => {
     expect(html).toContain("gitFolderContents hidden");
   });
 
+  it("keeps both rows of a file that is staged and then edited again", () => {
+    // git status reports "1 MM path" as two changes sharing one path: the index
+    // side and the worktree side. Both are actionable, so both must be listed.
+    const html = renderChangesPanel(
+      [change("src/a.ts", { staged: true }), change("src/a.ts", { staged: false })],
+      null
+    );
+
+    // escapeHtml encodes the separator, so the path appears as src&#x2F;a.ts.
+    expect([...html.matchAll(/data-path="src&#x2F;a\.ts"/g)].length).toBe(2);
+    expect(html).toContain('class="changesFile staged"');
+    expect(html).toContain('class="changesFile unstaged"');
+    // Still one folder holding them, and each row named after the file itself.
+    expect([...html.matchAll(/gitFolderName">src</g)].length).toBe(1);
+    expect([...html.matchAll(/>a\.ts</g)].length).toBe(2);
+  });
+
+  it("never shows the tree key it uses to keep the two sides apart", () => {
+    const html = renderChangesPanel([change("a.ts", { staged: true })], null);
+
+    expect(html).toContain('changesFileName M">a.ts</span>');
+    expect(html).not.toContain("\u0000");
+    expect(html).not.toContain("a.ts</span>true");
+  });
+
   it("reports an error instead of a tree", () => {
     expect(renderChangesPanel([], "boom")).toContain("boom");
   });

@@ -76,6 +76,12 @@ function statusTitle(status: GitWorkingTreeChange["status"]): string {
   }
 }
 
+/** The file's own name, taken from the change rather than the tree's key. */
+function baseName(path: string): string {
+  const slash = path.lastIndexOf("/");
+  return slash < 0 ? path : path.slice(slash + 1);
+}
+
 /**
  * Applies remembered folds to a freshly built tree. Staging a file re-reads the
  * whole working tree, so without this every fold would spring open under the
@@ -125,7 +131,11 @@ export function renderChangesPanel(
   if (changes.length === 0) {
     return `<div class="changesMessage">${escapeHtml(l10n.changesNothingToCommit)}</div>`;
   }
-  const tree = buildFileTree(changes.map((change) => change.path));
+  // A file that is staged and then edited again is two changes sharing one
+  // path: Git reports the index side and the worktree side separately, and both
+  // are actionable. The tree keys leaves by name, so the side is folded into the
+  // key to keep them apart; the row takes its name from the change instead.
+  const tree = buildFileTree(changes.map((change) => `${change.path}\u0000${change.staged}`));
   applyClosedFolders(tree, closedFolders);
-  return renderFileTree(tree, (index, name) => renderRow(changes[index], name));
+  return renderFileTree(tree, (index) => renderRow(changes[index], baseName(changes[index].path)));
 }
