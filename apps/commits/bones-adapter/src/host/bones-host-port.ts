@@ -14,6 +14,7 @@ import {
   encodeGitRun,
   encodeOsRequest,
   encodeUpdaterRequest,
+  encodeWatchRequest,
   type GitRun,
   type OsAction,
   type UpdaterAction,
@@ -137,6 +138,10 @@ export class BonesHostPort implements HostPort {
 
   requestUpdate(requestId: number, action: UpdaterAction, manifestUrl: string): void {
     publish("updater/request", encodeUpdaterRequest(requestId, action, manifestUrl));
+  }
+
+  watchRepository(requestId: number, action: "start" | "stop", repository: string): void {
+    publish("watcher/request", encodeWatchRequest(requestId, action, repository));
   }
 
   installStatus(): InstallStatus {

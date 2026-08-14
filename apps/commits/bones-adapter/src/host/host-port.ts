@@ -81,6 +81,13 @@ export interface HostPort {
   runGit(request: import("@commits/ipc/native").GitRun): void;
   respondPrompt(id: string, value: string): void;
   requestOs(requestId: number, action: import("@commits/ipc/native").OsAction, value?: string): void;
+
+  /**
+   * Starts or stops watching a repository for changes made outside the app.
+   * Events come back on the `repo/full-refresh` and `repo/lightweight-refresh`
+   * topics, correlated by `requestId`.
+   */
+  watchRepository(requestId: number, action: "start" | "stop", repository: string): void;
   /** Checks a manifest for a newer version, stages its verified asset, or stages the running build itself. */
   requestUpdate(requestId: number, action: import("@commits/ipc/native").UpdaterAction, manifestUrl: string): void;
   /** Whether this running build is the one installed at the canonical location. */

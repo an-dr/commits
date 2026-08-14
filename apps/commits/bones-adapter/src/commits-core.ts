@@ -1,6 +1,6 @@
 import type { GitFileChangeType } from "@an-dr/commits-core/backend/types";
 import type { RequestMessage, ResponseMessage } from "@an-dr/commits-core/types";
-import { encodeFileRead, type GitResult, type NativeResult, type UpdaterResult } from "@commits/ipc/native";
+import { encodeFileRead, type GitResult, type NativeResult, type UpdaterResult, type WatchEvent } from "@commits/ipc/native";
 import { gravatarUrl } from "./gravatar";
 import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
@@ -56,6 +56,9 @@ export class CommitsCore {
    *  held nothing to open, shown once on the chooser. */
   private chooserError = "";
   private currentRepository: string | null = null;
+  /** Repository the watcher is pointed at, and the id correlating its events. */
+  private watchedRepository: string | null = null;
+  private watchRequestId = 0;
   private commitsRepoPath: string | null = null;
   private commitsRepoParentPath: string | null = null;
   private commitsRepoExists = false;
@@ -125,6 +128,8 @@ export class CommitsCore {
     this.host.subscribe("os/prompt");
     this.host.subscribe("git/completed");
     this.host.subscribe("updater/completed");
+    this.host.subscribe("repo/full-refresh");
+    this.host.subscribe("repo/lightweight-refresh");
     // Fetched here rather than at construction so the request reaches a running
     // host instead of the build-time snapshot taken while componentizing.
     this.host.openPanel(PANEL, this.host.loadPageSource());
@@ -803,8 +808,37 @@ export class CommitsCore {
     if (first !== null) this.selectRepository(first);
   }
 
+  /**
+   * Points the file watcher at the repository now on screen. Only one is
+   * watched at a time: watching every repository ever opened would keep OS
+   * handles on trees nobody is looking at.
+   */
+  private watchCurrentRepository(path: string): void {
+    if (this.watchedRepository === path) {
+      return;
+    }
+    if (this.watchedRepository !== null) {
+      this.host.watchRepository(this.watchRequestId, "stop", this.watchedRepository);
+    }
+    this.watchRequestId += 1;
+    this.watchedRepository = path;
+    this.host.watchRepository(this.watchRequestId, "start", path);
+  }
+
+  /**
+   * A change reached the repository from outside the app. Increment 4 turns
+   * this into a coalesced refresh; for now it records what arrived.
+   */
+  receiveWatchEvent(event: WatchEvent): void {
+    if (event.requestId !== this.watchRequestId || event.repository !== this.watchedRepository) {
+      return;
+    }
+    this.host.log("info", `watch ${event.kind}: ${event.path}`);
+  }
+
   private selectRepository(path: string, persist = true): void {
     this.currentRepository = path;
+    this.watchCurrentRepository(path);
     if (persist) {
       this.state = this.persistent.save({
         ...this.state,

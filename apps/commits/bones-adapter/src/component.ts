@@ -6,7 +6,12 @@ import {
   decodePanelFailed,
   decodePanelOpened,
 } from "@commits/ipc/web";
-import { decodeGitResult, decodeNativeResult, decodeUpdaterResult } from "@commits/ipc/native";
+import {
+  decodeGitResult,
+  decodeNativeResult,
+  decodeUpdaterResult,
+  decodeWatchEvent,
+} from "@commits/ipc/native";
 
 const OWNER = "commits";
 const PANEL = "main";
@@ -57,6 +62,8 @@ function onMessage(
       core.receiveUpdaterResult(decodeUpdaterResult(payload));
     } else if (topic === "os/prompt") {
       core.receivePrompt(new TextDecoder().decode(payload));
+    } else if (topic === "repo/full-refresh" || topic === "repo/lightweight-refresh") {
+      core.receiveWatchEvent(decodeWatchEvent(payload));
     }
   } catch (error) {
     host.log("warn", `ignored invalid ${topic}: ${String(error)}`);

@@ -12,6 +12,7 @@ class StubHost implements HostPort {
   readonly osRequests: unknown[] = [];
   readonly gitRequests: GitRun[] = [];
   readonly updateRequests: Array<{ requestId: number; action: UpdaterAction; manifestUrl: string }> = [];
+  readonly watchRequests: Array<{ requestId: number; action: "start" | "stop"; repository: string }> = [];
   readonly promptReplies: string[] = [];
   savedState: Uint8Array<ArrayBufferLike> = new Uint8Array();
   settingsBytes: Uint8Array<ArrayBufferLike> = new Uint8Array();
@@ -46,6 +47,9 @@ class StubHost implements HostPort {
   requestUpdate(requestId: number, action: UpdaterAction, manifestUrl: string): void {
     this.updateRequests.push({ requestId, action, manifestUrl });
   }
+  watchRepository(requestId: number, action: "start" | "stop", repository: string): void {
+    this.watchRequests.push({ requestId, action, repository });
+  }
   installStatus(): InstallStatus { return this.installStatusValue; }
   sendPageMessage(panel: string, message: unknown): void { this.sent.push([panel, message]); }
   subscribe(topic: string): void { this.topics.push(topic); }
@@ -73,7 +77,15 @@ describe("CommitsCore MIT webview host", () => {
     core.start();
 
     expect(host.opened).toEqual([["main", { kind: "url", value: "file:///commits/page.html" }]]);
-    expect(host.topics).toEqual(["web/*", "os/result", "os/prompt", "git/completed", "updater/completed"]);
+    expect(host.topics).toEqual([
+      "web/*",
+      "os/result",
+      "os/prompt",
+      "git/completed",
+      "updater/completed",
+      "repo/full-refresh",
+      "repo/lightweight-refresh",
+    ]);
   });
 
   it("boots the shared repository selector from host repositories", () => {
@@ -1719,6 +1731,77 @@ describe("CommitsCore MIT webview host", () => {
     const core = new CommitsCore(host);
     core.receivePageJson("{not json");
     expect(host.logs).toContainEqual(["warn", "ignored malformed page JSON"]);
+  });
+
+  it("subscribes to the refresh topics the watcher publishes on", () => {
+    const host = new StubHost();
+    new CommitsCore(host).start();
+
+    expect(host.topics).toContain("repo/full-refresh");
+    expect(host.topics).toContain("repo/lightweight-refresh");
+  });
+
+  it("watches a repository once it is the one on screen", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
+    completeFindRepositories(host, core, ["C:/repo"]);
+
+    expect(host.watchRequests).toContainEqual({
+      requestId: 1,
+      action: "start",
+      repository: "C:/repo",
+    });
+  });
+
+  it("stops watching the repository it leaves before watching the next", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/one" }));
+    completeFindRepositories(host, core, ["C:/one"]);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/two" }));
+    completeFindRepositories(host, core, ["C:/two"]);
+
+    expect(host.watchRequests.map((request) => [request.action, request.repository])).toEqual([
+      ["start", "C:/one"],
+      ["stop", "C:/one"],
+      ["start", "C:/two"],
+    ]);
+  });
+
+  it("does not restart the watch when the same repository is selected again", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
+    completeFindRepositories(host, core, ["C:/repo"]);
+
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
+    completeFindRepositories(host, core, ["C:/repo"]);
+
+    expect(host.watchRequests.filter((request) => request.action === "start")).toHaveLength(1);
+  });
+
+  it("ignores a watch event left over from a repository it no longer watches", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
+    completeFindRepositories(host, core, ["C:/repo"]);
+    const before = host.logs.length;
+
+    core.receiveWatchEvent({
+      requestId: 99,
+      kind: "full",
+      repository: "C:/gone",
+      path: "C:/gone/.git/HEAD",
+    });
+
+    expect(host.logs).toHaveLength(before);
   });
 });
 
