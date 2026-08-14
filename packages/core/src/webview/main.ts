@@ -61,6 +61,8 @@ class GitGraphView {
   private gitBranches: string[] = [];
   /** Last tag list rendered, so a tag-only change still refreshes the panel. */
   private gitTags: string[] = [];
+  /** A branch was chosen while a load was running; run it when that finishes. */
+  private branchSelectionPending = false;
   private gitBranchHead: string | null = null;
   private commits: GitCommitNode[] = [];
   private commitFilterText: string = "";
@@ -407,13 +409,27 @@ class GitGraphView {
     this.fullDiffPanel.render(data);
   }
 
+  /**
+   * Changes which branches the graph shows.
+   *
+   * The table is left in place while the new commits are fetched rather than
+   * replaced by a loading state: the scroll position and any open commit
+   * survive, and a selection that turns out to show much the same history does
+   * not flicker. An expanded commit missing from the new selection is dropped
+   * by the load itself, the same way a refresh handles one that has gone.
+   */
   private selectBranch(value: string, additive = false) {
     this.setSelectedBranches(nextBranchSelection(this.currentBranches, value, additive));
     this.branchPanel.setSelectedValues(this.currentBranches);
     this.maxCommits = this.config.initialLoadCommits;
-    this.expandedCommit = null;
     this.saveState();
-    this.renderShowLoading();
+    // Without a loading state there is nothing on screen to say a click was
+    // ignored, so a selection made mid-load is held and run afterwards rather
+    // than dropped, which would leave the previous branch showing.
+    if (this.loadCommitsCallback !== null) {
+      this.branchSelectionPending = true;
+      return;
+    }
     this.requestLoadCommits(true, () => {});
   }
 
@@ -745,6 +761,12 @@ class GitGraphView {
     if (this.loadCommitsCallback !== null) {
       this.loadCommitsCallback(changes);
       this.loadCommitsCallback = null;
+    }
+    // A branch chosen while that load was running is honoured now, so the graph
+    // ends on the selection the user actually made last.
+    if (this.branchSelectionPending) {
+      this.branchSelectionPending = false;
+      this.requestLoadCommits(true, () => {});
     }
   }
 
@@ -1658,8 +1680,11 @@ class GitGraphView {
   private renderUncommitedChanges() {
     let dateTitle = getCommitTitleDate(this.commits[0].date);
     let dateCompact = getCompactCommitDate(this.commits[0].date);
+    // The indent clears the graph lanes and renderTable puts it on every row.
+    // This rewrite has to carry it too, or re-rendering the row alone leaves
+    // its message sitting left of every commit beneath it.
     document.getElementsByClassName("unsavedChanges")[0].innerHTML =
-      '<td><span class="description"><b>' +
+      '<td><span class="description" style="padding-left:var(--message-indent)"><b>' +
       escapeHtml(this.commits[0].message) +
       "</b></span></td>" +
       // The asterisks are placeholder display text for the Dev and ID columns,
