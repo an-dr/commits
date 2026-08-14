@@ -1750,6 +1750,61 @@ describe("CommitsCore MIT webview host", () => {
       .toBe(false);
   });
 
+  it("creates an annotated tag with its message", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "addTag",
+      repo: "C:/repo",
+      tagName: "v1.2.0",
+      commitHash: "abc1234",
+      lightweight: false,
+      message: "release",
+    }));
+
+    expect(host.gitRequests.at(-1)?.args).toEqual([
+      "tag", "-a", "v1.2.0", "abc1234", "-m", "release",
+    ]);
+  });
+
+  it("creates a lightweight tag without a message Git would reject", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "addTag",
+      repo: "C:/repo",
+      tagName: "v1.2.0",
+      commitHash: "abc1234",
+      lightweight: true,
+      message: "",
+    }));
+
+    expect(host.gitRequests.at(-1)?.args).toEqual(["tag", "v1.2.0", "abc1234"]);
+  });
+
+  it("reports a failure to tag rather than claiming it worked", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+    core.receivePageJson(JSON.stringify({
+      command: "addTag", repo: "C:/repo", tagName: "v1", commitHash: "abc", lightweight: true, message: "",
+    }));
+
+    failGitAt(host, core, 0, "fatal: tag 'v1' already exists");
+
+    const reply = host.sent
+      .map(([, message]) => message as { command: string; status?: string | null })
+      .find((message) => message.command === "addTag");
+    expect(reply?.status).toContain("already exists");
+  });
+
   it("ignores malformed page JSON", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);

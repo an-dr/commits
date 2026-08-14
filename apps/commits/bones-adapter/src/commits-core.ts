@@ -397,6 +397,16 @@ export class CommitsCore {
           (status) => this.send({ command: "mergeBranch", status }),
         );
         return;
+      case "addTag":
+        this.workingTreeActions.addTag(
+          this.currentRepository ?? "",
+          asString(value.tagName),
+          asString(value.commitHash),
+          value.lightweight === true,
+          asString(value.message),
+          (status) => this.send({ command: "addTag", status }),
+        );
+        return;
       case "deleteTag":
         this.workingTreeActions.deleteTag(
           this.currentRepository ?? "",
@@ -977,7 +987,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isMutationCommand(command: string): command is RequestMessage["command"] {
   return [
-    "addTag", "createBranch", "checkoutCommit", "cherrypickCommit", "revertCommit",
+    "createBranch", "checkoutCommit", "cherrypickCommit", "revertCommit",
     "resetToCommit", "mergeCommit", "inProgressAction",
   ].includes(command);
 }

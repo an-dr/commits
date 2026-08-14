@@ -150,6 +150,32 @@ export class WorkingTreeActions {
     this.send(repo, createNewCommit ? ["merge", branchName, "--no-ff"] : ["merge", branchName], deliver);
   }
 
+  /**
+   * Creates a tag on a commit. An annotated tag carries a message and its own
+   * object; a lightweight one is just a ref, and Git rejects `-m` for it, so
+   * the two forms cannot share a single argument list.
+   */
+  addTag(
+    repo: string,
+    tagName: string,
+    commitHash: string,
+    lightweight: boolean,
+    message: string,
+    deliver: (status: string | null) => void,
+  ): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(
+      repo,
+      lightweight
+        ? ["tag", tagName, commitHash]
+        : ["tag", "-a", tagName, commitHash, "-m", message],
+      deliver,
+    );
+  }
+
   deleteTag(repo: string, tagName: string, deliver: (status: string | null) => void): void {
     if (repo === "") {
       deliver("No repository is open.");
