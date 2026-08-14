@@ -674,12 +674,6 @@ body.filesPanelHidden #filesPanel {
 #commitTable tr.unsavedChanges.selected td {
   background-color: var(--vscode-list-inactiveSelectionBackground, rgba(128, 128, 128, 0.22));
 }
-/* One accent line at the row's left edge, not one per column: only the first
-   cell carries it, so it does not repeat at every column boundary. */
-#commitTable tr.commit.selected td:first-child,
-#commitTable tr.unsavedChanges.selected td:first-child {
-  box-shadow: inset 2px 0 0 var(--vscode-focusBorder);
-}
 #commitTable tr.commit.commitDetailsOpen:hover td {
   background-color: rgba(128, 128, 128, 0.35);
 }
@@ -1023,16 +1017,26 @@ svg.fileIcon {
   border-radius: 4px;
 }
 
-#commitTable tr.commit.head td:not(:first-child) {
-  background-color: var(--vscode-list-inactiveSelectionBackground);
+/* The checked-out commit is washed amber across the whole row, first cell
+   included: warm rather than grey, so it reads as "you are here" beside a
+   selection highlight instead of competing with it. Weak on purpose -- it
+   marks one row permanently, and anything stronger would shout on every
+   screen.
+
+   Painted as an image rather than a colour so it layers over whatever
+   background-color the row has. Hover and selection both set that colour, and
+   a colour here would be replaced by them -- the checked-out row would lose
+   its mark exactly when the pointer was on it. */
+#commitTable tr.commit.head td {
+  background-image: linear-gradient(rgba(255, 191, 0, 0.1), rgba(255, 191, 0, 0.1));
+}
+/* A tenth of amber vanishes on white, so the light theme takes a deeper,
+   slightly more saturated wash to land at the same weight. */
+body.vscode-light #commitTable tr.commit.head td {
+  background-image: linear-gradient(rgba(214, 148, 0, 0.16), rgba(214, 148, 0, 0.16));
 }
 #commitTable td:first-child {
   padding-left: 10px;
-}
-/* Marks the checked-out branch's commit down the message cell, which is the
-   first cell now that it spans the graph gutter too. */
-#commitTable tr.commit.head td:first-child {
-  box-shadow: inset 2px 0 0 var(--git-graph-color);
 }
 #commitTable tr.commit.head:hover td {
   background-color: var(--vscode-list-hoverBackground);
