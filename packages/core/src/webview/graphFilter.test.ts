@@ -85,6 +85,16 @@ describe("filterGraph", () => {
     expect(result.commits[0].parentHashes).toEqual([]);
   });
 
+  it("marks only the edges that actually skip commits, along one chain", () => {
+    // d -> c -> b -> a with c hidden: d reaches b over a gap, b reaches a
+    // directly. A branch must not take one state for all of its edges.
+    const result = filterGraph(linear, (commit) => commit.hash !== "c");
+
+    expect(result.commits.map((c) => c.hash)).toEqual(["d", "b", "a"]);
+    expect([...(result.bridged.get("d") ?? [])]).toEqual(["b"]);
+    expect(result.bridged.has("b")).toBe(false);
+  });
+
   it("returns nothing when the filter matches nothing", () => {
     const result = filterGraph(linear, () => false);
 

@@ -516,9 +516,10 @@ export class Graph {
       parentVertex = this.vertices[i].getNextParent();
     let lastPoint = vertex.isNotOnBranch() ? vertex.getNextPoint() : vertex.getPoint(),
       curPoint;
-    // Every segment laid down toward this parent is dashed together, so the
-    // whole run reads as one skipped stretch of history.
-    const dashed = vertex.isParentBridged(parentVertex);
+    // Recomputed whenever the loop below moves on to the next edge: one
+    // determinePath call walks a whole branch, and each edge along it decides
+    // separately whether the filter removed the commits it spans.
+    let dashed = vertex.isParentBridged(parentVertex);
 
     if (
       parentVertex !== null &&
@@ -577,6 +578,7 @@ export class Graph {
           parentVertex.addToBranch(branch, curPoint.x);
           vertex = parentVertex;
           parentVertex = vertex.getNextParent();
+          dashed = vertex.isParentBridged(parentVertex);
           if (parentVertexOnBranch) {
             break;
           }

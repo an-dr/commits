@@ -59,6 +59,8 @@ function requestRemoteOperation(operation: "fetch" | "pull" | "push") {
 class GitGraphView {
   private gitRepos: GG.GitRepoSet;
   private gitBranches: string[] = [];
+  /** Last tag list rendered, so a tag-only change still refreshes the panel. */
+  private gitTags: string[] = [];
   private gitBranchHead: string | null = null;
   private commits: GitCommitNode[] = [];
   private commitFilterText: string = "";
@@ -269,9 +271,13 @@ class GitGraphView {
     // Tracking and remote data arrive with the branches but are not part of
     // what decides whether the list itself changed.
     this.branchPanel.setRemoteInfo(remoteInfo);
+    // Tags are part of what the panel shows, so a tag created since the last
+    // read is a change even when every branch is identical. Leaving them out
+    // meant a new tag never reached the sidebar until a hard refresh.
     if (
       !hard &&
       arraysEqual(this.gitBranches, branchOptions, (a, b) => a === b) &&
+      arraysEqual(this.gitTags, [...tags], (a, b) => a === b) &&
       this.gitBranchHead === branchHead
     ) {
       this.triggerLoadBranchesCallback(false, isRepo);
@@ -279,6 +285,7 @@ class GitGraphView {
     }
 
     this.gitBranches = branchOptions;
+    this.gitTags = [...tags];
     this.gitBranchHead = branchHead;
     const stillPresent = this.currentBranches.filter(
       (branch) => branch === "" || this.gitBranches.indexOf(branch) > -1
@@ -843,6 +850,13 @@ class GitGraphView {
   }
 
   public refresh(hard: boolean) {
+    // A load already in flight will deliver the same fresh data, and the
+    // request below would be refused. Painting the loading state for a request
+    // that never runs is what leaves the graph reading "Loading" forever --
+    // reachable now that the file watcher issues refreshes of its own.
+    if (this.loadBranchesCallback !== null) {
+      return;
+    }
     if (hard) {
       if (this.expandedCommit !== null) {
         this.expandedCommit = null;
