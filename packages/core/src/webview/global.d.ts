@@ -90,6 +90,7 @@ declare global {
     p1: Point;
     p2: Point;
     lockedFirst: boolean; // TRUE => The line is locked to p1, FALSE => The line is locked to p2
+    dashed: boolean; // TRUE => the edge skips commits a filter is hiding
   }
 
   interface Pixel {
@@ -101,6 +102,7 @@ declare global {
     p2: Pixel;
     isCommitted: boolean;
     lockedFirst: boolean; // TRUE => The line is locked to p1, FALSE => The line is locked to p2
+    dashed: boolean; // TRUE => the edge skips commits a filter is hiding
   }
 
   type AvatarImageCollection = { [email: string]: string };

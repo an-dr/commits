@@ -1328,12 +1328,9 @@ body.vscode-light .gitRef {
 tr.filterHidden {
   display: none;
 }
-/* The graph is absolutely positioned against row offsets, so it would be
-   drawn against the wrong rows once any are hidden. Hide it while filtering
-   rather than redraw a graph whose parent commits are not on screen. */
-body.commitFilterActive #commitGraph {
-  display: none;
-}
+/* The graph is rebuilt over the visible rows while a filter is active, so it
+   stays on screen. Edges that skip filtered-out commits are drawn dashed by
+   the renderer itself. */
 #loadMoreCommitsBtn {
   width: 180px;
   height: 28px;

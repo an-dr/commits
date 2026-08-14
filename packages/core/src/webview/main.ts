@@ -26,6 +26,7 @@ import {
 } from "./dialog";
 import { Dropdown } from "./dropdown";
 import { buildFileTree, renderFileTree } from "./fileTree";
+import { filterGraph } from "./graphFilter";
 import { DEFAULT_FILES_PANEL_WIDTH, FilesPanel } from "./filesPanel";
 import { FindWidget } from "./findWidget";
 import { FullDiffPanel } from "./fullDiffPanel";
@@ -746,10 +747,25 @@ class GitGraphView {
   /* Refresh */
   /**
    * Hides commit rows that do not match the filter text, matching on message,
-   * author, email, or a hash prefix. Filtering is presentational: the rows
-   * stay in the table and the graph is untouched, so clearing the filter
-   * restores the view without reloading.
+   * author, email, or a hash prefix. Nothing is reloaded: the rows stay in the
+   * table, so clearing the filter restores the view immediately.
+   *
+   * The graph is rebuilt over the rows that remain, because it is drawn against
+   * row offsets and would otherwise sit against the wrong ones. Commits that
+   * survive keep their lanes and reconnect to their nearest visible ancestor,
+   * dashed where the filter removed the history in between.
    */
+  /** Whether a commit survives the active filter, matched as the box describes. */
+  private matchesCommitFilter(commit: GitCommitNode): boolean {
+    const lower = this.commitFilterText.toLowerCase();
+    return (
+      commit.message.toLowerCase().includes(lower) ||
+      commit.hash.toLowerCase().startsWith(lower) ||
+      commit.author.toLowerCase().includes(lower) ||
+      commit.email.toLowerCase().includes(lower)
+    );
+  }
+
   public applyCommitFilter(text: string) {
     this.commitFilterText = text;
     const active = text !== "";
@@ -765,23 +781,30 @@ class GitGraphView {
       for (let i = 0; i < rows.length; i++) {
         rows[i].classList.remove("filterHidden");
       }
+      this.graph.loadCommits(this.commits, this.commitHead, this.commitLookup);
+      this.renderGraph();
       this.findWidget.refresh();
       return;
     }
 
-    const lower = text.toLowerCase();
+    const matches = (commit: GitCommitNode): boolean => this.matchesCommitFilter(commit);
+
     for (let i = 0; i < rows.length; i++) {
       const commit = this.commits[parseInt(rows[i].dataset.id ?? "", 10)];
       if (commit === undefined) {
         continue;
       }
-      const match =
-        commit.message.toLowerCase().includes(lower) ||
-        commit.hash.toLowerCase().startsWith(lower) ||
-        commit.author.toLowerCase().includes(lower) ||
-        commit.email.toLowerCase().includes(lower);
-      rows[i].classList.toggle("filterHidden", !match);
+      rows[i].classList.toggle("filterHidden", !matches(commit));
     }
+
+    const filtered = filterGraph(this.commits, matches);
+    this.graph.loadCommits(
+      filtered.commits,
+      this.commitHead,
+      filtered.lookup,
+      filtered.bridged
+    );
+    this.renderGraph();
     this.findWidget.refresh();
   }
 
@@ -928,6 +951,12 @@ class GitGraphView {
     this.renderTable();
     this.renderGraph();
   }
+  /** Rows the graph is drawn against: every commit, or the filtered subset. */
+  private graphRowCount(): number {
+    return this.commitFilterText === ""
+      ? this.commits.length
+      : this.commits.filter((commit) => this.matchesCommitFilter(commit)).length;
+  }
   private renderGraph() {
     let colHeadersElem = document.getElementById("tableColHeaders");
     if (colHeadersElem === null) {
@@ -940,12 +969,15 @@ class GitGraphView {
       expandedCommitElem !== null
         ? expandedCommitElem.getBoundingClientRect().height
         : this.config.grid.expandY;
+    // Rows the filter hides are out of the table's flow, so the row height must
+    // be divided among the rows actually on screen or the graph drifts.
+    const drawnRows = this.graphRowCount();
     this.config.grid.y =
-      this.commits.length > 0
+      drawnRows > 0
         ? (this.tableElem.children[0].clientHeight -
             headerHeight -
             (this.expandedCommit !== null ? this.config.grid.expandY : 0)) /
-          this.commits.length
+          drawnRows
         : this.config.grid.y;
     this.config.grid.offsetY = headerHeight + this.config.grid.y / 2;
     this.graph.render(this.expandedCommit);

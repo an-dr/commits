@@ -16,8 +16,14 @@ class Branch {
     this.colour = colour;
   }
 
-  public addLine(p1: Point, p2: Point, isCommitted: boolean, lockedFirst: boolean) {
-    this.lines.push({ p1: p1, p2: p2, lockedFirst: lockedFirst });
+  public addLine(
+    p1: Point,
+    p2: Point,
+    isCommitted: boolean,
+    lockedFirst: boolean,
+    dashed = false
+  ) {
+    this.lines.push({ p1: p1, p2: p2, lockedFirst: lockedFirst, dashed: dashed });
     if (isCommitted) {
       if (p2.y < this.numUncommitted) {
         this.numUncommitted = p2.y;
@@ -71,13 +77,15 @@ class Branch {
               p1: { x: x1, y: y1 },
               p2: { x: x2, y: y2 },
               isCommitted: i >= this.numUncommitted,
-              lockedFirst: this.lines[i].lockedFirst
+              lockedFirst: this.lines[i].lockedFirst,
+              dashed: this.lines[i].dashed
             }); // Display the normal transition
             lines.push({
               p1: { x: x2, y: y1 + config.grid.y },
               p2: { x: x2, y: y2 + config.grid.expandY },
               isCommitted: i >= this.numUncommitted,
-              lockedFirst: this.lines[i].lockedFirst
+              lockedFirst: this.lines[i].lockedFirst,
+              dashed: this.lines[i].dashed
             }); // Extend the line over the expansion from the transition end point
             continue;
           } else {
@@ -86,7 +94,8 @@ class Branch {
               p1: { x: x1, y: y1 },
               p2: { x: x1, y: y2 - config.grid.y + config.grid.expandY },
               isCommitted: i >= this.numUncommitted,
-              lockedFirst: this.lines[i].lockedFirst
+              lockedFirst: this.lines[i].lockedFirst,
+              dashed: this.lines[i].dashed
             }); // Extend the line over the expansion to the new transition start point
             y1 += config.grid.expandY;
             y2 += config.grid.expandY;
@@ -97,7 +106,8 @@ class Branch {
         p1: { x: x1, y: y1 },
         p2: { x: x2, y: y2 },
         isCommitted: i >= this.numUncommitted,
-        lockedFirst: this.lines[i].lockedFirst
+        lockedFirst: this.lines[i].lockedFirst,
+        dashed: this.lines[i].dashed
       });
     }
 
@@ -109,7 +119,8 @@ class Branch {
         lines[i].p2.x === lines[i + 1].p1.x &&
         lines[i + 1].p1.x === lines[i + 1].p2.x &&
         lines[i].p2.y === lines[i + 1].p1.y &&
-        lines[i].isCommitted === lines[i + 1].isCommitted
+        lines[i].isCommitted === lines[i + 1].isCommitted &&
+        lines[i].dashed === lines[i + 1].dashed
       ) {
         lines[i].p2.y = lines[i + 1].p2.y;
         lines.splice(i + 1, 1);
@@ -126,8 +137,13 @@ class Branch {
       y2 = lines[i].p2.y;
 
       // If the new point belongs to a different path, render the current path and reset it for the new path
-      if (curPath !== "" && i > 0 && lines[i].isCommitted !== lines[i - 1].isCommitted) {
-        this.drawPath(svg, curPath, curColour);
+      if (
+        curPath !== "" &&
+        i > 0 &&
+        (lines[i].isCommitted !== lines[i - 1].isCommitted ||
+          lines[i].dashed !== lines[i - 1].dashed)
+      ) {
+        this.drawPath(svg, curPath, curColour, lines[i - 1].dashed);
         curPath = "";
         curColour = "";
       }
@@ -175,16 +191,24 @@ class Branch {
       }
     }
 
-    this.drawPath(svg, curPath, curColour); // Draw the remaining path
+    // Draw the remaining path, dashed if the run it closes was
+    this.drawPath(svg, curPath, curColour, lines.length > 0 && lines[lines.length - 1].dashed);
   }
-  private drawPath(svg: SVGElement, path: string, colour: string) {
+  /**
+   * A dashed path stands for an edge whose intervening commits a filter is
+   * hiding: the two ends are related, but not adjacent as drawn.
+   */
+  private drawPath(svg: SVGElement, path: string, colour: string, dashed = false) {
     let line1 = document.createElementNS("http://www.w3.org/2000/svg", "path"),
       line2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
     line1.setAttribute("class", "shaddow");
     line1.setAttribute("d", path);
-    line2.setAttribute("class", "line");
+    line2.setAttribute("class", dashed ? "line dashed" : "line");
     line2.setAttribute("d", path);
     line2.setAttribute("stroke", colour);
+    if (dashed) {
+      line2.setAttribute("stroke-dasharray", "3,3");
+    }
     svg.appendChild(line1);
     svg.appendChild(line2);
   }
@@ -194,6 +218,8 @@ class Vertex {
   private x: number = 0;
   private y: number;
   private parents: Vertex[] = [];
+  /** Parents reached only by skipping commits a filter is hiding. */
+  private bridgedParents = new Set<Vertex>();
   private nextParent: number = 0;
   private onBranch: Branch | null = null;
   private isCommitted: boolean = true;
@@ -205,6 +231,13 @@ class Vertex {
     this.y = y;
   }
 
+  /** Records that the edge to `vertex` passes over commits that are hidden. */
+  public markParentBridged(vertex: Vertex) {
+    this.bridgedParents.add(vertex);
+  }
+  public isParentBridged(vertex: VertexOrNull) {
+    return vertex !== null && this.bridgedParents.has(vertex);
+  }
   public addParent(vertex: Vertex) {
     this.parents.push(vertex);
   }
@@ -351,10 +384,16 @@ export class Graph {
     document.getElementById(id)!.appendChild(this.svg);
   }
 
+  /**
+   * @param bridgedParents Parent hashes each commit reaches only by skipping
+   *   commits a filter is hiding, keyed by the child's hash. Those edges are
+   *   drawn dashed; everything else is drawn solid, as before.
+   */
   public loadCommits(
     commits: GitCommitNode[],
     commitHead: string | null,
-    commitLookup: { [hash: string]: number }
+    commitLookup: { [hash: string]: number },
+    bridgedParents?: ReadonlyMap<string, ReadonlySet<string>>
   ) {
     this.vertices = [];
     this.branches = [];
@@ -365,9 +404,15 @@ export class Graph {
       this.vertices.push(new Vertex(i));
     }
     for (i = 0; i < commits.length; i++) {
+      const bridged = bridgedParents?.get(commits[i].hash);
       for (j = 0; j < commits[i].parentHashes.length; j++) {
-        if (typeof commitLookup[commits[i].parentHashes[j]] === "number") {
-          this.vertices[i].addParent(this.vertices[commitLookup[commits[i].parentHashes[j]]]);
+        const parentHash = commits[i].parentHashes[j];
+        if (typeof commitLookup[parentHash] === "number") {
+          const parent = this.vertices[commitLookup[parentHash]];
+          this.vertices[i].addParent(parent);
+          if (bridged?.has(parentHash)) {
+            this.vertices[i].markParentBridged(parent);
+          }
         }
       }
     }
@@ -471,6 +516,9 @@ export class Graph {
       parentVertex = this.vertices[i].getNextParent();
     let lastPoint = vertex.isNotOnBranch() ? vertex.getNextPoint() : vertex.getPoint(),
       curPoint;
+    // Every segment laid down toward this parent is dashed together, so the
+    // whole run reads as one skipped stretch of history.
+    const dashed = vertex.isParentBridged(parentVertex);
 
     if (
       parentVertex !== null &&
@@ -492,7 +540,8 @@ export class Graph {
           lastPoint,
           curPoint,
           vertex.getIsCommitted(),
-          !foundPointToParent && this.vertices[i] !== parentVertex ? lastPoint.x < curPoint.x : true
+          !foundPointToParent && this.vertices[i] !== parentVertex ? lastPoint.x < curPoint.x : true,
+          dashed
         );
         this.vertices[i].registerUnavailablePoint(curPoint.x, parentVertex, parentBranch);
         lastPoint = curPoint;
@@ -512,7 +561,13 @@ export class Graph {
           parentVertex === this.vertices[i] && !parentVertex.isNotOnBranch()
             ? this.vertices[i].getPoint()
             : this.vertices[i].getNextPoint();
-        branch.addLine(lastPoint, curPoint, vertex.getIsCommitted(), lastPoint.x < curPoint.x);
+        branch.addLine(
+          lastPoint,
+          curPoint,
+          vertex.getIsCommitted(),
+          lastPoint.x < curPoint.x,
+          dashed
+        );
         this.vertices[i].registerUnavailablePoint(curPoint.x, parentVertex, branch);
         lastPoint = curPoint;
 
