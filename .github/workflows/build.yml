@@ -5,16 +5,12 @@ name: build
 # (continue-on-error) until someone confirms a green run and this comment can
 # be updated to drop that.
 #
-# Windows arm64 is commented out below rather than deleted. It never passed a
-# single run: `npm run build:wasm` dies inside componentize-js, a fraction of
-# a second after it spawns the wizer that `cargo install` has just built
-# successfully. What made that hard to see is that componentize-js hands wizer
-# the parent's own stdout stream, so the reason never reaches the log -- the
-# step just ends, exit code 1, in silence. The instrumentation that found this
-# much is still in apps/commits/scripts/build-components.mjs, and the same
-# arm64 path runs on an arm64 developer machine, where it works. Re-enable the
-# matrix entry to pick the hunt back up; the wizer cache steps below are
-# already keyed to it.
+# Windows arm64 is experimental and non-required. Earlier runs died inside
+# componentize-js shortly after spawning the locally bootstrapped wizer, while
+# the same path worked on an arm64 developer machine. The instrumentation in
+# apps/commits/scripts/build-components.mjs and the cache steps below preserve
+# enough evidence to diagnose another runner-only failure without blocking the
+# verified Windows x64 build.
 
 on:
   push:
@@ -34,9 +30,9 @@ jobs:
           - name: windows-x64
             os: windows-latest
             required: true
-          # - name: windows-arm64
-          #   os: windows-11-arm
-          #   required: false
+          - name: windows-arm64
+            os: windows-11-arm
+            required: false
           - name: linux-x64
             os: ubuntu-latest
             required: false
