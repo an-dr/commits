@@ -5,11 +5,13 @@ use std::time::{Duration, Instant};
 
 use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use commits_ipc::native::WatchRequest;
+use notify::event::AccessKind;
+use notify::EventKind;
 use tempfile::tempdir;
 
 use crate::{
-    is_interesting, resolve_metadata_paths, WatcherModule, FULL_TOPIC, LIGHTWEIGHT_TOPIC,
-    REQUEST_TOPIC,
+    is_interesting, is_refresh_worthy, resolve_metadata_paths, WatcherModule, FULL_TOPIC,
+    LIGHTWEIGHT_TOPIC, REQUEST_TOPIC,
 };
 
 #[test]
@@ -50,7 +52,9 @@ fn rejects_an_invalid_git_file() {
 #[test]
 fn build_output_and_git_objects_are_not_worth_reporting() {
     assert!(!is_interesting(Path::new("C:/repo/target/debug/app.exe")));
-    assert!(!is_interesting(Path::new("C:/repo/node_modules/pkg/index.js")));
+    assert!(!is_interesting(Path::new(
+        "C:/repo/node_modules/pkg/index.js"
+    )));
     assert!(!is_interesting(Path::new("C:/repo/dist/app/commits.exe")));
     assert!(!is_interesting(Path::new("C:/repo/.git/objects/ab/cdef")));
     assert!(!is_interesting(Path::new("C:/repo/.git/lfs/objects/x")));
@@ -63,6 +67,12 @@ fn source_and_refs_are_worth_reporting() {
     assert!(is_interesting(Path::new("C:/repo/.git/refs/heads/main")));
     // "objects" only counts directly under .git, not as an ordinary folder.
     assert!(is_interesting(Path::new("C:/repo/src/objects/model.rs")));
+}
+
+#[test]
+fn access_only_events_do_not_trigger_a_refresh() {
+    assert!(!is_refresh_worthy(EventKind::Access(AccessKind::Read)));
+    assert!(is_refresh_worthy(EventKind::Any));
 }
 
 #[test]
@@ -94,7 +104,10 @@ fn a_worktree_change_alone_asks_only_for_a_lightweight_refresh() {
 
     fs::write(temp.path().join("work.txt"), "changed").unwrap();
 
-    let events = collect_for(&bus, &topics, Duration::from_millis(1_200));
+    let events = collect_until(&bus, &topics, Duration::from_secs(5), |events| {
+        events.iter().any(|topic| topic == LIGHTWEIGHT_TOPIC)
+            || events.iter().any(|topic| topic == FULL_TOPIC)
+    });
     assert!(events.iter().any(|topic| topic == LIGHTWEIGHT_TOPIC));
     assert!(!events.iter().any(|topic| topic == FULL_TOPIC));
 }
@@ -111,11 +124,17 @@ fn a_build_writing_into_target_is_never_reported() {
     }
 
     let events = collect_for(&bus, &topics, Duration::from_millis(800));
-    assert!(events.is_empty(), "build churn reached the guest: {events:?}");
+    assert!(
+        events.is_empty(),
+        "build churn reached the guest: {events:?}"
+    );
 }
 
 /// Starts a watch on `repository` and returns the bus plus the topics seen.
-fn start_watching(repository: &Path, request_id: u32) -> (Bus, Arc<Mutex<Vec<String>>>, WatcherModule) {
+fn start_watching(
+    repository: &Path,
+    request_id: u32,
+) -> (Bus, Arc<Mutex<Vec<String>>>, WatcherModule) {
     let bus = Bus::new();
     let mut services = ServiceRegistry::new();
     services.provide(bus.clone()).unwrap();
@@ -144,10 +163,24 @@ fn start_watching(repository: &Path, request_id: u32) -> (Bus, Arc<Mutex<Vec<Str
 
 /// Pumps the bus for `window`, which must outlast the coalescing quiet period.
 fn collect_for(bus: &Bus, topics: &Arc<Mutex<Vec<String>>>, window: Duration) -> Vec<String> {
-    let deadline = Instant::now() + window;
+    collect_until(bus, topics, window, |_| false)
+}
+
+/// Pumps the bus until `done` observes the expected event or the timeout expires.
+fn collect_until(
+    bus: &Bus,
+    topics: &Arc<Mutex<Vec<String>>>,
+    timeout: Duration,
+    done: impl Fn(&[String]) -> bool,
+) -> Vec<String> {
+    let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(20));
         bus.dispatch();
+        let events = topics.lock().unwrap();
+        if done(&events) {
+            return events.clone();
+        }
     }
     topics.lock().unwrap().clone()
 }

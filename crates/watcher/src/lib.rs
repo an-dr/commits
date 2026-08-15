@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_ipc::native::{WatchEvent, WatchRequest};
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 pub const REQUEST_TOPIC: &str = "watcher/request";
 pub const FULL_TOPIC: &str = "repo/full-refresh";
@@ -39,6 +39,12 @@ pub fn is_interesting(path: &Path) -> bool {
         previous_was_git_dir = component == ".git";
     }
     true
+}
+
+/// Access events are non-mutating and can be emitted by a recursive watch's
+/// own directory scan, so they must not trigger a repository refresh.
+fn is_refresh_worthy(kind: EventKind) -> bool {
+    !matches!(kind, EventKind::Access(_))
 }
 
 pub struct WatcherModule {
@@ -100,6 +106,9 @@ impl WatcherModule {
         let mut watcher =
             notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
                 let Ok(event) = result else { return };
+                if !is_refresh_worthy(event.kind) {
+                    return;
+                }
                 for path in event.paths {
                     if !is_interesting(&path) {
                         continue;
