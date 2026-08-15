@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createLocalizedStrings } from "@an-dr/commits-webview-shell/l10n";
 import { NO_REMOTE_INFO, type BranchPanelRenderModel } from "@an-dr/commits-core/webview/branchPanel";
 import { renderBranchPanel } from "@an-dr/commits-core/webview/branchPanelRender";
+import { toolbarIcons } from "@an-dr/commits-core/webview/utils/icons";
 
 /** The panel reads its strings from the page global the host installs. */
 beforeAll(() => {
@@ -90,7 +91,7 @@ describe("renderBranchPanel", () => {
       collapsedFolders: new Set(["local/fix"]),
     });
 
-    expect(html).toContain("▸");
+    expect(html).toContain(toolbarIcons.chevronRight);
     expect(html).not.toContain(">one<");
   });
 
@@ -189,8 +190,10 @@ describe("foldable sections", () => {
     const collapsed = render({ ...withTags, collapsedFolders: new Set(["tags"]) });
 
     const tagsHeader = collapsed.slice(collapsed.indexOf('data-folder="tags"'));
-    expect(tagsHeader).toContain("▸");
-    expect(render(withTags).slice(render(withTags).indexOf('data-folder="tags"'))).toContain("▾");
+    expect(tagsHeader).toContain(toolbarIcons.chevronRight);
+    expect(render(withTags).slice(render(withTags).indexOf('data-folder="tags"'))).toContain(
+      toolbarIcons.chevronDown
+    );
   });
 });
 

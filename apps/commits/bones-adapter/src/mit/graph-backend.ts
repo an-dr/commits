@@ -8,6 +8,7 @@ import type {
 } from "@an-dr/commits-core/backend/types";
 import type { GitWorkingTreeChange } from "@an-dr/commits-core/data-source/models";
 import type { GitResult, GitRun } from "@commits/ipc/native";
+import { RepositoryGraphCache } from "../cache/repository-graph-cache";
 
 interface GitHost {
   runGit(request: GitRun): void;
@@ -102,9 +103,30 @@ const UNREADABLE_FULL_DIFF = {
  * Adapts the MIT view's read queries to the correlated native Bones Git
  * service. It deliberately does not import simple-git or any Node API.
  */
+/**
+ * What a loadCommits read is worth remembering.
+ *
+ * Deliberately not the whole response: that also carries an "Uncommitted
+ * Changes" row built from `git status`, which moves with the working tree
+ * rather than with the refs. Remembering it would show a stale count after
+ * every save, so only the committed history is kept and the volatile part is
+ * read again on every request.
+ */
+interface CachedHistory {
+  readonly commits: readonly GitCommitNode[];
+  readonly head: string | null;
+  readonly moreCommitsAvailable: boolean;
+}
+
 export class MitGraphBackend {
   private nextRequestId = 30_000;
   private readonly pending = new Map<number, (result: GitResult) => void>();
+  /**
+   * Committed history per repository, so returning to a branch does not pay for
+   * a `git log` that would produce the same rows. Invalidated by `invalidate`,
+   * which is the only way anything enters or leaves this cache's generation.
+   */
+  private readonly cache = new RepositoryGraphCache<GitCommitNode, CachedHistory>();
 
   /**
    * The working-tree reader is optional so a host without the file capability
@@ -147,13 +169,22 @@ export class MitGraphBackend {
     if (!request.showRemoteBranches) refArgs.push("--heads", "--tags");
     refArgs.push("-d", "--head");
 
+    const statusArgs = ["status", "--porcelain=v1", "--untracked-files=normal"];
+    // The arguments are the key: two requests that run the same log against the
+    // same repository produce the same rows, whatever shaped the request.
+    const key = JSON.stringify([logArgs, refArgs]);
+    const cached = this.cache.getProjection(request.repo, key);
+    if (cached !== null && !cached.stale) {
+      // History is known; only the working tree still has to be read.
+      this.batch(request.repo, { status: statusArgs }, (results) => {
+        deliver(this.historyResponse(cached.value, successText(results.status), request.hard));
+      });
+      return;
+    }
+
     this.batch(
       request.repo,
-      {
-        log: logArgs,
-        refs: refArgs,
-        status: ["status", "--porcelain=v1", "--untracked-files=normal"],
-      },
+      { log: logArgs, refs: refArgs, status: statusArgs },
       (results) => {
         const refs = parseRefs(successText(results.refs));
         let commits = parseCommits(successText(results.log));
@@ -161,28 +192,63 @@ export class MitGraphBackend {
         if (moreCommitsAvailable) commits = commits.slice(0, maxCommits);
         attachRefs(commits, refs.refs);
 
-        const changed = nonEmptyLines(successText(results.status)).length;
-        if (changed > 0 && refs.head !== null) {
-          commits.unshift({
-            hash: "*",
-            parentHashes: [refs.head],
-            author: "*",
-            email: "",
-            date: Math.round(Date.now() / 1_000),
-            message: `Uncommitted Changes (${changed})`,
-            refs: [],
-          });
+        const history: CachedHistory = { commits, head: refs.head, moreCommitsAvailable };
+        // Only a read that worked is worth keeping: caching the empty result of
+        // a failed log would serve an empty graph until something invalidated it.
+        if (succeeded(results.log) && succeeded(results.refs)) {
+          this.cache.setProjection(request.repo, key, commits, history);
         }
-
-        deliver({
-          command: "loadCommits",
-          commits,
-          head: refs.head,
-          moreCommitsAvailable,
-          hard: request.hard,
-        });
+        deliver(this.historyResponse(history, successText(results.status), request.hard));
       },
     );
+  }
+
+  /**
+   * Builds a loadCommits response around history that may have come from the
+   * cache, prepending the uncommitted row from a freshly read status.
+   *
+   * The rows are copied rather than unshifted in place: the cached array is
+   * shared with every later hit, and growing it once per read would repeat the
+   * uncommitted row until the cache was invalidated.
+   */
+  private historyResponse(
+    history: CachedHistory,
+    statusText: string,
+    hard: boolean,
+  ): QueryResponse {
+    const changed = nonEmptyLines(statusText).length;
+    const commits =
+      changed > 0 && history.head !== null
+        ? [
+            {
+              hash: "*",
+              parentHashes: [history.head],
+              author: "*",
+              email: "",
+              date: Math.round(Date.now() / 1_000),
+              message: `Uncommitted Changes (${changed})`,
+              refs: [],
+            },
+            ...history.commits,
+          ]
+        : [...history.commits];
+    return {
+      command: "loadCommits",
+      commits,
+      head: history.head,
+      moreCommitsAvailable: history.moreCommitsAvailable,
+      hard,
+    } as QueryResponse;
+  }
+
+  /**
+   * Forgets a repository's cached history.
+   *
+   * The one way the cache is cleared. Callers say what changed, not how the
+   * cache should react, so there is a single place to reason about staleness.
+   */
+  invalidate(repository: string): void {
+    this.cache.advanceGeneration(repository);
   }
 
   loadBranches(request: LoadBranchesRequest, deliver: (response: QueryResponse) => void): void {

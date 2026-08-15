@@ -35,27 +35,11 @@ export interface OsCapabilityResponse {
   readonly error: string;
 }
 
-export interface LoadRepositoryRequest {
-  readonly command: "loadRepository";
-  readonly path: string;
-}
-
-export interface RefreshRepositoryRequest {
-  readonly command: "refreshRepository";
-}
-
-export interface RepositorySnapshotResponse {
-  readonly command: "repositorySnapshot";
-  readonly repository: string;
-  readonly commits: readonly import("./read/models").Commit[];
-  readonly refs: import("./read/models").RefSnapshot;
-  readonly errors: readonly string[];
-}
 export interface CredentialResponseRequest { readonly command: "credentialResponse"; readonly id: string; readonly value: string; }
 export interface CredentialPromptResponse { readonly command: "credentialPrompt"; readonly id: string; readonly kind: string; readonly message: string; }
 
-export type RequestMessage = EchoRequest | PageReadyRequest | OsCapabilityRequest | LoadRepositoryRequest | RefreshRepositoryRequest | CredentialResponseRequest;
-export type ResponseMessage = CoreReadyResponse | EchoResponse | OsCapabilityResponse | RepositorySnapshotResponse | CredentialPromptResponse;
+export type RequestMessage = EchoRequest | PageReadyRequest | OsCapabilityRequest | CredentialResponseRequest;
+export type ResponseMessage = CoreReadyResponse | EchoResponse | OsCapabilityResponse | CredentialPromptResponse;
 
 export function isRequestMessage(value: unknown): value is RequestMessage {
   if (!isRecord(value) || typeof value.command !== "string") {

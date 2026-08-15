@@ -106,10 +106,7 @@ body.branchPanelHidden #branchPanelSidebar {
 /* The header folds its section, so it carries the same twisty as a folder
    without inheriting a folder's indent or weight. */
 .branchPanelSectionHeader .branchPanelTwisty {
-  flex: 0 0 auto;
   margin-right: 2px;
-  font-size: 10px;
-  opacity: 0.8;
 }
 .branchPanelFilterInput {
   width: calc(100% - 12px);
@@ -157,12 +154,20 @@ body.branchPanelHidden #branchPanelSidebar {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The disclosure is a 16px icon on the same grid as every other glyph here,
+   rather than a text triangle scaled down until it reads as a speck. */
 .branchPanelTwisty {
-  width: 14px;
-  flex: 0 0 14px;
-  text-align: center;
+  width: 16px;
+  flex: 0 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   opacity: 0.8;
-  font-size: 10px;
+}
+.branchPanelTwisty > svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 .branchPanelCurrentMarker {
   margin-right: 3px;

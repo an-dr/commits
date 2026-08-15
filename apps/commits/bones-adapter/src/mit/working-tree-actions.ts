@@ -39,7 +39,16 @@ export class WorkingTreeActions {
   private nextRequestId = 40_000;
   private readonly pending = new Map<number, (result: GitResult) => void>();
 
-  constructor(private readonly host: GitHost) {}
+  /**
+   * @param onMutated Called with the repository after any action finishes.
+   *   Every method here changes the repository, so this is the one place that
+   *   knows a cached read of it may no longer be true. It fires on failure
+   *   too: a merge that stopped part-way still moved the refs.
+   */
+  constructor(
+    private readonly host: GitHost,
+    private readonly onMutated: (repo: string) => void = () => {},
+  ) {}
 
   receive(result: GitResult): void {
     const callback = this.pending.get(result.requestId);
@@ -317,13 +326,14 @@ export class WorkingTreeActions {
 
   private send(repo: string, args: string[], deliver: (status: string | null) => void, timeoutMs = 30_000): void {
     const requestId = this.nextRequestId++;
-    this.pending.set(requestId, (result) =>
+    this.pending.set(requestId, (result) => {
+      this.onMutated(repo);
       deliver(
         result.status === "completed" && result.exitCode === 0
           ? null
           : failureText(result) || "The Git command did not complete.",
-      ),
-    );
+      );
+    });
     this.host.runGit({ requestId, cwd: repo, args, timeoutMs });
   }
 }

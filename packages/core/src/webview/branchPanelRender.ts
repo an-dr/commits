@@ -7,6 +7,7 @@ import {
 } from "./branchPanel";
 import { abbrevCommit } from "./utils/git";
 import { escapeHtml } from "./utils/html";
+import { toolbarIcons } from "./utils/icons";
 
 const REMOTE_PREFIX = "remotes/";
 
@@ -192,7 +193,7 @@ function renderTree(
     }
     const isCollapsed = collapsed.has(node.path);
     html += `<div class="branchPanelFolder" data-folder="${escapeHtml(node.path)}" style="padding-left:${4 + indent * 14}px">
-      <span class="branchPanelTwisty">${isCollapsed ? "▸" : "▾"}</span>
+      <span class="branchPanelTwisty">${isCollapsed ? toolbarIcons.chevronRight : toolbarIcons.chevronDown}</span>
       <span class="branchPanelFolderName">${escapeHtml(node.name)}</span>
     </div>`;
     if (!isCollapsed) {
@@ -227,7 +228,7 @@ function renderSection(
   const collapsed = model.collapsedFolders.has(sectionKey);
   const header =
     `<div class="branchPanelSectionHeader branchPanelFolder" data-folder="${escapeHtml(sectionKey)}">` +
-    `<span class="branchPanelTwisty">${collapsed ? "▸" : "▾"}</span>${name}${url}</div>`;
+    `<span class="branchPanelTwisty">${collapsed ? toolbarIcons.chevronRight : toolbarIcons.chevronDown}</span>${name}${url}</div>`;
   return collapsed
     ? header
     : header + renderTree(tree, 1, model.collapsedFolders, model.remoteInfo.upstreams);

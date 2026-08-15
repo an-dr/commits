@@ -104,7 +104,10 @@ export class CommitsCore {
     this.graph = new MitGraphBackend(host, (repo, path, deliver) =>
       this.readWorkingTreeFile(repo, path, deliver),
     );
-    this.workingTreeActions = new WorkingTreeActions(host);
+    // An action this app ran is the one change the watcher cannot be relied on
+    // to report: WatcherModule discards its own start failure, so a watch that
+    // never began would leave the cache serving history the app itself moved.
+    this.workingTreeActions = new WorkingTreeActions(host, (repo) => this.graph.invalidate(repo));
   }
 
   /**
@@ -899,6 +902,11 @@ export class CommitsCore {
   receiveWatchEvent(event: WatchEvent): void {
     if (event.requestId !== this.watchRequestId || event.repository !== this.watchedRepository) {
       return;
+    }
+    if (event.kind === "full") {
+      // The refs moved outside the app, so remembered history is out of date.
+      // A worktree change is left alone: it cannot alter what is committed.
+      this.graph.invalidate(event.repository);
     }
     this.send({ command: "refresh", scope: event.kind === "full" ? "all" : "worktree" });
   }

@@ -13,6 +13,8 @@ class StubHost implements HostPort {
   readonly gitRequests: GitRun[] = [];
   readonly updateRequests: Array<{ requestId: number; action: UpdaterAction; manifestUrl: string }> = [];
   readonly watchRequests: Array<{ requestId: number; action: "start" | "stop"; repository: string }> = [];
+  /** How many git requests a helper has already answered, so it can resume. */
+  answeredGitRequests = 0;
   readonly promptReplies: string[] = [];
   savedState: Uint8Array<ArrayBufferLike> = new Uint8Array();
   settingsBytes: Uint8Array<ArrayBufferLike> = new Uint8Array();
@@ -1903,6 +1905,68 @@ describe("CommitsCore MIT webview host", () => {
     expect(reply?.status).toContain("already exists");
   });
 
+  it("rereads history after refs move outside the app", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
+    completeFindRepositories(host, core, ["C:/repo"]);
+    const cold = loadCommitsOnce(host, core);
+    const cached = loadCommitsOnce(host, core);
+
+    core.receiveWatchEvent({
+      requestId: 1,
+      kind: "full",
+      repository: "C:/repo",
+      path: "C:/repo/.git/refs/heads/main",
+    });
+    const afterEvent = loadCommitsOnce(host, core);
+
+    expect(cached).toBeLessThan(cold);
+    expect(afterEvent).toBe(cold);
+  });
+
+  it("keeps its cached history when only the working tree changed", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
+    completeFindRepositories(host, core, ["C:/repo"]);
+    loadCommitsOnce(host, core);
+    const cached = loadCommitsOnce(host, core);
+
+    core.receiveWatchEvent({
+      requestId: 1,
+      kind: "lightweight",
+      repository: "C:/repo",
+      path: "C:/repo/src/main.ts",
+    });
+
+    // Saving a file cannot change what is committed, so the history stands.
+    expect(loadCommitsOnce(host, core)).toBe(cached);
+  });
+
+  it("rereads history after an action this app ran", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneOpenRepository", path: "C:/repo" }));
+    completeFindRepositories(host, core, ["C:/repo"]);
+    const cold = loadCommitsOnce(host, core);
+    const cached = loadCommitsOnce(host, core);
+
+    core.receivePageJson(JSON.stringify({
+      command: "addTag", repo: "C:/repo", tagName: "v1", commitHash: "abc",
+      lightweight: true, message: "",
+    }));
+    while (pendingGit(host, core)) {
+      // Let the tag command complete, which is what invalidates.
+    }
+
+    expect(cached).toBeLessThan(cold);
+    expect(loadCommitsOnce(host, core)).toBe(cold);
+  });
+
   it("ignores malformed page JSON", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
@@ -2016,6 +2080,39 @@ describe("CommitsCore MIT webview host", () => {
     ).toBe(false);
   });
 });
+
+/**
+ * Runs one loadCommits request and returns how many git commands it cost.
+ *
+ * That count is the observable for the cache: a cold read runs the log, the
+ * refs and status, while a cached one runs status alone. Comparing two pairs
+ * would prove nothing -- each pair is one cold read and one cached read either
+ * way -- so the reads are measured singly.
+ */
+function loadCommitsOnce(host: StubHost, core: CommitsCore): number {
+  const before = host.gitRequests.length;
+  core.receivePageJson(JSON.stringify({
+    command: "loadCommits", repo: "C:/repo", branchName: "main",
+    maxCommits: 50, showRemoteBranches: false, hard: false,
+  }));
+  // Answer whatever the read asked for; empty output is enough, because the
+  // test measures how many commands ran rather than what they returned.
+  while (pendingGit(host, core)) {
+    // completeGitAt resolves them in order until none is outstanding.
+  }
+  return host.gitRequests.length - before;
+}
+
+/** Completes the oldest unanswered git request, or reports there is none. */
+function pendingGit(host: StubHost, core: CommitsCore): boolean {
+  const index = host.answeredGitRequests ?? 0;
+  if (index >= host.gitRequests.length) {
+    return false;
+  }
+  host.answeredGitRequests = index + 1;
+  completeGitAt(host, core, index, "");
+  return true;
+}
 
 /** Answers the newest repository scan the way the host reports what it found. */
 function completeFindRepositories(host: StubHost, core: CommitsCore, paths: readonly string[]): void {

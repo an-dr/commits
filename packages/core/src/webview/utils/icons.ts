@@ -21,6 +21,13 @@ export const toolbarIcons = {
   plus: toolbarIcon('<path d="M8 3.5v9"/><path d="M3.5 8h9"/>'),
   /** Minus: take a file back out of the index. */
   minus: toolbarIcon('<path d="M3.5 8h9"/>'),
+  /**
+   * Tree disclosure, drawn as a stroked chevron on the same 16x16 grid as the
+   * rest of these. The panel used a 10px text triangle, which reads as a
+   * speck beside the label it belongs to.
+   */
+  chevronRight: toolbarIcon('<path d="M6 3.5 10.5 8 6 12.5"/>'),
+  chevronDown: toolbarIcon('<path d="M3.5 6 8 10.5 12.5 6"/>'),
   /** Cross: throw working-tree changes away. */
   cross: toolbarIcon('<path d="M4.5 4.5l7 7"/><path d="M11.5 4.5l-7 7"/>'),
   /** Two commits joined by a check: send the selection to review. */
