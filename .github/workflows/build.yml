@@ -44,7 +44,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.12"
+          # 22.12 exits silently inside componentize-js on Windows ARM64;
+          # 22.23.2 completes the same wizer invocation on the same machine.
+          node-version: "22.23.2"
 
       - uses: dtolnay/rust-toolchain@stable
 
