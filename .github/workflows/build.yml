@@ -112,10 +112,10 @@ jobs:
 
       - run: cargo test --workspace
 
-      # Only windows-x64 has a defined install/launcher layout (docs/updating.md)
-      # to assemble; the other legs stop at "compiles and tests pass" for now.
+      # Both Windows architectures use the install/launcher layout documented
+      # in docs/updating.md; Linux stops at "compiles and tests pass" for now.
       - name: Assemble dist
-        if: matrix.name == 'windows-x64'
+        if: startsWith(matrix.name, 'windows-')
         run: npm run dist
 
       # What `npm run dist` assembles is already the runnable layout -- unzip
@@ -126,10 +126,10 @@ jobs:
       # The SHA is in the name because the download is a bare zip once saved,
       # with nothing inside it saying which commit it came from.
       - name: Upload the runnable build
-        if: matrix.name == 'windows-x64'
+        if: startsWith(matrix.name, 'windows-')
         uses: actions/upload-artifact@v4
         with:
-          name: commits-windows-x64-${{ github.sha }}
+          name: commits-${{ matrix.name }}-${{ github.sha }}
           path: dist/app
           if-no-files-found: error
           retention-days: 30
