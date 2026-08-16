@@ -1,3 +1,23 @@
 [env]
 CMAKE_GENERATOR = "Ninja"
 
+# Who the upgrader builds for. `commits-upgrader` spells none of these
+# itself, so that bones or any other host can reuse the crate under its own
+# names; this block is where this repository states them once, for every
+# binary in the workspace at compile time.
+#
+# UPGRADER_LAUNCHER_VERSION must move with `[package] version` in
+# apps/commits/host/Cargo.toml -- `commits --version` reports both, and the
+# whole point of reporting them is spotting when they disagree. AGENTS.md's
+# version-bump rule covers the pair.
+UPGRADER_INSTALL_DIR_NAME = ".commits"
+UPGRADER_INSTALL_ENV_VAR = "COMMITS_INSTALL_DIR"
+UPGRADER_LAUNCHER_STEM = "commits"
+UPGRADER_APP_STEM = "commits-app"
+UPGRADER_LAUNCHER_VERSION = "1.1.0"
+
+# The launcher is the executable users see in Explorer, the taskbar and
+# their Start Menu, so it carries the app's icon. `relative = true` resolves
+# this against the workspace root rather than whatever directory cargo was
+# invoked from.
+UPGRADER_LAUNCHER_ICON = { value = "apps/commits/host/assets/icon.ico", relative = true }

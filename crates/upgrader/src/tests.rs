@@ -2,7 +2,7 @@ use commits_os::OsBackend;
 
 use crate::{
     download_asset_verified, fetch_manifest, is_installed_version_dir, is_newer, parse_manifest,
-    shared_or_exe_relative, shared_or_exe_relative_from, verify_checksum, Manifest, LAUNCHER_EXE_NAME,
+    shared_or_exe_relative, shared_or_exe_relative_from, verify_checksum, AppIdentity, Manifest,
 };
 
 /// Serializes tests that mutate the process-wide `COMMITS_INSTALL_DIR` env
@@ -185,6 +185,18 @@ fn download_asset_verified_accepts_anything_when_no_checksum_is_published() {
     assert_eq!(download_asset_verified(&backend, &manifest).unwrap(), b"whatever");
 }
 
+/// Deliberately not this repository's own names: every path these tests
+/// build comes from the identity, so a value left hardcoded in the code
+/// under test fails here rather than passing by coincidence.
+fn identity() -> AppIdentity {
+    AppIdentity {
+        install_dir_name: ".probe",
+        install_env_var: "PROBE_INSTALL_DIR",
+        launcher_stem: "probe",
+        app_stem: "probe-app",
+    }
+}
+
 fn running_exe_dir() -> std::path::PathBuf {
     std::env::current_exe().unwrap().parent().unwrap().to_path_buf()
 }
@@ -194,11 +206,11 @@ fn is_installed_version_dir_when_the_running_directory_is_a_child_of_the_install
     let exe_dir = running_exe_dir();
     let install_dir = exe_dir.parent().unwrap();
     let _guard = ENV_LOCK.lock().unwrap();
-    unsafe { std::env::set_var("COMMITS_INSTALL_DIR", install_dir) };
+    unsafe { std::env::set_var(identity().install_env_var, install_dir) };
 
-    let installed = is_installed_version_dir(&exe_dir);
+    let installed = is_installed_version_dir(&identity(), &exe_dir);
 
-    unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
+    unsafe { std::env::remove_var(identity().install_env_var) };
     assert!(installed);
 }
 
@@ -206,11 +218,11 @@ fn is_installed_version_dir_when_the_running_directory_is_a_child_of_the_install
 fn not_an_installed_version_dir_when_the_install_dir_is_elsewhere() {
     let elsewhere = tempfile::tempdir().unwrap();
     let _guard = ENV_LOCK.lock().unwrap();
-    unsafe { std::env::set_var("COMMITS_INSTALL_DIR", elsewhere.path()) };
+    unsafe { std::env::set_var(identity().install_env_var, elsewhere.path()) };
 
-    let installed = is_installed_version_dir(&running_exe_dir());
+    let installed = is_installed_version_dir(&identity(), &running_exe_dir());
 
-    unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
+    unsafe { std::env::remove_var(identity().install_env_var) };
     assert!(!installed);
 }
 
@@ -219,7 +231,7 @@ fn shared_or_exe_relative_resolves_beside_the_real_running_exe() {
     // The test binary's own directory has no launcher beside it, so this
     // exercises the plain exe-relative fallback end to end through the
     // public function (current_exe() and all).
-    let resolved = shared_or_exe_relative("state").unwrap();
+    let resolved = shared_or_exe_relative(&identity(), "state").unwrap();
 
     assert_eq!(resolved, running_exe_dir().join("state"));
 }
@@ -230,7 +242,7 @@ fn shared_or_exe_relative_from_stays_beside_the_exe_without_a_version_folder_sha
     let exe_dir = dir.path().join("some-build");
     std::fs::create_dir_all(&exe_dir).unwrap();
 
-    let resolved = shared_or_exe_relative_from(&exe_dir, "state");
+    let resolved = shared_or_exe_relative_from(&identity(), &exe_dir, "state");
 
     assert_eq!(resolved, exe_dir.join("state"));
 }
@@ -243,7 +255,7 @@ fn shared_or_exe_relative_from_stays_beside_the_exe_without_a_launcher_sibling()
     let exe_dir = dir.path().join("1.3.0");
     std::fs::create_dir_all(&exe_dir).unwrap();
 
-    let resolved = shared_or_exe_relative_from(&exe_dir, "state");
+    let resolved = shared_or_exe_relative_from(&identity(), &exe_dir, "state");
 
     assert_eq!(resolved, exe_dir.join("state"));
 }
@@ -256,9 +268,9 @@ fn shared_or_exe_relative_from_steps_up_when_running_from_a_version_folder() {
     let install_dir = dir.path().join("app");
     let exe_dir = install_dir.join("1.3.0");
     std::fs::create_dir_all(&exe_dir).unwrap();
-    std::fs::write(install_dir.join(LAUNCHER_EXE_NAME), b"launcher").unwrap();
+    std::fs::write(install_dir.join(identity().launcher_exe()), b"launcher").unwrap();
 
-    let resolved = shared_or_exe_relative_from(&exe_dir, "state");
+    let resolved = shared_or_exe_relative_from(&identity(), &exe_dir, "state");
 
     assert_eq!(resolved, install_dir.join("state"));
 }

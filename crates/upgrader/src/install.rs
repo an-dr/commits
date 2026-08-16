@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest, Sha256};
 
 use crate::versions::ordered_version_dirs;
-use crate::LAUNCHER_EXE_NAME;
+use crate::AppIdentity;
 
 /// How many version folders survive under an install dir after any install
 /// operation: the current one and one to fall back to. Anything older is
@@ -62,8 +62,13 @@ pub fn extract_version(archive_bytes: &[u8], install_dir: &Path, version: &str) 
 /// copy; `components/` travels with the rest of the version folder exactly
 /// as in `extract_version`. Prunes anything beyond the current and
 /// previous version once the copy succeeds.
-pub fn copy_version_from_dir(source_dir: &Path, install_dir: &Path, version: &str) -> Result<PathBuf, String> {
-    let relative_files = collect_copyable_files(source_dir)?;
+pub fn copy_version_from_dir(
+    identity: &AppIdentity,
+    source_dir: &Path,
+    install_dir: &Path,
+    version: &str,
+) -> Result<PathBuf, String> {
+    let relative_files = collect_copyable_files(identity, source_dir)?;
     let mut hasher = Sha256::new();
     for relative in &relative_files {
         let metadata = fs::metadata(source_dir.join(relative)).map_err(|error| error.to_string())?;
@@ -97,35 +102,144 @@ pub fn copy_version_from_dir(source_dir: &Path, install_dir: &Path, version: &st
 /// staged, so this completes the install outright: the launcher executable
 /// found near `source_dir` goes to `install_dir` itself, and everything
 /// else becomes the first version folder.
-pub fn install_fresh(source_dir: &Path, install_dir: &Path, version: &str) -> Result<(), String> {
-    let Some(launcher_source) = find_launcher_near(source_dir) else {
-        return Err(format!("{LAUNCHER_EXE_NAME} not found in or above {}", source_dir.display()));
+pub fn install_fresh(
+    identity: &AppIdentity,
+    source_dir: &Path,
+    install_dir: &Path,
+    version: &str,
+) -> Result<(), String> {
+    let launcher_exe = identity.launcher_exe();
+    let Some(launcher_source) = find_launcher_near(identity, source_dir) else {
+        return Err(format!("{launcher_exe} not found in or above {}", source_dir.display()));
     };
     fs::create_dir_all(install_dir).map_err(|error| error.to_string())?;
-    fs::copy(&launcher_source, install_dir.join(LAUNCHER_EXE_NAME)).map_err(|error| error.to_string())?;
-    copy_version_from_dir(source_dir, install_dir, version)?;
+    fs::copy(&launcher_source, install_dir.join(&launcher_exe)).map_err(|error| error.to_string())?;
+    copy_version_from_dir(identity, source_dir, install_dir, version)?;
     Ok(())
 }
 
-/// [`LAUNCHER_EXE_NAME`] beside `source_dir` itself -- a flat dev build, the
-/// same shape a raw `cargo build` output (`target/release/`) still has, with
-/// the launcher and `commits-app.exe` as siblings -- or, failing that, one
+/// The launcher beside `source_dir` itself -- a flat dev build, the same
+/// shape a raw `cargo build` output (`target/release/`) still has, with the
+/// launcher and the app executable as siblings -- or, failing that, one
 /// level up: `source_dir` running_directory() resolves to is now often a
 /// version folder (e.g. running straight out of `dist/app/<version>/`, or an
 /// already-installed version folder), where the launcher is a sibling of
 /// the version folder, not inside it.
-fn find_launcher_near(source_dir: &Path) -> Option<PathBuf> {
-    let direct = source_dir.join(LAUNCHER_EXE_NAME);
+fn find_launcher_near(identity: &AppIdentity, source_dir: &Path) -> Option<PathBuf> {
+    let launcher_exe = identity.launcher_exe();
+    let direct = source_dir.join(&launcher_exe);
     if direct.is_file() {
         return Some(direct);
     }
-    let sibling = source_dir.parent()?.join(LAUNCHER_EXE_NAME);
+    let sibling = source_dir.parent()?.join(&launcher_exe);
     sibling.is_file().then_some(sibling)
 }
 
-/// Deletes a single version folder outright. Used by the launcher when a
-/// version fails its health check: there is nothing to restore, since the
-/// previous version's own folder was never touched by installing this one.
+/// Suffix given to the outgoing entry point while it is still running.
+const SUPERSEDED_SUFFIX: &str = ".old";
+
+/// Installs the launcher that shipped with `version_dir` as the entry point
+/// at `install_dir`, if it differs from the one already there. Reports
+/// whether anything was replaced.
+///
+/// This is the direction that used to be missing. An install or update
+/// rewrites the version folder underneath the entry point but never the
+/// entry point itself, so a launcher fix could not reach a machine that
+/// already had one: the file users run stayed whatever version first
+/// created it, forever. The app is the only process that can fix that,
+/// because it is the only one running when the launcher is not.
+///
+/// "Not the process doing the writing" is not the same as "not running":
+/// the launcher may still be alive, and Windows refuses to overwrite a
+/// running image. It permits *renaming* one, though, which is the whole
+/// trick -- the outgoing file is moved aside under [`SUPERSEDED_SUFFIX`],
+/// keeping whatever process is executing it happily mapped to the bytes it
+/// started with, and the new launcher takes the now-free name. A later
+/// start sweeps the leftover, once nothing holds it.
+///
+/// Every failure is returned rather than swallowed, but the caller is
+/// expected to treat them as non-fatal: an entry point that could not be
+/// refreshed is the situation the app was already in, and refusing to open
+/// over it would turn a stale launcher into no application at all.
+pub fn refresh_launcher(
+    identity: &AppIdentity,
+    install_dir: &Path,
+    version_dir: &Path,
+) -> Result<bool, String> {
+    let target = install_dir.join(identity.launcher_exe());
+    let superseded = with_suffix(&target, SUPERSEDED_SUFFIX);
+    // Best effort, and first: the previous replacement's leftover is only
+    // removable once nothing executes it, which is typically now rather
+    // than at the moment it was superseded.
+    let _ = fs::remove_file(&superseded);
+
+    let source = version_dir.join(identity.launcher_payload_exe());
+    if !source.is_file() {
+        // A version folder from before launchers travelled with a payload.
+        // Nothing to install, and nothing wrong.
+        return Ok(false);
+    }
+    if same_contents(&source, &target) {
+        return Ok(false);
+    }
+    if target.exists() {
+        fs::rename(&target, &superseded)
+            .map_err(|error| format!("could not move the current launcher aside: {error}"))?;
+    }
+    if let Err(error) = fs::copy(&source, &target) {
+        // Put the original back rather than leaving no entry point at all:
+        // a stale launcher still starts the app, a missing one does not.
+        let _ = fs::rename(&superseded, &target);
+        return Err(format!("could not install the launcher from {}: {error}", source.display()));
+    }
+    Ok(true)
+}
+
+/// [`refresh_launcher`] for a process running out of an installed version
+/// folder, which is the only case where it means anything: the running
+/// executable's own directory is the version, and its parent is the
+/// install. A build running anywhere else -- a bare `cargo build` output,
+/// an ad-hoc copy -- has no entry point to speak of, and reports `false`
+/// rather than an error.
+pub fn refresh_launcher_from_running_exe(identity: &AppIdentity) -> Result<bool, String> {
+    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+    let Some(version_dir) = exe.parent() else {
+        return Ok(false);
+    };
+    if !crate::is_version_folder(identity, version_dir) {
+        return Ok(false);
+    }
+    let Some(install_dir) = version_dir.parent() else {
+        return Ok(false);
+    };
+    refresh_launcher(identity, install_dir, version_dir)
+}
+
+/// `path` with `suffix` appended to its whole filename, extension included,
+/// so `commits.exe` becomes `commits.exe.old` rather than `commits.old` --
+/// which would collide with nothing today but reads as a different file
+/// entirely.
+fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(suffix);
+    path.with_file_name(name)
+}
+
+/// Whether both files exist and hold identical bytes. A missing target
+/// counts as different, which is what makes a first install copy rather
+/// than skip.
+fn same_contents(source: &Path, target: &Path) -> bool {
+    match (fs::read(source), fs::read(target)) {
+        (Ok(source), Ok(target)) => source == target,
+        _ => false,
+    }
+}
+
+/// Deletes a single version folder outright. Dropping the newest one is how
+/// a version that cannot start is escaped: there is nothing to restore, since
+/// the previous version's own folder was never touched by installing this one,
+/// and it becomes current again the moment this one is gone. Called by
+/// `extract_version` to prune, and by the launcher's `--rollback`.
 pub fn remove_version_dir(version_dir: &Path) -> Result<(), String> {
     clear_dir(version_dir)
 }
@@ -152,17 +266,23 @@ fn version_folder_name(install_dir: &Path, version: &str, hash: &str) -> String 
     }
 }
 
-/// Every file under `source_dir`, as paths relative to it, skipping
-/// [`LAUNCHER_EXE_NAME`] and anything [`is_runtime_artifact`] recognizes at
-/// any depth -- neither belongs in a version folder.
-fn collect_copyable_files(source_dir: &Path) -> Result<Vec<PathBuf>, String> {
+/// Every file under `source_dir`, as paths relative to it, skipping the
+/// launcher and anything [`is_runtime_artifact`] recognizes at any depth --
+/// neither belongs in a version folder.
+fn collect_copyable_files(identity: &AppIdentity, source_dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
-    collect_copyable_files_into(source_dir, Path::new(""), &mut files)?;
+    collect_copyable_files_into(identity, source_dir, Path::new(""), &mut files)?;
     files.sort();
     Ok(files)
 }
 
-fn collect_copyable_files_into(base: &Path, relative: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+fn collect_copyable_files_into(
+    identity: &AppIdentity,
+    base: &Path,
+    relative: &Path,
+    out: &mut Vec<PathBuf>,
+) -> Result<(), String> {
+    let launcher_exe = identity.launcher_exe();
     let current = base.join(relative);
     if !current.is_dir() {
         return Ok(());
@@ -170,13 +290,13 @@ fn collect_copyable_files_into(base: &Path, relative: &Path, out: &mut Vec<PathB
     for entry in fs::read_dir(&current).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
         let name = entry.file_name();
-        if is_runtime_artifact(&name) || name.to_string_lossy().eq_ignore_ascii_case(LAUNCHER_EXE_NAME) {
+        if is_runtime_artifact(&name) || name.to_string_lossy().eq_ignore_ascii_case(&launcher_exe) {
             continue;
         }
         let entry_relative = relative.join(&name);
         let file_type = entry.file_type().map_err(|error| error.to_string())?;
         if file_type.is_dir() {
-            collect_copyable_files_into(base, &entry_relative, out)?;
+            collect_copyable_files_into(identity, base, &entry_relative, out)?;
         } else {
             out.push(entry_relative);
         }
@@ -253,6 +373,18 @@ fn clear_dir(path: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
     use std::io::Write;
+
+    /// Deliberately not this repository's own names: every path these tests
+    /// build comes from the identity, so a value left hardcoded in the code
+    /// under test fails here rather than passing by coincidence.
+    fn identity() -> AppIdentity {
+        AppIdentity {
+            install_dir_name: ".probe",
+            install_env_var: "PROBE_INSTALL_DIR",
+            launcher_stem: "probe",
+            app_stem: "probe-app",
+        }
+    }
 
     fn zip_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
         let mut buffer = Vec::new();
@@ -337,14 +469,14 @@ mod tests {
         let source_dir = dir.path().join("dev-build");
         let install_dir = dir.path().join("app");
         fs::create_dir_all(source_dir.join("components")).unwrap();
-        fs::write(source_dir.join(LAUNCHER_EXE_NAME), b"the launcher").unwrap();
+        fs::write(source_dir.join(identity().launcher_exe()), b"the launcher").unwrap();
         fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
         fs::write(source_dir.join("components/commits.wasm"), b"component").unwrap();
 
-        let version_dir = copy_version_from_dir(&source_dir, &install_dir, "1.0.0").unwrap();
+        let version_dir = copy_version_from_dir(&identity(), &source_dir, &install_dir, "1.0.0").unwrap();
 
         assert_eq!(fs::read(version_dir.join("commits-app.exe")).unwrap(), b"the app");
-        assert!(!version_dir.join(LAUNCHER_EXE_NAME).exists());
+        assert!(!version_dir.join(identity().launcher_exe()).exists());
         assert_eq!(fs::read(version_dir.join("components/commits.wasm")).unwrap(), b"component");
         assert!(!install_dir.join("components").exists());
     }
@@ -361,7 +493,7 @@ mod tests {
         fs::write(source_dir.join("commits.log"), b"log").unwrap();
         fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
 
-        let version_dir = copy_version_from_dir(&source_dir, &install_dir, "1.0.0").unwrap();
+        let version_dir = copy_version_from_dir(&identity(), &source_dir, &install_dir, "1.0.0").unwrap();
 
         assert!(!version_dir.join("commits-app.exe.WebView2").exists());
         assert!(!version_dir.join("state").exists());
@@ -376,12 +508,12 @@ mod tests {
         let first_source = dir.path().join("first");
         fs::create_dir_all(&first_source).unwrap();
         fs::write(first_source.join("commits-app.exe"), b"first build").unwrap();
-        copy_version_from_dir(&first_source, &install_dir, "0.0.0-dev").unwrap();
+        copy_version_from_dir(&identity(), &first_source, &install_dir, "0.0.0-dev").unwrap();
 
         let second_source = dir.path().join("second");
         fs::create_dir_all(&second_source).unwrap();
         fs::write(second_source.join("commits-app.exe"), b"second build, different size").unwrap();
-        let second = copy_version_from_dir(&second_source, &install_dir, "0.0.0-dev").unwrap();
+        let second = copy_version_from_dir(&identity(), &second_source, &install_dir, "0.0.0-dev").unwrap();
 
         assert_ne!(second, install_dir.join("0.0.0-dev"));
         assert_eq!(fs::read(install_dir.join("0.0.0-dev/commits-app.exe")).unwrap(), b"first build");
@@ -394,12 +526,12 @@ mod tests {
         let source_dir = dir.path().join("dev-build");
         let install_dir = dir.path().join("app");
         fs::create_dir_all(&source_dir).unwrap();
-        fs::write(source_dir.join(LAUNCHER_EXE_NAME), b"the launcher").unwrap();
+        fs::write(source_dir.join(identity().launcher_exe()), b"the launcher").unwrap();
         fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
 
-        install_fresh(&source_dir, &install_dir, "1.0.0").unwrap();
+        install_fresh(&identity(), &source_dir, &install_dir, "1.0.0").unwrap();
 
-        assert_eq!(fs::read(install_dir.join(LAUNCHER_EXE_NAME)).unwrap(), b"the launcher");
+        assert_eq!(fs::read(install_dir.join(identity().launcher_exe())).unwrap(), b"the launcher");
         assert_eq!(fs::read(install_dir.join("1.0.0/commits-app.exe")).unwrap(), b"the app");
     }
 
@@ -413,12 +545,12 @@ mod tests {
         let source_dir = build_root.join("0.3.0");
         let install_dir = dir.path().join("app");
         fs::create_dir_all(&source_dir).unwrap();
-        fs::write(build_root.join(LAUNCHER_EXE_NAME), b"the launcher").unwrap();
+        fs::write(build_root.join(identity().launcher_exe()), b"the launcher").unwrap();
         fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
 
-        install_fresh(&source_dir, &install_dir, "1.0.0").unwrap();
+        install_fresh(&identity(), &source_dir, &install_dir, "1.0.0").unwrap();
 
-        assert_eq!(fs::read(install_dir.join(LAUNCHER_EXE_NAME)).unwrap(), b"the launcher");
+        assert_eq!(fs::read(install_dir.join(identity().launcher_exe())).unwrap(), b"the launcher");
         assert_eq!(fs::read(install_dir.join("1.0.0/commits-app.exe")).unwrap(), b"the app");
     }
 
@@ -430,7 +562,103 @@ mod tests {
         fs::create_dir_all(&source_dir).unwrap();
         fs::write(source_dir.join("commits-app.exe"), b"the app").unwrap();
 
-        assert!(install_fresh(&source_dir, &install_dir, "1.0.0").is_err());
+        assert!(install_fresh(&identity(), &source_dir, &install_dir, "1.0.0").is_err());
+    }
+
+    /// An install dir holding one version folder, with `payload` as the
+    /// launcher that shipped inside it and `entry` as the entry point
+    /// already installed. Either can be absent.
+    fn install_with(payload: Option<&[u8]>, entry: Option<&[u8]>) -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let install_dir = dir.path().join("app");
+        let version_dir = install_dir.join("1.0.0");
+        fs::create_dir_all(&version_dir).unwrap();
+        if let Some(bytes) = payload {
+            fs::write(version_dir.join(identity().launcher_payload_exe()), bytes).unwrap();
+        }
+        if let Some(bytes) = entry {
+            fs::write(install_dir.join(identity().launcher_exe()), bytes).unwrap();
+        }
+        (dir, install_dir, version_dir)
+    }
+
+    #[test]
+    fn refresh_launcher_installs_a_shipped_launcher_that_differs() {
+        let (_dir, install_dir, version_dir) = install_with(Some(b"new launcher"), Some(b"old launcher"));
+
+        let replaced = refresh_launcher(&identity(), &install_dir, &version_dir).unwrap();
+
+        assert!(replaced);
+        assert_eq!(fs::read(install_dir.join(identity().launcher_exe())).unwrap(), b"new launcher");
+    }
+
+    #[test]
+    fn refresh_launcher_moves_the_outgoing_entry_point_aside_rather_than_overwriting_it() {
+        // The launcher may still be executing while this runs, and Windows
+        // refuses to overwrite a running image but allows renaming one.
+        // Whatever is executing the old bytes has to keep finding them.
+        let (_dir, install_dir, version_dir) = install_with(Some(b"new launcher"), Some(b"old launcher"));
+
+        refresh_launcher(&identity(), &install_dir, &version_dir).unwrap();
+
+        let superseded = install_dir.join(format!("{}{}", identity().launcher_exe(), SUPERSEDED_SUFFIX));
+        assert_eq!(fs::read(superseded).unwrap(), b"old launcher");
+    }
+
+    #[test]
+    fn refresh_launcher_sweeps_a_leftover_from_the_previous_replacement() {
+        let (_dir, install_dir, version_dir) = install_with(Some(b"same"), Some(b"same"));
+        let superseded = install_dir.join(format!("{}{}", identity().launcher_exe(), SUPERSEDED_SUFFIX));
+        fs::write(&superseded, b"two versions ago").unwrap();
+
+        refresh_launcher(&identity(), &install_dir, &version_dir).unwrap();
+
+        assert!(!superseded.exists(), "the leftover should be gone once nothing executes it");
+    }
+
+    #[test]
+    fn refresh_launcher_leaves_an_identical_entry_point_untouched() {
+        let (_dir, install_dir, version_dir) = install_with(Some(b"same bytes"), Some(b"same bytes"));
+
+        let replaced = refresh_launcher(&identity(), &install_dir, &version_dir).unwrap();
+
+        assert!(!replaced);
+        let superseded = install_dir.join(format!("{}{}", identity().launcher_exe(), SUPERSEDED_SUFFIX));
+        assert!(!superseded.exists(), "an unchanged launcher should not be moved aside");
+    }
+
+    #[test]
+    fn refresh_launcher_does_nothing_for_a_version_folder_carrying_no_launcher() {
+        // Every version folder installed before launchers travelled with a
+        // payload looks like this, and none of them is an error.
+        let (_dir, install_dir, version_dir) = install_with(None, Some(b"the only launcher"));
+
+        let replaced = refresh_launcher(&identity(), &install_dir, &version_dir).unwrap();
+
+        assert!(!replaced);
+        assert_eq!(fs::read(install_dir.join(identity().launcher_exe())).unwrap(), b"the only launcher");
+    }
+
+    #[test]
+    fn refresh_launcher_installs_one_where_no_entry_point_exists_yet() {
+        let (_dir, install_dir, version_dir) = install_with(Some(b"first launcher"), None);
+
+        let replaced = refresh_launcher(&identity(), &install_dir, &version_dir).unwrap();
+
+        assert!(replaced);
+        assert_eq!(fs::read(install_dir.join(identity().launcher_exe())).unwrap(), b"first launcher");
+    }
+
+    #[test]
+    fn refresh_launcher_never_ships_the_payload_under_the_entry_points_name() {
+        // The payload has to survive in the version folder under its own
+        // name: pruning aside, it is what a later start reinstalls from.
+        let (_dir, install_dir, version_dir) = install_with(Some(b"new launcher"), Some(b"old launcher"));
+
+        refresh_launcher(&identity(), &install_dir, &version_dir).unwrap();
+
+        assert!(version_dir.join(identity().launcher_payload_exe()).exists());
+        assert!(!version_dir.join(identity().launcher_exe()).exists());
     }
 
     #[test]

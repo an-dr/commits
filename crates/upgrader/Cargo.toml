@@ -8,6 +8,18 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
+# The launcher, the other half of the mechanism this crate implements: the
+# app can only replace an entry point that something else built, so both
+# halves ship from here rather than the launcher living in a host that would
+# have to rewrite it. `launcher::run` is public for a host that would rather
+# declare its own thin binary under its own name.
+[[bin]]
+name = "commits-launcher"
+path = "src/bin/commits-launcher.rs"
+
+[build-dependencies]
+winresource = "0.1"
+
 [dependencies]
 commits-os = { path = "../os" }
 dirs = "6.0.0"

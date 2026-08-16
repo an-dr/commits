@@ -144,7 +144,7 @@ fn stage(backend: &dyn OsBackend, request_id: u32, manifest_url: &str) -> Update
 fn stage_inner(backend: &dyn OsBackend, manifest_url: &str) -> Result<String, String> {
     let manifest = commits_upgrader::fetch_manifest(backend, manifest_url)?;
     let asset = commits_upgrader::download_asset_verified(backend, &manifest)?;
-    let install_dir = commits_upgrader::default_install_dir()
+    let install_dir = commits_upgrader::default_install_dir(&commits_upgrader::host_identity())
         .ok_or_else(|| String::from("could not resolve the install directory"))?;
     commits_upgrader::extract_version(&asset, &install_dir, &manifest.version)?;
     Ok(manifest.version)
@@ -193,13 +193,14 @@ fn install_inner(source_dir: &Path) -> Result<bool, String> {
         // itself would be destructive, so refuse instead.
         return Err(String::from("this build is already the one installed; nothing to do"));
     }
-    let install_dir = commits_upgrader::default_install_dir()
+    let identity = commits_upgrader::host_identity();
+    let install_dir = commits_upgrader::default_install_dir(&identity)
         .ok_or_else(|| String::from("could not resolve the install directory"))?;
-    if install_dir.join(commits_upgrader::LAUNCHER_EXE_NAME).is_file() {
-        commits_upgrader::copy_version_from_dir(source_dir, &install_dir, CURRENT_VERSION)?;
+    if install_dir.join(identity.launcher_exe()).is_file() {
+        commits_upgrader::copy_version_from_dir(&identity, source_dir, &install_dir, CURRENT_VERSION)?;
         Ok(false)
     } else {
-        commits_upgrader::install_fresh(source_dir, &install_dir, CURRENT_VERSION)?;
+        commits_upgrader::install_fresh(&identity, source_dir, &install_dir, CURRENT_VERSION)?;
         Ok(true)
     }
 }
@@ -221,7 +222,7 @@ fn is_installed() -> bool {
 /// launcher) launching a version folder it picked, rather than a dev build
 /// or an ad-hoc launch.
 fn is_install_dir(current: &Path) -> bool {
-    commits_upgrader::is_installed_version_dir(current)
+    commits_upgrader::is_installed_version_dir(&commits_upgrader::host_identity(), current)
 }
 
 /// `[SUCCESS, installed_byte, just_updated_byte, ...version_utf8]` -- the
@@ -449,7 +450,8 @@ mod tests {
         let source_dir = tempfile::tempdir().unwrap();
         std::fs::write(source_dir.path().join("commits-app.exe"), b"a dev build").unwrap();
         let install_dir = tempfile::tempdir().unwrap();
-        std::fs::write(install_dir.path().join(commits_upgrader::LAUNCHER_EXE_NAME), b"already installed").unwrap();
+        let launcher = commits_upgrader::host_identity().launcher_exe();
+        std::fs::write(install_dir.path().join(&launcher), b"already installed").unwrap();
         let _guard = ENV_LOCK.lock().unwrap();
         unsafe { std::env::set_var("COMMITS_INSTALL_DIR", install_dir.path()) };
 
@@ -465,7 +467,7 @@ mod tests {
         // The already-installed launcher itself is untouched -- only a new
         // version folder is pushed for it to pick up on its own next start.
         assert_eq!(
-            std::fs::read(install_dir.path().join(commits_upgrader::LAUNCHER_EXE_NAME)).unwrap(),
+            std::fs::read(install_dir.path().join(&launcher)).unwrap(),
             b"already installed",
         );
     }
@@ -473,7 +475,8 @@ mod tests {
     #[test]
     fn install_from_places_files_directly_when_nothing_is_installed_yet() {
         let source_dir = tempfile::tempdir().unwrap();
-        std::fs::write(source_dir.path().join(commits_upgrader::LAUNCHER_EXE_NAME), b"the launcher").unwrap();
+        let launcher = commits_upgrader::host_identity().launcher_exe();
+        std::fs::write(source_dir.path().join(&launcher), b"the launcher").unwrap();
         std::fs::write(source_dir.path().join("commits-app.exe"), b"a dev build").unwrap();
         let install_root = tempfile::tempdir().unwrap();
         let install_dir = install_root.path().join("app");
@@ -486,7 +489,7 @@ mod tests {
         unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
         assert!(result.ok, "{}", result.error);
         assert!(result.fresh);
-        assert_eq!(std::fs::read(install_dir.join(commits_upgrader::LAUNCHER_EXE_NAME)).unwrap(), b"the launcher");
+        assert_eq!(std::fs::read(install_dir.join(&launcher)).unwrap(), b"the launcher");
         assert_eq!(
             std::fs::read(install_dir.join(CURRENT_VERSION).join("commits-app.exe")).unwrap(),
             b"a dev build",

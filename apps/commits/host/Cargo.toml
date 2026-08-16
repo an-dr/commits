@@ -3,7 +3,7 @@ name = "commits-app"
 # The standalone app's own version: compared against a hosted manifest by
 # the self-updater (commits_upgrader::is_newer) and shown in the About menu.
 # Bump on every integration into main -- see AGENTS.md.
-version = "1.0.1"
+version = "1.1.0"
 edition = "2021"
 license = "MIT"
 
@@ -19,9 +19,9 @@ path = "src/bin/commits-askpass.rs"
 name = "commits-editor"
 path = "src/bin/commits-editor.rs"
 
-[[bin]]
-name = "commits"
-path = "src/bin/commits-launcher.rs"
+# The launcher is not here. It is built by `commits-upgrader`, which owns
+# both halves of the replace-each-other mechanism, and is placed at the
+# install root as `commits.exe` by dist.ps1 and by an install.
 
 [build-dependencies]
 winresource = "0.1"

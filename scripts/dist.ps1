@@ -92,15 +92,27 @@ if ($Part -in @("wasm", "all")) {
 }
 
 if ($Part -in @("host", "all")) {
-    cargo build --release -p commits-app
+    # Two packages: the app, and the upgrader that builds the launcher. The
+    # launcher lives there because the app can only replace an entry point
+    # something else produced -- see crates/upgrader/src/launcher.rs.
+    cargo build --release -p commits-app -p commits-upgrader
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    # "commits" is the launcher -- the permanent entry point that picks the
-    # current version folder before running the real app logic, built
-    # separately as "commits-app". Shortcuts and manual launches always
-    # target this one, and it stays at dist/app's root, never inside the
-    # version folder.
-    $exe = if ($isWindowsPlatform) { "commits.exe" } else { "commits" }
-    Copy-Item (Join-Path $root "target/release/$exe") (Join-Path $outputFull $exe) -Force
+    # The launcher is the permanent entry point: it picks the current version
+    # folder before running the real app logic, built separately as
+    # "commits-app". Shortcuts and manual launches always target this one, and
+    # it stays at dist/app's root, never inside the version folder. It is
+    # built as "commits-launcher" and placed as "commits" so the name users
+    # type is stable while the file behind it can be replaced.
+    $launcherExe = if ($isWindowsPlatform) { "commits-launcher.exe" } else { "commits-launcher" }
+    $entryPointExe = if ($isWindowsPlatform) { "commits.exe" } else { "commits" }
+    Copy-Item (Join-Path $root "target/release/$launcherExe") (Join-Path $outputFull $entryPointExe) -Force
+    # The same launcher also travels *inside* the version folder, under its
+    # build name. That copy is what the app installs over the entry point
+    # when the two differ -- without it in the payload, a launcher fix can
+    # never reach a machine that already has one. Keeping the two names
+    # apart is what lets the entry point stay stable while the file behind
+    # it is replaceable.
+    Copy-Item (Join-Path $root "target/release/$launcherExe") (Join-Path $versionDirFull $launcherExe) -Force
     foreach ($helper in @("commits-askpass", "commits-editor", "commits-app")) {
         $helperExe = if ($isWindowsPlatform) { "$helper.exe" } else { $helper }
         Copy-Item (Join-Path $root "target/release/$helperExe") (Join-Path $versionDirFull $helperExe) -Force

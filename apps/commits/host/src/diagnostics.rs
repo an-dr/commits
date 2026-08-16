@@ -33,7 +33,7 @@ const PREVIOUS_LOG_FILE: &str = "commits.prev.log";
 /// installed version folder, so `commits.log` survives across updates
 /// instead of starting over in each new version folder.
 pub fn log_path() -> Option<PathBuf> {
-    commits_upgrader::shared_or_exe_relative(LOG_FILE)
+    commits_upgrader::shared_or_exe_relative(&commits_upgrader::host_identity(), LOG_FILE)
 }
 
 /// Installs the file logger, returning it alongside the channel that carries

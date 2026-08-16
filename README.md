@@ -135,6 +135,30 @@ is pre-labelled with the last one — pressing Enter on the empty box reopens it
 so the common case is still one keystroke. The same list is under **Recent** in
 the menu, for switching without leaving the graph.
 
+Three flags are answered by `commits` itself; everything else reaches the app
+untouched:
+
+```powershell
+commits --version    # the installed app version, and the launcher's own build
+commits --help       # usage
+commits --rollback   # drop the newest installed version for the previous one
+```
+
+`--version` prints both numbers on purpose. `commits.exe` is a small permanent
+entry point that starts the real application from a version folder beside it,
+and the two are updated by different mechanisms, so they can drift:
+
+```text
+commits 1.1.0
+launcher 1.1.0
+```
+
+Matching numbers mean the entry point is current. If they disagree, the
+application is newer than the thing starting it — start `commits` once and it
+repairs itself, since the running app replaces the launcher whenever the
+version it came from carries a newer one. See
+[`docs/updating.md`](docs/updating.md) for the mechanism.
+
 ## Troubleshooting a blank window
 
 A window that opens black, with no menu bar, means the `commits` component

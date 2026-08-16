@@ -12,12 +12,13 @@ rather than synchronous calls.
 
 An installation the launcher can update looks like this:
 
-```
+```text
 ~/.commits/
   app/
-    commits.exe           # the permanent entry point -- stable, not versioned,
-                           # never touched by an update
-    1.2.0/                 # a version folder: commits-app.exe, page.html, components/, ...
+    commits.exe           # the permanent entry point -- stable name, replaced
+                           # in place by the app when a version ships a newer one
+    1.2.0/                 # a version folder: commits-app.exe, commits-launcher.exe,
+                           # page.html, components/, ...
     1.3.0/                 # the current version -- the highest by folder name
     state/                   # user save data, shared across every version -- also
                              # holds updater.bin, the version last recorded for the
@@ -28,11 +29,41 @@ An installation the launcher can update looks like this:
 ```
 
 `commits.exe`, not `commits-app.exe`, is the permanent entry point: Start
-Menu and desktop shortcuts point at it. On every start it picks the current
-version folder -- the highest by name under `app/` -- and launches that
-version's `commits-app.exe`. There is nothing to apply first: installing a
-version means its folder already exists, so the very next start already
-sees it as the newest one on disk.
+Menu and desktop shortcuts point at it, and it is the name users type. On
+every start it picks the current version folder -- the highest by name under
+`app/` -- and launches that version's `commits-app.exe`. There is nothing to
+apply first: installing a version means its folder already exists, so the
+very next start already sees it as the newest one on disk.
+
+## The two processes replace each other
+
+Neither process can replace itself while it is running, so each replaces the
+other. The launcher swaps the app by picking a different version folder on
+its next start. The app swaps the launcher by writing over the file at the
+install root — which is why every version folder also carries
+`commits-launcher.exe`, the launcher that shipped with that version.
+
+The name changes on the way in. The payload is `commits-launcher.exe` and
+the entry point is `commits.exe`: they live in one tree during an install,
+and what belongs inside a version folder is decided by filename, so sharing
+a name would quietly drop the launcher from every payload.
+
+On startup the app compares the two. If they differ, it renames the current
+entry point to `commits.exe.old` and copies the shipped one into place —
+renaming rather than overwriting, because Windows refuses to overwrite a
+running image but allows renaming one, and the launcher that started this
+very process may still be alive. A later start deletes the leftover, once
+nothing is executing it.
+
+This direction used to be missing, and its absence was not theoretical: an
+install rewrote the version folder underneath the entry point and never the
+entry point itself, so `commits.exe` stayed whatever version first created
+it. A launcher bug — including one that dropped the command-line argument
+before the app ever saw it — could not be fixed by any number of updates.
+
+A version folder that carries no `commits-launcher.exe` is left alone. Every
+folder installed before this release looks like that, and none of them is an
+error.
 
 Only the current and previous version folders are kept; anything older is
 deleted once a new one is installed. `components/` (the built-in WASM
@@ -67,9 +98,12 @@ hosted JSON document:
   applied to version folder names instead of a manifest field, is also how
   the launcher picks which installed version is current.
 - `url` is a ZIP of a version's contents (`commits-app.exe`, the other
-  helper executables, `page.html`, and a `components/` folder for any WASM
-  component being updated) -- never `commits.exe` itself, since the
-  launcher is not part of what an update replaces.
+  helper executables, `commits-launcher.exe`, `page.html`, and a
+  `components/` folder for any WASM component being updated). Include the
+  launcher: it is how a launcher fix reaches an existing install, and a
+  payload without one simply leaves whatever entry point is already there.
+  Never name it `commits.exe` inside the ZIP — that is the entry point's
+  name, not the payload's.
 - `sha256` is optional but recommended: when present, a downloaded asset
   that does not match is refused outright rather than installed. Omitting
   it is a deliberate choice for a publisher who cannot commit to a checksum
@@ -89,7 +123,8 @@ already exists (a dev build that never bumped its version, most commonly),
 the new one gets a short content-hash suffix rather than overwriting it. The
 menu label then switches to "Restart to update"; the new version becomes
 current only once `commits.exe` is started again and finds it as the newest
-folder on disk.
+folder on disk. That start also refreshes the entry point itself, if the new
+version brought a different launcher with it.
 
 ## Install: pushing a running build without a manifest
 
@@ -103,7 +138,8 @@ on whether `~/.commits/app` already has a launcher in it:
   directory into a new version folder, the same way a downloaded update
   does. The label switches to "Restart to install"; the existing
   `~/.commits/app/commits.exe` picks it up as current the next time it
-  starts.
+  starts, and that start replaces the entry point too if the pushed build
+  carries a different launcher.
 - **Nothing installed yet**: there is no launcher yet to ever pick up a
   pushed version folder, so this places the launcher at `~/.commits/app`
   itself and the rest of the build into its own first version folder. This
@@ -112,26 +148,74 @@ on whether `~/.commits/app` already has a launcher in it:
   [`scripts/install.ps1`](../scripts/install.ps1), which also sets up
   shortcuts) to actually start it.
 
-## Launch and fallback
+## Launch
 
 On every start, `commits.exe` (the launcher):
 
 1. Picks the current version folder under `~/.commits/app` — the highest by
    name, the same comparison the manifest check uses.
-2. Launches that version's `commits-app.exe` and waits up to 45 seconds for
-   it to report itself healthy — a marker file written once the engine's
-   own 35-second startup grace period passes with no load failure.
-3. If the marker never appears, kills the child, deletes that version's
-   folder outright (there is nothing to restore — installing it never
-   touched anything else), and relaunches the previous version folder once,
-   unsupervised. With no previous version folder to fall back to, the
-   broken one is left in place and the launcher gives up: there is nothing
-   else installed to try.
+2. Launches that version's `commits-app.exe`, forwarding its own arguments
+   unread, and exits.
 
-A step that only sees standard output/error (no window) is a launch that
-failed before startup could even begin; check `~/.commits` for a log path
-reported by the failed-startup dialog if `commits-app.exe` itself started
-but never became healthy.
+It does not supervise what it started. It used to: it waited up to 45
+seconds for a health marker and, failing to see one, deleted that version's
+folder and fell back to the previous one. That check measured wall clock, so
+it could not tell a slow machine from a broken build — and being wrong meant
+deleting a version that worked. A guess that destructive, made on every
+launch, cost more than the recovery it bought.
+
+Recovering from a version that genuinely cannot start is a deliberate act
+now. Both version folders are still on disk (see "Install layout"), and the
+previous one becomes current again the moment the newest is removed:
+
+```powershell
+commits --rollback
+```
+
+It refuses when the newest is the only version installed, since deleting it
+would leave the entry point with nothing to start at all.
+
+## The command line
+
+The launcher answers three flags itself and forwards everything else to the
+app unread — a repository path, and anything a later app learns to take. A
+flag counts only as the first argument, which costs nothing, because no path
+the app opens begins with a dash.
+
+| Flag | Does |
+| --- | --- |
+| `--version` | prints the installed app version and the launcher's own build |
+| `--help` | prints usage |
+| `--rollback` | drops the newest version folder for the previous one |
+
+The launcher answers them rather than the app because it is the process the
+shell waits on: the app is spawned detached with no stdio, so nothing it
+printed could reach the terminal.
+
+`--version` prints both numbers because the interesting answer is whether
+they agree. A launcher left behind by an old install starts a perfectly
+current app while being years out of date itself, and nothing else makes
+that visible:
+
+```text
+commits 1.1.0
+launcher 1.0.1     # this pair disagreeing is the bug, not a display quirk
+```
+
+`unknown` for the launcher means the build never stamped
+`UPGRADER_LAUNCHER_VERSION` — see [`.cargo/config.toml`](../.cargo/config.toml).
+
+Both binaries are GUI-subsystem executables, so they own no console. The
+launcher borrows the calling terminal's to answer, and prefers a redirect
+when the caller supplied one, so `commits --version > versions.txt` writes
+to the file rather than to the screen. Started from Explorer there is
+neither, and the text goes nowhere — which is correct, since nobody asked
+for it.
+
+A launch that only prints to standard output/error and opens no window
+failed before startup could begin. When `commits-app.exe` itself starts but
+the window stays blank, its own failed-startup dialog names the log path;
+see "Troubleshooting a blank window" in the [README](../README.md).
 
 ## Confirming an update took effect
 

@@ -21,7 +21,9 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (logger, failures) = diagnostics::install();
-    watch_startup_health(failures);
+    satisfy_legacy_launcher();
+    watch_startup_failure(failures);
+    refresh_launcher(&logger);
     let page = page::PageModule::new(logger.clone());
     let splash = splash::SplashModule::new(logger.clone());
     bones_engine::Engine::new()
@@ -70,14 +72,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(launch::LaunchModule::default())
         .module(updater::UpdaterModule::default())
         .run()?;
-    // Reached only once the engine loop returns without error -- a clean
-    // shutdown, whether the window closed on its own or the user closed it.
-    // `watch_startup_health`'s own marker write (on its background thread,
-    // after `STARTUP_GRACE_PERIOD`) already covers a long-running app; this
-    // covers a short-lived one closed before that timer ever fires, which
-    // that thread cannot reliably do for itself once the process is about to
-    // exit right behind it. Redundant, not wrong, if both end up writing it.
-    write_health_marker();
     Ok(())
 }
 
@@ -87,12 +81,62 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 /// relative name (the engine's own default behavior) if the running
 /// executable's path cannot be resolved at all.
 fn shared_data_dir(name: &str) -> std::path::PathBuf {
-    commits_upgrader::shared_or_exe_relative(name).unwrap_or_else(|| std::path::PathBuf::from(name))
+    let identity = commits_upgrader::host_identity();
+    commits_upgrader::shared_or_exe_relative(&identity, name)
+        .unwrap_or_else(|| std::path::PathBuf::from(name))
 }
 
-/// Turns a failed startup extension into something the user can act on, and
-/// tells the launcher (if that is what started this process) that
-/// startup succeeded.
+/// Tells a launcher old enough to supervise that this process started.
+///
+/// Every launcher installed before this release waits up to 45 seconds for
+/// a file at `COMMITS_HEALTH_MARKER` and, not finding one, kills the app,
+/// **deletes the version folder it just launched**, and rolls back. This
+/// build no longer writes that marker as part of its own startup, so
+/// without this line the first launch of every update would destroy the
+/// update -- including the one carrying the launcher that stops doing this.
+///
+/// Written immediately rather than after a grace period: the old launcher
+/// polls, so an early marker simply ends its wait sooner. Nothing here
+/// claims the app is healthy; it claims the process exists, which is all
+/// the marker was ever able to prove.
+///
+/// Removable once no installed launcher predates the replaceable one -- and
+/// [`refresh_launcher`] is what eventually makes that true. Until then this
+/// is the bridge the whole migration crosses.
+fn satisfy_legacy_launcher() {
+    let Ok(path) = std::env::var("COMMITS_HEALTH_MARKER") else {
+        return;
+    };
+    if let Err(error) = std::fs::write(&path, []) {
+        eprintln!("could not write the legacy launcher's marker at {path}: {error}");
+    }
+}
+
+/// Installs the launcher that shipped with this version as the entry point,
+/// when it differs from the one already there.
+///
+/// The app is the only process that can do this: the launcher cannot
+/// overwrite itself while it is the thing running. Every outcome is logged
+/// rather than surfaced -- a refresh that fails leaves exactly the entry
+/// point that was already there, which is a worse launcher rather than a
+/// broken app, and refusing to open over it would be the larger failure.
+fn refresh_launcher(logger: &bones_engine::logging::Logger) {
+    match commits_upgrader::refresh_launcher_from_running_exe(&commits_upgrader::host_identity()) {
+        Ok(true) => logger.log(
+            bones_engine::logging::Level::Info,
+            "updater",
+            "installed this version's launcher as the entry point",
+        ),
+        Ok(false) => {}
+        Err(error) => logger.log(
+            bones_engine::logging::Level::Warn,
+            "updater",
+            &format!("could not refresh the entry point: {error}"),
+        ),
+    }
+}
+
+/// Turns a failed startup extension into something the user can act on.
 ///
 /// The engine treats an extension that cannot attach as non-fatal: it logs the
 /// error and keeps ticking. Nothing then opens the panel, so the window stays
@@ -102,49 +146,24 @@ fn shared_data_dir(name: &str) -> std::path::PathBuf {
 /// because a blank window looks like a broken build rather than a retryable
 /// timeout.
 ///
-/// A launcher supervising this process for a self-update needs to know
-/// startup actually succeeded, not just that this line of code ran, so the
-/// health marker (`COMMITS_HEALTH_MARKER`) is written once this grace period
-/// passes with no failure on `failures` -- the one channel that already knows
-/// about the blank-window failure mode above. Launched directly (the
-/// ordinary case today), `COMMITS_HEALTH_MARKER` is unset and this is a
-/// no-op past the existing failure-reporting behavior.
-///
-/// This alone used to leave a real gap: closing the window before the grace
-/// period elapses (trivially easy, since the app is usable within about a
-/// second) never sends a failure and never lets this timer fire either, so
-/// no marker was ever written -- a supervising launcher would conclude
-/// startup failed and delete the version it just launched, even though
-/// nothing went wrong. `run()` covers that case directly, on its own thread,
-/// since a background thread has no guaranteed chance to run between the
-/// engine loop returning and the process exiting right after it.
-///
 /// Waits on its own thread: the report has to arrive while the engine is still
 /// running its loop, not after it returns.
-fn watch_startup_health(failures: Receiver<String>) {
+fn watch_startup_failure(failures: Receiver<String>) {
     // Longer than `extension_load_timeout` (30s, set in `run()` below) so a
-    // genuine cold-load failure has time to arrive on `failures` before this
-    // would otherwise conclude the app is healthy. Discovered empirically:
-    // an initial 5s grace period made the launcher roll back a perfectly
-    // good, merely slow-to-load install.
+    // genuine cold-load failure has time to arrive on `failures` rather than
+    // being cut off by this wait ending first.
     const STARTUP_GRACE_PERIOD: std::time::Duration = std::time::Duration::from_secs(35);
     let spawned = std::thread::Builder::new()
         .name("commits-startup-report".to_string())
         .spawn(move || {
             let message = match failures.recv_timeout(STARTUP_GRACE_PERIOD) {
-                Ok(message) => message,
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    write_health_marker();
-                    return;
-                }
+                // No failure arrived in time: the app started normally and
+                // there is nothing to report.
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => return,
                 // The engine shut down without failing -- the ordinary path,
-                // needing no dialog since the app is exiting anyway. Writing
-                // the marker here too would be redundant at best: `main()`
-                // returns, and the process exits, essentially the same
-                // instant the sender's drop makes this branch reachable, so
-                // this thread is not guaranteed to ever run again to do it
-                // (confirmed empirically -- see `run()`'s own write instead).
+                // needing no dialog since the app is exiting anyway.
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
+                Ok(message) => message,
             };
             let log = diagnostics::log_path()
                 .map(|path| path.display().to_string())
@@ -164,19 +183,5 @@ fn watch_startup_health(failures: Receiver<String>) {
         });
     if let Err(error) = spawned {
         eprintln!("could not watch for a failed startup extension: {error}");
-    }
-}
-
-/// Writes an empty file at `COMMITS_HEALTH_MARKER`, if set. A write failure
-/// (missing parent directory, no permission) is logged, not fatal: the
-/// worst outcome is the launcher treating a genuinely healthy start as
-/// failed and rolling back to the previous version, never the app itself
-/// misbehaving.
-fn write_health_marker() {
-    let Ok(path) = std::env::var("COMMITS_HEALTH_MARKER") else {
-        return;
-    };
-    if let Err(error) = std::fs::write(&path, []) {
-        eprintln!("could not write the health marker at {path}: {error}");
     }
 }

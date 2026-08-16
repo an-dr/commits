@@ -86,9 +86,11 @@ pub fn current_version_dir(install_dir: &Path) -> Option<PathBuf> {
     ordered_version_dirs(install_dir).into_iter().next()
 }
 
-/// The version folder to fall back to if [`current_version_dir`] fails its
-/// health check -- the next-newest one still on disk, or `None` if there is
-/// nothing to fall back to (a fresh install with only one version).
+/// The version folder that becomes current once [`current_version_dir`] is
+/// removed -- the next-newest one still on disk, or `None` if there is
+/// nothing to fall back to (a fresh install with only one version). Read by
+/// the launcher's `--rollback`, to say which version dropping this one
+/// would land on.
 pub fn previous_version_dir(install_dir: &Path) -> Option<PathBuf> {
     ordered_version_dirs(install_dir).into_iter().nth(1)
 }
