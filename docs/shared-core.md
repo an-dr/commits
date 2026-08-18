@@ -58,6 +58,19 @@ refresh-shortcut setup was extracted into reusable functions, and `main.ts`
 now exports `applyLiveSettings()`, which the standalone host calls after a
 settings save. See ADR-010.
 
+Refs can be dragged in the graph. `dragDrop.ts` is new and holds the DOM-free
+half -- the private `application/vnd.an-dr-commits-ref` payload and the rules
+saying what a dropped ref may do -- while `main.ts` renders local branch and
+tag badges as draggable, highlights the row under the pointer, and opens a
+menu on the drop offering to move the branch, reset or rebase the checked-out
+one, or move the tag. Remote-tracking badges and the uncommitted row take no
+part. The protocol grew with it: `createBranch` and `addTag` carry a `force`
+flag, and `rebase` is a new non-interactive action, implemented in
+`packages/core`'s own backend and in the standalone adapter alike. The extension
+this came from reads the drag payload during `dragover`, which the browser
+blanks until the drop; here the type list is checked instead, so the drop is
+actually accepted.
+
 Every other file remains as imported, and the MIT grant and notice are
 unchanged; MIT permits modification. What is lost is reproducibility: the
 snapshot can no longer be verified by hashing against

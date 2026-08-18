@@ -19,6 +19,15 @@ import { renderChangesFooter, renderChangesPanel } from "./changesPanelRender";
 import { CommitSelection, readSelectionGesture } from "./commitSelection";
 import { hideContextMenuIfOpen, isContextMenuOpen, showContextMenu } from "./contextMenu";
 import {
+  dropActionsFor,
+  parseDraggedRef,
+  readDraggedRef,
+  REF_DRAG_MIME,
+  serializeDraggedRef,
+  type DraggedRef,
+  type DropActionKind
+} from "./dragDrop";
+import {
   hideDialog,
   isDialogOpen,
   showActionRunningDialog,
@@ -85,6 +94,8 @@ class GitGraphView {
   private maxCommits: number;
 
   private tableElem: HTMLElement;
+  /** Row a dragged ref is hovering over, highlighted until it leaves. */
+  private commitDropTarget: HTMLElement | null = null;
   private findWidget: FindWidget;
   private footerElem: HTMLElement;
   private repoDropdown: Dropdown;
@@ -126,6 +137,10 @@ class GitGraphView {
     this.maxCommits = config.initialLoadCommits;
     this.graph = new Graph("commitGraph", this.config);
     this.tableElem = document.getElementById("commitTable")!;
+    // Delegated once, unlike the per-class row listeners: a re-render replaces
+    // every row mid-drag, and a listener re-attached under the pointer would
+    // never see the dragend that clears the highlight.
+    this.registerRefDragAndDrop();
     this.findWidget = new FindWidget(this.tableElem);
     this.footerElem = document.getElementById("footer")!;
     this.repoDropdown = new Dropdown("repoSelect", true, l10n.repo, (value) => {
@@ -1109,7 +1124,7 @@ class GitGraphView {
           this.commits[i].refs[j].name === this.gitBranchHead;
         refHtml =
           this.commits[i].refs[j].type === "tag"
-            ? renderTagPill(this.commits[i].refs[j].name)
+            ? renderTagPill(this.commits[i].refs[j].name, { draggable: true })
             : // Only the checked-out branch carries an icon; every other label
               // is its name in a rectangle, so the one marked row stands out
               // instead of competing with a glyph on each of its neighbours.
@@ -1118,7 +1133,16 @@ class GitGraphView {
               (refActive ? " active" : "") +
               '" data-name="' +
               refName +
-              '">' +
+              '"' +
+              // Only a local branch can be dragged onto another commit; a
+              // remote-tracking ref moves when its remote does, not when we
+              // say so.
+              (this.commits[i].refs[j].type === "head"
+                ? ' data-drag-ref-type="branch" data-drag-ref-name="' +
+                  refName +
+                  '" draggable="true"'
+                : "") +
+              ">" +
               (refActive ? svgIcons.currentBranch : "") +
               '<span class="gitRefName" data-fullref="' +
               refName +
@@ -1270,7 +1294,8 @@ class GitGraphView {
                     tagName: values[0],
                     commitHash: hash,
                     lightweight: values[1] === "lightweight",
-                    message: values[2]
+                    message: values[2],
+                    force: false
                   });
                 },
                 sourceElem
@@ -1292,7 +1317,8 @@ class GitGraphView {
                     command: "createBranch",
                     repo: this.currentRepo!,
                     branchName: name,
-                    commitHash: hash
+                    commitHash: hash,
+                    force: false
                   });
                 },
                 sourceElem
@@ -1727,6 +1753,225 @@ class GitGraphView {
       this.checkoutBranchAction(sourceElem, unescapeHtml(sourceElem.dataset.name!));
     });
   }
+  /**
+   * Wires dragging a branch or tag badge from one commit row onto another.
+   *
+   * The badge carries the ref, the row under the pointer is highlighted while
+   * it hovers, and the drop opens a menu rather than acting: a ref landing on
+   * a commit is ambiguous -- a branch could move, reset or rebase there -- so
+   * the user still says which, and every choice confirms before Git runs.
+   */
+  private registerRefDragAndDrop() {
+    this.tableElem.addEventListener("dragstart", (e: DragEvent) => {
+      const badge = (<Element>e.target).closest<HTMLElement>("[data-drag-ref-type]");
+      if (badge === null || e.dataTransfer === null) {
+        return;
+      }
+      const name = badge.dataset.dragRefName;
+      const ref = readDraggedRef({
+        dragRefType: badge.dataset.dragRefType,
+        dragRefName: name === undefined ? undefined : unescapeHtml(name),
+        tagtype: badge.dataset.tagtype
+      });
+      if (ref === null) {
+        return;
+      }
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData(REF_DRAG_MIME, serializeDraggedRef(ref));
+      // So a drop outside the graph -- an editor, a terminal -- pastes the
+      // ref's name instead of nothing.
+      e.dataTransfer.setData("text/plain", ref.name);
+    });
+
+    this.tableElem.addEventListener("dragend", () => this.clearCommitDropTarget());
+
+    this.tableElem.addEventListener("dragover", (e: DragEvent) => {
+      // The payload itself is unreadable until the drop, by design: only the
+      // list of types is exposed while the drag is in flight, and that is
+      // enough to know this drag is one of ours.
+      if (e.dataTransfer === null || !e.dataTransfer.types.includes(REF_DRAG_MIME)) {
+        return;
+      }
+      const row = this.dropTargetRow(e);
+      if (row === null) {
+        return;
+      }
+      // Without this the drop never fires: the default is to reject it.
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      this.setCommitDropTarget(row);
+    });
+
+    this.tableElem.addEventListener("dragleave", (e: DragEvent) => {
+      const row = this.dropTargetRow(e);
+      // Moving between cells of the same row leaves it without leaving it, so
+      // the highlight only clears once the pointer is outside the row itself.
+      if (row !== null && row === this.commitDropTarget && !row.contains(<Node>e.relatedTarget)) {
+        this.clearCommitDropTarget();
+      }
+    });
+
+    this.tableElem.addEventListener("drop", (e: DragEvent) => {
+      const row = this.dropTargetRow(e);
+      this.clearCommitDropTarget();
+      if (e.dataTransfer === null || row === null) {
+        return;
+      }
+      const ref = parseDraggedRef(e.dataTransfer.getData(REF_DRAG_MIME));
+      const hash = row.dataset.hash;
+      if (ref === null || hash === undefined || hash === UNCOMMITTED) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      this.showDroppedRefMenu(ref, hash, row, e);
+    });
+  }
+
+  /** The commit row a drag event is over, or null when it is over none. */
+  private dropTargetRow(e: DragEvent): HTMLElement | null {
+    return e.target === null ? null : (<Element>e.target).closest<HTMLElement>("tr.commit");
+  }
+
+  private setCommitDropTarget(row: HTMLElement) {
+    if (this.commitDropTarget === row) {
+      return;
+    }
+    this.clearCommitDropTarget();
+    this.commitDropTarget = row;
+    row.classList.add("dropTarget");
+  }
+
+  private clearCommitDropTarget() {
+    if (this.commitDropTarget !== null) {
+      this.commitDropTarget.classList.remove("dropTarget");
+      this.commitDropTarget = null;
+    }
+  }
+
+  /** Offers what the dropped ref can do to the commit it landed on. */
+  private showDroppedRefMenu(ref: DraggedRef, hash: string, row: HTMLElement, e: DragEvent) {
+    const kinds = dropActionsFor(ref, { currentBranch: this.gitBranchHead });
+    if (kinds.length === 0) {
+      return;
+    }
+    const refName = escapeHtml(ref.name);
+    const target = abbrevCommit(hash);
+    const titles: Record<DropActionKind, string> = {
+      moveBranch: l10n.dropMoveBranch.replace("{0}", refName).replace("{1}", target),
+      resetHead: l10n.dropResetHead.replace("{0}", refName).replace("{1}", target),
+      rebase: l10n.dropRebase.replace("{0}", refName).replace("{1}", target),
+      moveTag: l10n.dropMoveTag.replace("{0}", refName).replace("{1}", target)
+    };
+    // A DragEvent is a MouseEvent, so the menu opens at the drop point.
+    showContextMenu(
+      e,
+      kinds.map((kind) => ({
+        title: titles[kind] + ELLIPSIS,
+        onClick: () => this.runDropAction(kind, ref, hash, row)
+      })),
+      row
+    );
+  }
+
+  /** Confirms the chosen drop action, then asks the host to run it. */
+  private runDropAction(kind: DropActionKind, ref: DraggedRef, hash: string, row: HTMLElement) {
+    const refName = "<b><i>" + escapeHtml(ref.name) + "</i></b>";
+    const target = "<b><i>" + abbrevCommit(hash) + "</i></b>";
+    switch (kind) {
+      case "moveBranch":
+        showConfirmationDialog(
+          l10n.dialogMoveBranchConfirm.replace("{0}", refName).replace("{1}", target),
+          () =>
+            sendMessage({
+              command: "createBranch",
+              repo: this.currentRepo!,
+              branchName: ref.name,
+              commitHash: hash,
+              // The branch exists already -- moving it is the whole point --
+              // so Git only obeys when told to overwrite it.
+              force: true
+            }),
+          row
+        );
+        return;
+      case "resetHead":
+        showSelectDialog(
+          l10n.dialogResetConfirm.replace("{0}", refName).replace("{1}", target),
+          "mixed",
+          [
+            { name: l10n.dialogResetSoft, value: "soft" },
+            { name: l10n.dialogResetMixed, value: "mixed" },
+            { name: l10n.dialogResetHard, value: "hard" }
+          ],
+          l10n.dialogYesReset,
+          (mode) =>
+            sendMessage({
+              command: "resetToCommit",
+              repo: this.currentRepo!,
+              commitHash: hash,
+              resetMode: <GitResetMode>mode
+            }),
+          row
+        );
+        return;
+      case "rebase":
+        showCheckboxDialog(
+          l10n.dialogRebaseConfirm.replace("{0}", refName).replace("{1}", target),
+          l10n.dialogRebaseIgnoreDate,
+          false,
+          l10n.dialogYesRebase,
+          (ignoreDate) =>
+            sendMessage({
+              command: "rebase",
+              repo: this.currentRepo!,
+              commitHash: hash,
+              ignoreDate: ignoreDate
+            }),
+          row
+        );
+        return;
+      case "moveTag":
+        // The graph's refs carry no tag type, so an existing tag's kind is
+        // only known when the badge was rendered with it. The form asks for it
+        // rather than guessing: forcing the wrong kind would silently replace
+        // an annotated tag object with a plain ref.
+        showFormDialog(
+          l10n.dialogMoveTagTitle.replace("{0}", refName).replace("{1}", target),
+          [
+            {
+              type: "select",
+              name: l10n.dialogAddTagType,
+              default: ref.tagType ?? "annotated",
+              options: [
+                { name: l10n.dialogAddTagTypeAnnotated, value: "annotated" },
+                { name: l10n.dialogAddTagTypeLightweight, value: "lightweight" }
+              ]
+            },
+            {
+              type: "text",
+              name: l10n.dialogAddTagMessage,
+              default: "",
+              placeholder: l10n.dialogAddTagOptional
+            }
+          ],
+          l10n.dialogMoveTagSubmit,
+          (values) =>
+            sendMessage({
+              command: "addTag",
+              repo: this.currentRepo!,
+              tagName: ref.name,
+              commitHash: hash,
+              lightweight: values[0] === "lightweight",
+              message: values[1],
+              force: true
+            }),
+          row
+        );
+        return;
+    }
+  }
+
   private renderUncommitedChanges() {
     let dateTitle = getCommitTitleDate(this.commits[0].date);
     let dateCompact = getCompactCommitDate(this.commits[0].date);
@@ -2486,6 +2731,9 @@ window.addEventListener("message", (event) => {
       break;
     case "deleteRemoteBranch":
       refreshGraphOrDisplayError(msg.status, l10n.unableToDeleteRemoteBranch);
+      break;
+    case "rebase":
+      refreshGraphOrDisplayError(msg.status, l10n.unableToRebase);
       break;
     case "resetToCommit":
       refreshGraphOrDisplayError(msg.status, l10n.unableToReset);

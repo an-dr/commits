@@ -3,11 +3,19 @@ import type { GitResetMode } from "./git.types";
 export type GitCommandStatus = string | null;
 
 type ActionPayloads = {
-  addTag: { tagName: string; commitHash: string; lightweight: boolean; message: string };
+  /** `force` rewrites a tag that already exists, which is how a tag moves. */
+  addTag: {
+    tagName: string;
+    commitHash: string;
+    lightweight: boolean;
+    message: string;
+    force: boolean;
+  };
   checkoutBranch: { branchName: string; remoteBranch: string | null };
   checkoutCommit: { commitHash: string };
   cherrypickCommit: { commitHash: string; parentIndex: number };
-  createBranch: { commitHash: string; branchName: string };
+  /** `force` repoints a branch that already exists, which is how a branch moves. */
+  createBranch: { commitHash: string; branchName: string; force: boolean };
   deleteBranch: { branchName: string; forceDelete: boolean };
   deleteTag: { tagName: string };
   /** Moves working-tree files into the index. */
@@ -24,6 +32,12 @@ type ActionPayloads = {
   mergeBranch: { branchName: string; createNewCommit: boolean };
   mergeCommit: { commitHash: string; createNewCommit: boolean };
   pushTag: { tagName: string };
+  /**
+   * Replays the current branch onto a commit. Only the non-interactive form
+   * exists: an interactive rebase needs a terminal to edit its todo list in,
+   * and the standalone app has none to hand it to.
+   */
+  rebase: { commitHash: string; ignoreDate: boolean };
   renameBranch: { oldName: string; newName: string };
   resetToCommit: { commitHash: string; resetMode: GitResetMode };
   revertCommit: { commitHash: string; parentIndex: number };

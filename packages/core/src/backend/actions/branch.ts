@@ -1,11 +1,17 @@
 import type { ActionPayload } from "@an-dr/commits-core/backend/types";
 import type { SimpleGit } from "simple-git";
 
+/** Creates a branch at a commit, or repoints an existing one when forced. */
 export async function createBranch(
   git: SimpleGit,
   input: ActionPayload<"createBranch">
 ): Promise<void> {
-  await git.raw(["branch", input.branchName, input.commitHash]);
+  const args = ["branch"];
+  if (input.force) {
+    args.push("-f");
+  }
+  args.push(input.branchName, input.commitHash);
+  await git.raw(args);
 }
 
 export async function deleteBranch(

@@ -91,6 +91,7 @@ export interface LocalizedStrings {
   readonly unableToPull: string;
   readonly unableToPush: string;
   readonly unableToPushTag: string;
+  readonly unableToRebase: string;
   readonly unableToRenameBranch: string;
   readonly unableToReset: string;
   readonly unableToRevert: string;
@@ -128,6 +129,17 @@ export interface LocalizedStrings {
   readonly dialogAddTagTypeLightweight: string;
   readonly dialogAddTagOptional: string;
   readonly dialogAddTagSubmit: string;
+  readonly dropMoveBranch: string;
+  readonly dropResetHead: string;
+  readonly dropRebase: string;
+  readonly dropMoveTag: string;
+  readonly dialogMoveBranchConfirm: string;
+  readonly dialogYesMoveBranch: string;
+  readonly dialogMoveTagTitle: string;
+  readonly dialogMoveTagSubmit: string;
+  readonly dialogRebaseConfirm: string;
+  readonly dialogRebaseIgnoreDate: string;
+  readonly dialogYesRebase: string;
   readonly dialogCreateBranchTitle: string;
   readonly dialogCreateBranchSubmit: string;
   readonly dialogCheckoutConfirm: string;

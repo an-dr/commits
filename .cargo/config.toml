@@ -14,7 +14,7 @@ UPGRADER_INSTALL_DIR_NAME = ".commits"
 UPGRADER_INSTALL_ENV_VAR = "COMMITS_INSTALL_DIR"
 UPGRADER_LAUNCHER_STEM = "commits"
 UPGRADER_APP_STEM = "commits-app"
-UPGRADER_LAUNCHER_VERSION = "1.1.0"
+UPGRADER_LAUNCHER_VERSION = "1.2.0"
 
 # The launcher is the executable users see in Explorer, the taskbar and
 # their Start Menu, so it carries the app's icon. `relative = true` resolves

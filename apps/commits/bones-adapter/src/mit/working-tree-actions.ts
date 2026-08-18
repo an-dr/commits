@@ -159,23 +159,56 @@ export class WorkingTreeActions {
     this.send(repo, createNewCommit ? ["merge", branchName, "--no-ff"] : ["merge", branchName], deliver);
   }
 
-  /** Creates a branch at a commit, optionally checking it out in one step. */
+  /**
+   * Creates a branch at a commit, optionally checking it out in one step.
+   *
+   * `force` repoints a branch that already exists, which is how the graph
+   * moves one; it has no bearing on the checkout form, where `-b` would fail
+   * on an existing branch for a reason force cannot fix.
+   */
   createBranch(
     repo: string,
     branchName: string,
     commitHash: string,
     checkout: boolean,
+    force: boolean,
     deliver: (status: string | null) => void,
   ): void {
     if (repo === "") {
       deliver("No repository is open.");
       return;
     }
-    this.send(
-      repo,
-      checkout ? ["checkout", "-b", branchName, commitHash] : ["branch", branchName, commitHash],
-      deliver,
-    );
+    if (checkout) {
+      this.send(repo, ["checkout", "-b", branchName, commitHash], deliver);
+      return;
+    }
+    const args = ["branch"];
+    if (force) args.push("-f");
+    args.push(branchName, commitHash);
+    this.send(repo, args, deliver);
+  }
+
+  /**
+   * Replays the current branch onto a commit.
+   *
+   * Only the non-interactive form exists: an interactive rebase needs a
+   * terminal to edit its todo list in, and the app has none to hand it to. A
+   * rebase can stop on a conflict and take a while doing it, so it gets the
+   * long timeout the other history-rewriting commands use.
+   */
+  rebase(
+    repo: string,
+    commitHash: string,
+    ignoreDate: boolean,
+    deliver: (status: string | null) => void,
+  ): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    const args = ["rebase", commitHash];
+    if (ignoreDate) args.push("--ignore-date");
+    this.send(repo, args, deliver, 120_000);
   }
 
   /**
@@ -292,19 +325,21 @@ export class WorkingTreeActions {
     commitHash: string,
     lightweight: boolean,
     message: string,
+    force: boolean,
     deliver: (status: string | null) => void,
   ): void {
     if (repo === "") {
       deliver("No repository is open.");
       return;
     }
-    this.send(
-      repo,
-      lightweight
-        ? ["tag", tagName, commitHash]
-        : ["tag", "-a", tagName, commitHash, "-m", message],
-      deliver,
-    );
+    const args = ["tag"];
+    if (force) args.push("-f");
+    if (lightweight) {
+      args.push(tagName, commitHash);
+    } else {
+      args.push("-a", tagName, commitHash, "-m", message);
+    }
+    this.send(repo, args, deliver);
   }
 
   deleteTag(repo: string, tagName: string, deliver: (status: string | null) => void): void {

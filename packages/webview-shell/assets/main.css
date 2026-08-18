@@ -679,6 +679,15 @@ body.filesPanelHidden #filesPanel {
 #commitTable tr.unsavedChanges.selected td {
   background-color: var(--vscode-list-inactiveSelectionBackground, rgba(128, 128, 128, 0.22));
 }
+/* The row a dragged branch or tag would land on. Read against the selection
+   highlight rather than the hover one: hover follows the pointer during a
+   drag too, so the drop target has to be the stronger of the two to be seen
+   under it. */
+#commitTable tr.commit.dropTarget td {
+  background-color: var(--vscode-list-dropBackground, rgba(128, 128, 128, 0.35));
+  outline: 1px solid var(--vscode-focusBorder, rgba(128, 128, 128, 0.6));
+  outline-offset: -1px;
+}
 #commitTable tr.commit.commitDetailsOpen:hover td {
   background-color: rgba(128, 128, 128, 0.35);
 }

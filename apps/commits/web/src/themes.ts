@@ -80,6 +80,7 @@ function applyTheme(theme: ThemePreset): void {
     "--vscode-list-hoverBackground": colours.hover,
     "--vscode-toolbar-hoverBackground": colours.hover,
     "--vscode-list-activeSelectionBackground": colours.selection,
+    "--vscode-list-dropBackground": colours.selection,
     "--vscode-list-inactiveSelectionBackground": colours.hover,
     "--vscode-menu-selectionBackground": colours.selection,
     "--vscode-menu-selectionForeground": colours.selectionText,

@@ -1768,6 +1768,39 @@ describe("CommitsCore MIT webview host", () => {
     expect(run(true)).toEqual(["checkout", "-b", "feature", "abc"]);
   });
 
+  it("repoints an existing branch only when the request forces it", () => {
+    const run = (force: boolean): string[] | undefined => {
+      const host = new StubHost();
+      const core = new CommitsCore(host);
+      core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+      core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+      core.receivePageJson(JSON.stringify({
+        command: "createBranch", repo: "C:/repo", branchName: "feature", commitHash: "abc",
+        checkout: false, force,
+      }));
+      return host.gitRequests.at(-1)?.args;
+    };
+
+    expect(run(true)).toEqual(["branch", "-f", "feature", "abc"]);
+    expect(run(false)).toEqual(["branch", "feature", "abc"]);
+  });
+
+  it("rebases the current branch onto a commit, dating the replay only when asked", () => {
+    const run = (ignoreDate: boolean): string[] | undefined => {
+      const host = new StubHost();
+      const core = new CommitsCore(host);
+      core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+      core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+      core.receivePageJson(JSON.stringify({
+        command: "rebase", repo: "C:/repo", commitHash: "abc1234", ignoreDate,
+      }));
+      return host.gitRequests.at(-1)?.args;
+    };
+
+    expect(run(false)).toEqual(["rebase", "abc1234"]);
+    expect(run(true)).toEqual(["rebase", "abc1234", "--ignore-date"]);
+  });
+
   it("continues or aborts using the in-flight operation's own command", () => {
     const cases: Array<[string, string, string[]]> = [
       ["rebase", "continue", ["rebase", "--continue"]],
@@ -1886,6 +1919,24 @@ describe("CommitsCore MIT webview host", () => {
     }));
 
     expect(host.gitRequests.at(-1)?.args).toEqual(["tag", "v1.2.0", "abc1234"]);
+  });
+
+  it("moves a tag that already exists only when the request forces it", () => {
+    const run = (force: boolean, lightweight: boolean): string[] | undefined => {
+      const host = new StubHost();
+      const core = new CommitsCore(host);
+      core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+      core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+      core.receivePageJson(JSON.stringify({
+        command: "addTag", repo: "C:/repo", tagName: "v1.2.0", commitHash: "abc1234",
+        lightweight, message: "moved", force,
+      }));
+      return host.gitRequests.at(-1)?.args;
+    };
+
+    expect(run(true, true)).toEqual(["tag", "-f", "v1.2.0", "abc1234"]);
+    expect(run(true, false)).toEqual(["tag", "-f", "-a", "v1.2.0", "abc1234", "-m", "moved"]);
+    expect(run(false, true)).toEqual(["tag", "v1.2.0", "abc1234"]);
   });
 
   it("reports a failure to tag rather than claiming it worked", () => {

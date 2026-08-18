@@ -1,8 +1,12 @@
 import type { ActionPayload } from "@an-dr/commits-core/backend/types";
 import type { SimpleGit } from "simple-git";
 
+/** Creates a tag on a commit, or moves an existing one when forced. */
 export async function addTag(git: SimpleGit, input: ActionPayload<"addTag">): Promise<void> {
   const args: string[] = [];
+  if (input.force) {
+    args.push("-f");
+  }
   if (input.lightweight) {
     args.push(input.tagName);
   } else {

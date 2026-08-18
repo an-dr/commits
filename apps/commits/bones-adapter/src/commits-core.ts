@@ -406,7 +406,16 @@ export class CommitsCore {
           asString(value.branchName),
           asString(value.commitHash),
           value.checkout === true,
+          value.force === true,
           (status) => this.send({ command: "createBranch", status }),
+        );
+        return;
+      case "rebase":
+        this.workingTreeActions.rebase(
+          this.currentRepository ?? "",
+          asString(value.commitHash),
+          value.ignoreDate === true,
+          (status) => this.send({ command: "rebase", status }),
         );
         return;
       case "inProgressAction":
@@ -463,6 +472,7 @@ export class CommitsCore {
           asString(value.commitHash),
           value.lightweight === true,
           asString(value.message),
+          value.force === true,
           (status) => this.send({ command: "addTag", status }),
         );
         return;

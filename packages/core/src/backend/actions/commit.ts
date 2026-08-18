@@ -32,6 +32,19 @@ export async function revertCommit(
   await git.raw(args);
 }
 
+/**
+ * Replays the current branch onto a commit. `--ignore-date` rewrites the
+ * author dates to the replay time, which is what makes the rewritten commits
+ * sit in date order with the ones they now follow.
+ */
+export async function rebase(git: SimpleGit, input: ActionPayload<"rebase">): Promise<void> {
+  const args = ["rebase", input.commitHash];
+  if (input.ignoreDate) {
+    args.push("--ignore-date");
+  }
+  await git.raw(args);
+}
+
 export async function resetToCommit(
   git: SimpleGit,
   input: ActionPayload<"resetToCommit">
