@@ -1,8 +1,12 @@
 import { showContextMenu } from "./contextMenu";
+import { escapeHtml } from "./utils/html";
 import { toolbarIcons } from "./utils/icons";
 
 /** Marks a button the toolbar has folded away into the more menu. */
 const OVERFLOW_HIDDEN = "overflowHidden";
+
+/** The chevron half of a split button, which opens its menu instead of acting. */
+const SPLIT_MENU = "splitBtnMenu";
 
 export interface ToolbarButton {
   id: string;
@@ -18,6 +22,33 @@ export interface ToolbarButton {
   onDoubleClick?: () => void;
   /** Extra entries the more menu offers for this button. */
   overflowActions?: () => ContextMenuElement[];
+  /**
+   * Text shown beside the icon, which turns the button into a split button.
+   *
+   * The toolbar is icon-only otherwise, so a label is reserved for a button
+   * whose icon cannot say which of several things it will do -- Open in names
+   * the tool it would run.
+   */
+  label?: string;
+  /** Entries the chevron half offers; without it there is no chevron. */
+  menuActions?: () => ContextMenuElement[];
+}
+
+/**
+ * A plain button is its icon; a labelled one is icon and text, with the
+ * chevron in a part of its own so a click can tell the two halves apart.
+ *
+ * Exported because it is the whole of the split button's markup contract, and
+ * the only part of the toolbar that can be checked without a browser.
+ */
+export function renderButtonContent(button: ToolbarButton): string {
+  if (button.label === undefined) {
+    return button.icon;
+  }
+  const main = `<span class="splitBtnMain">${button.icon}<span class="splitBtnLabel">${escapeHtml(button.label)}</span></span>`;
+  return button.menuActions === undefined
+    ? main
+    : `${main}<span class="${SPLIT_MENU}">${toolbarIcons.chevronDown}</span>`;
 }
 
 /** Window within which a second click counts as a double click, in ms. */
@@ -52,12 +83,26 @@ export class Toolbar {
     this.group = document.getElementById("controlsBtns")!;
     this.moreBtn = document.getElementById("moreBtn")!;
     this.moreBtn.innerHTML = toolbarIcons.more;
-    this.moreBtn.addEventListener("click", (event) => this.showOverflowMenu(event));
+    this.moreBtn.addEventListener("click", (event) => {
+      // Same reason as the split button's chevron: the document-level closer
+      // would otherwise receive this very click and shut the menu at once.
+      event.stopPropagation();
+      this.showOverflowMenu(event);
+    });
     // Delegated so that re-declaring the button set cannot stack up listeners.
     this.group.addEventListener("click", (event) => {
       const elem = (event.target as Element).closest<HTMLElement>(".iconBtn");
       const button = this.buttons.find((candidate) => candidate.id === elem?.id);
       if (button === undefined || !button.visible) {
+        return;
+      }
+      // The chevron half never runs the button's own action: it exists so the
+      // other tools can be reached without changing which one is default.
+      if (button.menuActions !== undefined && (event.target as Element).closest(`.${SPLIT_MENU}`) !== null) {
+        // The document closes any open menu on click, so the click that opens
+        // this one must stop here or it would shut it again on the way up.
+        event.stopPropagation();
+        showContextMenu(event, button.menuActions(), elem!);
         return;
       }
       if (button.onDoubleClick === undefined) {
@@ -127,7 +172,8 @@ export class Toolbar {
       if (elem === null) {
         continue;
       }
-      elem.innerHTML = button.icon;
+      elem.innerHTML = renderButtonContent(button);
+      elem.classList.toggle("splitBtn", button.label !== undefined);
       elem.title = button.title;
     }
     this.applyLayout();

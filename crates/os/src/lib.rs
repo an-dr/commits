@@ -48,6 +48,13 @@ pub trait OsBackend: Send + Sync {
     /// this URL" outcome, e.g. a Gravatar that does not exist — rather than an
     /// error; other failures (network, non-2xx, oversized body) are `Err`.
     fn fetch_url(&self, url: &str) -> Result<Option<String>, String>;
+    /// Runs one external tool the user has configured.
+    ///
+    /// `request` is the line-framed form [`parse_tool_run`] reads: the
+    /// program, the two optional diff files, and then the argument vector.
+    /// The tool is started and left to run on its own -- the app does not wait
+    /// for an editor the user may keep open for hours.
+    fn run_tool(&self, request: &str) -> Result<(), String>;
     /// Lists every git repository at or below one folder, newline-separated,
     /// with the folder itself first when it is one. A folder holding no
     /// repository at all is reported as absent rather than as an error: it is
@@ -138,6 +145,15 @@ impl OsBackend for SystemOsBackend {
             base64::engine::general_purpose::STANDARD.encode(body)
         )))
     }
+    fn run_tool(&self, request: &str) -> Result<(), String> {
+        let run = parse_tool_run(request)?;
+        let args = materialize_tool_args(&run, &std::env::temp_dir())?;
+        std::process::Command::new(&run.program)
+            .args(&args)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("could not start {}: {error}", run.program))
+    }
     fn find_repositories(&self, path: &str) -> Result<Option<String>, String> {
         let found = discover::find_repositories(std::path::Path::new(path));
         if found.is_empty() {
@@ -165,6 +181,111 @@ pub fn decode_fetch_result(value: &str) -> Result<(String, Vec<u8>), String> {
         .decode(encoded)
         .map_err(|error| error.to_string())?;
     Ok((content_type.to_string(), bytes))
+}
+
+/// One side of a diff a tool is about to be handed.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ToolBlob {
+    pub name: String,
+    pub base64: String,
+}
+
+/// A parsed `run-tool` request: what to start, and what to hand it.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ToolRun {
+    pub program: String,
+    pub args: Vec<String>,
+    pub left: Option<ToolBlob>,
+    pub right: Option<ToolBlob>,
+}
+
+/// Reads the line-framed `run-tool` value.
+///
+/// The framing is the program, the left file's name and contents, the right
+/// file's name and contents, then one argument per line. It is positional
+/// rather than keyed because the fields are fixed and the value crosses the
+/// component boundary as a single string; the page's `encodeToolRun` writes
+/// the same order.
+pub fn parse_tool_run(value: &str) -> Result<ToolRun, String> {
+    let mut lines = value.split('\n');
+    let program = lines
+        .next()
+        .filter(|program| !program.is_empty())
+        .ok_or_else(|| String::from("a tool run names no program"))?
+        .to_string();
+    let mut field = || lines.next().unwrap_or_default().to_string();
+    let left_name = field();
+    let left_base64 = field();
+    let right_name = field();
+    let right_base64 = field();
+    let blob = |name: String, base64: String| {
+        (!name.is_empty()).then_some(ToolBlob { name, base64 })
+    };
+    Ok(ToolRun {
+        program,
+        args: lines.map(|argument| argument.to_string()).collect(),
+        left: blob(left_name, left_base64),
+        right: blob(right_name, right_base64),
+    })
+}
+
+/// Strips everything but the file name, so a crafted name cannot place the
+/// temporary file outside the directory chosen for it.
+fn temp_file_name(name: &str) -> String {
+    let stripped = name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .trim_matches(|character: char| character == '.' || character.is_whitespace());
+    if stripped.is_empty() {
+        String::from("file")
+    } else {
+        stripped.to_string()
+    }
+}
+
+/// Writes the diff sides into `directory` and substitutes their paths for the
+/// `{left}` and `{right}` placeholders, returning the arguments to run with.
+///
+/// A run with no diff sides -- opening a repository, say -- writes nothing and
+/// returns its arguments unchanged.
+pub fn materialize_tool_args(
+    run: &ToolRun,
+    directory: &std::path::Path,
+) -> Result<Vec<String>, String> {
+    let mut left_path = String::new();
+    let mut right_path = String::new();
+    if run.left.is_some() || run.right.is_some() {
+        // One directory per run: two revisions of the same file usually share a
+        // name, so they cannot both sit directly in the system temp directory.
+        let unique = format!(
+            "commits-diff-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_nanos())
+                .unwrap_or_default()
+        );
+        for (blob, slot, side) in [
+            (run.left.as_ref(), &mut left_path, "left"),
+            (run.right.as_ref(), &mut right_path, "right"),
+        ] {
+            let Some(blob) = blob else { continue };
+            let folder = directory.join(&unique).join(side);
+            std::fs::create_dir_all(&folder).map_err(|error| error.to_string())?;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(&blob.base64)
+                .map_err(|error| format!("{side} side is not valid base64: {error}"))?;
+            let path = folder.join(temp_file_name(&blob.name));
+            std::fs::write(&path, bytes).map_err(|error| error.to_string())?;
+            *slot = path.to_string_lossy().into_owned();
+        }
+    }
+    Ok(run
+        .args
+        .iter()
+        .map(|argument| argument.replace("{left}", &left_path).replace("{right}", &right_path))
+        .collect())
 }
 
 /// Reads `path` only when it resolves inside `repository`.
@@ -296,6 +417,7 @@ fn execute(backend: &dyn OsBackend, request: &OsRequest) -> NativeResult {
             .map(|_| Some(String::new())),
         7 => backend.fetch_url(&request.value),
         8 => backend.find_repositories(&request.value),
+        9 => backend.run_tool(&request.value).map(|_| Some(String::new())),
         _ => Err("unknown OS action".into()),
     };
     match outcome {

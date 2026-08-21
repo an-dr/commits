@@ -72,7 +72,8 @@ export type OsAction =
   | "read-file"
   | "reveal-directory"
   | "fetch-url"
-  | "find-repositories";
+  | "find-repositories"
+  | "run-tool";
 
 /**
  * Value of a `read-file` request: the repository the read is confined to, then
@@ -98,8 +99,60 @@ export function encodeOsRequest(
     "reveal-directory": 6,
     "fetch-url": 7,
     "find-repositories": 8,
+    "run-tool": 9,
   };
   return new Writer().u32(requestId).u8(tag[action]).string(value).finish();
+}
+
+/** One file the host writes before the tool runs, for a side of a diff. */
+export interface ToolBlob {
+  /** Suggested file name; the host strips any directory part from it. */
+  name: string;
+  /** The file's bytes, base64-encoded, since the value is carried as text. */
+  base64: string;
+}
+
+/**
+ * A run of one external tool.
+ *
+ * `args` is an argument vector, never a command line: the host passes it to
+ * the program as-is, so a repository path with a space in it -- or a file name
+ * carrying a shell metacharacter -- cannot turn into a second command.
+ *
+ * `left` and `right` are the two sides of a diff. The host writes each to a
+ * temporary file and substitutes its path for the `{left}` and `{right}`
+ * placeholders in `args`, because a diff tool takes two paths on disk and the
+ * revisions being compared are not on disk anywhere.
+ */
+export interface ToolRun {
+  program: string;
+  args: string[];
+  left?: ToolBlob;
+  right?: ToolBlob;
+}
+
+/**
+ * Value of a `run-tool` request.
+ *
+ * The lines are, in order: the program, the left file's name and contents, the
+ * right file's name and contents, and then one argument per line. Empty name
+ * and contents lines mean that side is absent, which is the ordinary case for
+ * anything but a diff. A newline inside any field would break that framing, so
+ * it is rejected here rather than silently corrupting the run.
+ */
+export function encodeToolRun(run: ToolRun): string {
+  const fields = [
+    run.program,
+    run.left?.name ?? "",
+    run.left?.base64 ?? "",
+    run.right?.name ?? "",
+    run.right?.base64 ?? "",
+    ...run.args,
+  ];
+  if (fields.some((field) => field.includes("\n"))) {
+    throw new Error("a tool run may not contain a newline");
+  }
+  return fields.join("\n");
 }
 
 export interface NativeResult {

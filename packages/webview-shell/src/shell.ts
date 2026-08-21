@@ -21,6 +21,7 @@ export function buildGraphShell(t: (message: string) => string): string {
           <div id="resetBtn" class="iconBtn" title="${text("Reset to HEAD")}"></div>
           <div id="pullBtn" class="iconBtn"></div>
           <div id="pushBtn" class="iconBtn" title="${text("Push Current Branch")}"></div>
+          <div id="openInBtn" class="iconBtn"></div>
           <div id="appMenuSlot"></div>
           <div id="moreBtn" class="iconBtn" title="${text("More Actions")}"></div>
         </div>

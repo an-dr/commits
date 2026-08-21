@@ -147,7 +147,15 @@ async function boot(): Promise<void> {
     import("@an-dr/commits-core/webview/main"),
   ]);
   setWebviewHost({
-    postMessage: (message: RequestMessage) => post(message),
+    postMessage: (message: RequestMessage) => {
+      // The shared view asks its host to open settings; here the host is this
+      // page, so the request is answered rather than forwarded.
+      if (message.command === "openExtensionSettings") {
+        settingsEditor.open(activeSettings, loadSettingsError);
+        return;
+      }
+      post(message);
+    },
     getState: () => readState(),
     setState: (state) => writeState(state),
     getStyleValue: (name) => getComputedStyle(document.documentElement).getPropertyValue(name),

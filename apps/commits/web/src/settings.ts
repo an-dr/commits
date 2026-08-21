@@ -1,6 +1,7 @@
 import type { GitGraphViewState } from "@an-dr/commits-core/types";
 import {
   DEFAULT_SETTINGS,
+  TOOLS_KEY,
   type SettingsDocument,
 } from "@commits/adapter/read/settings";
 
@@ -33,5 +34,6 @@ export function createViewState(settings: SettingsDocument = DEFAULT_SETTINGS): 
     locale: globalThis.navigator?.language || "en",
     repos: {},
     showCurrentBranchByDefault: value("showCurrentBranchByDefault"),
+    tools: settings.app[TOOLS_KEY],
   };
 }

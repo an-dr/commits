@@ -272,6 +272,79 @@ body {
   background: color-mix(in srgb, var(--vscode-focusBorder) 8%, transparent);
 }
 
+/* `hidden` has to win over the grid display these set, or a hidden list would
+   still take its space. */
+.standaloneSettingField[hidden],
+.standaloneToolList[hidden] {
+  display: none;
+}
+
+/* External tools: one card per tool, because a tool is four fields that only
+   mean anything together, and the order of the cards is itself a setting. */
+.standaloneToolList {
+  display: grid;
+  gap: 10px;
+}
+
+.standaloneToolCard {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--vscode-focusBorder) 5%, transparent);
+}
+
+.standaloneToolHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Two columns where there is room: name and command are short, the argument
+   fields are the ones worth the width. */
+.standaloneToolFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.standaloneToolField {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.standaloneToolField > span {
+  font-weight: 600;
+}
+
+.standaloneToolField :disabled {
+  opacity: 0.6;
+}
+
+.standaloneToolAdd,
+.standaloneToolRemove {
+  justify-self: start;
+  padding: 4px 10px;
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+}
+
+.standaloneToolAdd:hover:enabled,
+.standaloneToolRemove:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.standaloneToolAdd:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .standaloneSettingField > span {
   font-weight: 600;
 }

@@ -16,4 +16,14 @@ describe("standalone settings bridge", () => {
 
     expect(state).toMatchObject({ uiDensity: "Compact", refreshShortcutKey: null, initialLoadCommits: 900 });
   });
+
+  it("carries the configured tools, which is how the toolbar learns about them", () => {
+    const tools = [
+      { name: "VS Code", command: "code", openArgs: ["{repo}"], diffArgs: ["--diff", "{left}", "{right}"] },
+    ];
+
+    const state = createViewState({ ...DEFAULT_SETTINGS, app: { ...DEFAULT_SETTINGS.app, tools } });
+
+    expect(state.tools).toEqual(tools);
+  });
 });

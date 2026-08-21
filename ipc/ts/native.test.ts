@@ -11,6 +11,7 @@ import {
   encodeGitRun,
   encodeFileRead,
   encodeOsRequest,
+  encodeToolRun,
   encodeUpdaterRequest,
   encodeWatchRequest,
 } from "./native";
@@ -93,6 +94,29 @@ describe("native protocol", () => {
     expect(toHex(encodeWatchRequest(1, "start", "C:/repo"))).toBe(fixtures.watch_start);
     expect(toHex(encodeOsRequest(2, "pick-folder", "Choose repository")))
       .toBe(fixtures.os_pick_folder);
+  });
+
+  it("frames a tool run so the host can tell its fields apart", () => {
+    expect(encodeOsRequest(1, "run-tool")[4]).toBe(9);
+    // Opening a repository carries no diff sides, so all four of their lines
+    // are empty and the arguments start straight after them.
+    expect(encodeToolRun({ program: "code", args: ["-n", "C:/repo"] })).toBe(
+      "code\n\n\n\n\n-n\nC:/repo",
+    );
+    expect(encodeToolRun({
+      program: "code",
+      args: ["--diff", "{left}", "{right}"],
+      left: { name: "a.ts", base64: "YQ==" },
+      right: { name: "a.ts", base64: "Yg==" },
+    })).toBe(
+      "code\na.ts\nYQ==\na.ts\nYg==\n--diff\n{left}\n{right}",
+    );
+  });
+
+  it("refuses a tool run whose newline would break the framing", () => {
+    expect(() => encodeToolRun({ program: "code", args: ["C:/re\npo"] })).toThrow(
+      "may not contain a newline",
+    );
   });
 
   it("rejects unknown result tags and truncated payloads", () => {

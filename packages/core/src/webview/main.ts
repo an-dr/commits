@@ -39,6 +39,7 @@ import {
   showSelectDialog
 } from "./dialog";
 import { Dropdown } from "./dropdown";
+import { diffTool, openInMenuEntries, repositoryTools } from "./externalTools";
 import { buildFileTree, renderFileTree } from "./fileTree";
 import { filterGraph } from "./graphFilter";
 import { DEFAULT_FILES_PANEL_WIDTH, FilesPanel } from "./filesPanel";
@@ -56,7 +57,7 @@ import { abbrevCommit, arraysEqual, ELLIPSIS } from "./utils/git";
 import { UNCOMMITTED } from "./utils/graphConstants";
 import { getVSCodeStyle, sendMessage, vscode } from "./utils/host";
 import { escapeHtml, unescapeHtml } from "./utils/html";
-import { svgIcons } from "./utils/icons";
+import { svgIcons, toolbarIcons } from "./utils/icons";
 import { renderTagPill } from "./utils/refPills";
 import { nextBranchSelection } from "./branchSelection";
 
@@ -452,8 +453,33 @@ class GitGraphView {
    * Declares the toolbar's buttons. Rebuilt whenever repository state changes,
    * because which remote actions apply depends on the branch and its remotes.
    */
-  private renderToolbar() {
+  /** Tools that can open a repository, in the order the settings list them. */
+  private openInTools(): readonly GG.ToolView[] {
+    return repositoryTools(viewState.tools);
+  }
+
+  /** Runs one tool on the open repository. */
+  private openRepoIn(tool: GG.ToolView) {
+    sendMessage({
+      command: "runTool",
+      repo: this.currentRepo!,
+      program: tool.command,
+      // {repo} is the one placeholder the page can resolve; the host resolves
+      // the diff ones, which name files only it writes.
+      args: tool.openArgs.map((argument) => argument.replace("{repo}", this.currentRepo ?? ""))
+    });
+  }
+
+  /**
+   * Declares the toolbar's buttons, from repository state and from settings.
+   *
+   * Public because a settings save changes the button set too: a tool
+   * configured a moment ago belongs on the bar there and then, rather than
+   * waiting for whatever next happens to reload branches.
+   */
+  public renderToolbar() {
     const remoteAvailable = this.gitBranchHead !== null && this.gitBranchHead !== "HEAD";
+    const tools = this.openInTools();
     this.toolbar.setButtons([
       {
         id: "refreshBtn",
@@ -491,6 +517,38 @@ class GitGraphView {
         title: l10n.pushCurrentBranch,
         visible: remoteAvailable,
         onClick: () => requestRemoteOperation("push")
+      },
+      // Last, so it sits against the app menu, and labelled, because "open in"
+      // is a question of which tool -- an icon alone could not say.
+      {
+        id: "openInBtn",
+        icon: toolbarIcons.externalLink,
+        title: l10n.openInTitle,
+        label: tools.length > 0 ? tools[0].name : "",
+        visible: tools.length > 0,
+        onClick: () => {
+          if (tools.length > 0) {
+            this.openRepoIn(tools[0]);
+          }
+        },
+        // The chevron is always there, even with one tool: "configure" is the
+        // answer to "why is my editor not in this list", and it can only be
+        // found behind the chevron.
+        menuActions: () =>
+          openInMenuEntries(viewState.tools).map((entry) => {
+            if (entry.kind === "separator") {
+              return null;
+            }
+            return entry.kind === "configure"
+              ? {
+                  title: l10n.configureTools + ELLIPSIS,
+                  onClick: () => sendMessage({ command: "openExtensionSettings" })
+                }
+              : {
+                  title: l10n.openIn.replace("{0}", escapeHtml(entry.tool.name)),
+                  onClick: () => this.openRepoIn(entry.tool)
+                };
+          })
       }
     ]);
   }
@@ -2486,6 +2544,26 @@ class GitGraphView {
       if (file === null) {
         return;
       }
+      // A configured diff tool takes the double click over, because that is
+      // what configuring one means; with none the host's own diff view still
+      // answers it, as it always has.
+      const tool = diffTool(viewState.tools);
+      if (tool !== null) {
+        sendMessage({
+          command: "runTool",
+          repo: this.currentRepo!,
+          program: tool.command,
+          args: [...tool.diffArgs],
+          diff: {
+            oldFilePath: file.oldFilePath,
+            newFilePath: file.newFilePath,
+            fromHash,
+            toHash,
+            type: file.type
+          }
+        });
+        return;
+      }
       sendMessage({
         command: "viewDiff",
         repo: this.currentRepo!,
@@ -2592,6 +2670,9 @@ export function applyLiveSettings(): void {
   refreshShortcutKey = viewState.refreshShortcutKey;
   applyUiDensity(viewState.uiDensity);
   gitGraph?.updateConfig(configFromViewState());
+  // The button set is read from settings too -- a tool configured a moment ago
+  // belongs on the bar now, not after the next branch load.
+  gitGraph?.renderToolbar();
   gitGraph?.refresh(false);
 }
 
@@ -2734,6 +2815,13 @@ window.addEventListener("message", (event) => {
       break;
     case "rebase":
       refreshGraphOrDisplayError(msg.status, l10n.unableToRebase);
+      break;
+    case "runTool":
+      // Nothing in the repository changed, so there is nothing to reread; only
+      // a failure is worth interrupting for.
+      if (msg.status !== null) {
+        showErrorDialog(l10n.unableToRunTool, msg.status, null);
+      }
       break;
     case "resetToCommit":
       refreshGraphOrDisplayError(msg.status, l10n.unableToReset);

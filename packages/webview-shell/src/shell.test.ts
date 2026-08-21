@@ -9,10 +9,17 @@ describe("shared MIT webview shell", () => {
       "refreshBtn", "resetBtn", "pullBtn", "pushBtn", "moreBtn", "findWidget",
       "branchPanel", "repoInProgressBanner", "commitGraph", "commitTable", "footer",
       "filesPanel", "fullDiffPanel", "contextMenu", "dialogBacking", "dialog",
-      "scrollShadow",
+      "scrollShadow", "openInBtn",
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
+  });
+
+  it("puts Open in last among the buttons, right before the app menu", () => {
+    const html = buildGraphShell((message) => message);
+
+    expect(html.indexOf('id="pushBtn"')).toBeLessThan(html.indexOf('id="openInBtn"'));
+    expect(html.indexOf('id="openInBtn"')).toBeLessThan(html.indexOf('id="appMenuSlot"'));
   });
 
   it("escapes host-provided translations before inserting them into HTML", () => {

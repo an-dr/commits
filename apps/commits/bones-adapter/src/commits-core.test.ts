@@ -1956,6 +1956,169 @@ describe("CommitsCore MIT webview host", () => {
     expect(reply?.status).toContain("already exists");
   });
 
+  it("starts a tool that needs no diff without asking Git anything", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+    const gitBefore = host.gitRequests.length;
+
+    core.receivePageJson(JSON.stringify({
+      command: "runTool", repo: "C:/repo", program: "code", args: ["-n", "C:/repo"],
+    }));
+
+    expect(host.gitRequests.length).toBe(gitBefore);
+    expect(host.osRequests.at(-1)).toEqual({
+      requestId: expect.any(Number),
+      action: "run-tool",
+      value: "code\n\n\n\n\n-n\nC:/repo",
+    });
+  });
+
+  it("reads both revisions before handing a diff tool anything", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+    const osBefore = host.osRequests.length;
+
+    core.receivePageJson(JSON.stringify({
+      command: "runTool", repo: "C:/repo", program: "code",
+      args: ["--diff", "{left}", "{right}"],
+      diff: {
+        oldFilePath: "src/a.ts", newFilePath: "src/a.ts",
+        fromHash: "aaa", toHash: "bbb", type: "M",
+      },
+    }));
+
+    expect(host.gitRequests.slice(-2).map((request) => request.args)).toEqual([
+      ["show", "aaa:src/a.ts"],
+      ["show", "bbb:src/a.ts"],
+    ]);
+    // One side is not enough: the tool takes two files or none.
+    completeGitAt(host, core, host.gitRequests.length - 2, "old");
+    expect(host.osRequests.length).toBe(osBefore);
+
+    completeGitAt(host, core, host.gitRequests.length - 1, "new");
+    expect(host.osRequests.at(-1)).toEqual({
+      requestId: expect.any(Number),
+      action: "run-tool",
+      value: "code\na.ts\nb2xk\na.ts\nbmV3\n--diff\n{left}\n{right}",
+    });
+  });
+
+  it("compares a commit against its parent, the way the built-in panel does", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "runTool", repo: "C:/repo", program: "code",
+      args: ["{left}", "{right}"],
+      diff: {
+        oldFilePath: "a.ts", newFilePath: "a.ts",
+        fromHash: "ccc", toHash: "ccc", type: "M",
+      },
+    }));
+
+    // Equal hashes mean "this commit against what came before it", so the
+    // parent is looked up before either side can be read.
+    expect(host.gitRequests.at(-1)?.args).toEqual(["rev-list", "--parents", "-n", "1", "ccc"]);
+    completeGitAt(host, core, host.gitRequests.length - 1, "ccc parentsha");
+
+    expect(host.gitRequests.slice(-2).map((request) => request.args)).toEqual([
+      ["show", "parentsha:a.ts"],
+      ["show", "ccc:a.ts"],
+    ]);
+  });
+
+  it("keeps each side's own name, so a rename reaches the tool as one", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "runTool", repo: "C:/repo", program: "code",
+      args: ["{left}", "{right}"],
+      diff: {
+        oldFilePath: "old/name.ts", newFilePath: "new/name.ts",
+        fromHash: "aaa", toHash: "bbb", type: "R",
+      },
+    }));
+
+    expect(host.gitRequests.slice(-2).map((request) => request.args)).toEqual([
+      ["show", "aaa:old/name.ts"],
+      ["show", "bbb:new/name.ts"],
+    ]);
+  });
+
+  it("hands an added file an empty left side rather than asking Git for one", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "runTool", repo: "C:/repo", program: "code",
+      args: ["{left}", "{right}"],
+      diff: {
+        oldFilePath: "added.ts", newFilePath: "added.ts",
+        fromHash: "aaa", toHash: "bbb", type: "A",
+      },
+    }));
+
+    // Only the new revision is read; the old one does not exist to read.
+    expect(host.gitRequests.at(-1)?.args).toEqual(["show", "bbb:added.ts"]);
+    completeGitAt(host, core, host.gitRequests.length - 1, "new");
+
+    expect(host.osRequests.at(-1)).toEqual({
+      requestId: expect.any(Number),
+      action: "run-tool",
+      value: "code\nadded.ts\n\nadded.ts\nbmV3\n{left}\n{right}",
+    });
+  });
+
+  it("reports a revision it could not read, once rather than per side", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+    const osBefore = host.osRequests.length;
+
+    core.receivePageJson(JSON.stringify({
+      command: "runTool", repo: "C:/repo", program: "code",
+      args: ["--diff", "{left}", "{right}"],
+      diff: {
+        oldFilePath: "src/gone.ts", newFilePath: "src/gone.ts",
+        fromHash: "aaa", toHash: "bbb", type: "M",
+      },
+    }));
+    failGitAt(host, core, host.gitRequests.length - 2, "fatal: path does not exist");
+    failGitAt(host, core, host.gitRequests.length - 1, "fatal: path does not exist");
+
+    const replies = host.sent
+      .map(([, message]) => message as { command: string; status?: string | null })
+      .filter((message) => message.command === "runTool");
+    expect(replies).toHaveLength(1);
+    expect(replies[0].status).toContain("does not exist");
+    expect(host.osRequests.length).toBe(osBefore);
+  });
+
+  it("refuses a tool run that names no program", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+    const osBefore = host.osRequests.length;
+
+    core.receivePageJson(JSON.stringify({ command: "runTool", repo: "C:/repo", program: "", args: [] }));
+
+    expect(host.osRequests.length).toBe(osBefore);
+    expect(host.sent).toContainEqual(["main", { command: "runTool", status: "No tool is configured." }]);
+  });
+
   it("rereads history after refs move outside the app", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);

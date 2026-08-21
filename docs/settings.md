@@ -74,6 +74,72 @@ window is reopened.
 [`updating.md`](updating.md) for the manifest format and what setting it
 enables.
 
+## External tools
+
+`app["external-tools.tools"]` lists the programs the app can hand a repository
+or a file to, and everything this feature owns lives under that
+`external-tools.` division. A
+fresh install ships with VS Code configured, so the Open in button is there to
+be found; emptying the list removes the button and returns the file tree's
+double click to the built-in diff panel. A settings document written before
+tools existed says nothing about them and takes the default, rather than
+losing the feature without a word.
+
+```json
+"external-tools.tools": [
+  {
+    "name": "VS Code",
+    "command": "code",
+    "openArgs": ["{repo}"],
+    "diffArgs": ["--diff", "{left}", "{right}"]
+  }
+]
+```
+
+`command` is the program, looked up on `PATH` or given as a full path.
+`openArgs` and `diffArgs` are argument vectors rather than command lines: each
+entry is passed to the program as one argument, so a path containing a space
+needs no quoting and a file name containing a shell metacharacter cannot start
+a second command. A tool with an empty `openArgs` is not offered by the Open in
+button, and one with an empty `diffArgs` is never used for a diff.
+
+Three placeholders are substituted:
+
+| Placeholder | Becomes | Substituted by |
+| --- | --- | --- |
+| `{repo}` | the open repository's path | the page, which knows the repository |
+| `{left}` | the older revision of the file | the host, which writes the file |
+| `{right}` | the newer revision of the file | the host, which writes the file |
+
+The diff placeholders are files the host writes into a temporary directory,
+one per side, because the revisions being compared exist as objects in the
+repository rather than as files on disk. They keep the file's own name, so the
+tool's title bar reads as the user expects, and they are left behind for the
+tool to read for as long as it needs them.
+
+The first tool in the list is the one the Open in button runs when clicked;
+the rest are offered under its chevron, which also carries "Configure tools" —
+so the list is reachable even when only one tool is set up. The first tool with
+a non-empty `diffArgs` is the one a double-clicked file opens in. At most five
+tools are kept, whatever the file lists.
+
+A document written before the key was namespaced is still read: a bare `tools`
+key is used when `external-tools.tools` is absent, and the namespaced key is
+what gets written back.
+
+A tool without a `command` is dropped when the file is read, and its
+neighbours are kept, the same way an invalid `core` value falls back on its
+own.
+
+The settings editor gives external tools their own section: one card per
+tool, each with a `VS Code` or `Custom` selector, a name, a command, and the
+two argument fields, an argument to a line. Cards can be added up to the limit
+and removed individually; removing the last one leaves no button, which is a
+legitimate choice. Choosing `VS Code` fills the fields and locks them rather
+than hiding them, so the preset is not a black box; a tool whose command
+matches the preset but whose arguments do not reads as `Custom`, so
+re-selecting the preset cannot quietly overwrite an edit.
+
 ## Migration and safety
 
 The old version 1 `commitLimit` becomes

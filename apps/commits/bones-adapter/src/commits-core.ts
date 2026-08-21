@@ -5,6 +5,7 @@ import { gravatarUrl } from "./gravatar";
 import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
 import { MitGraphBackend } from "./mit/graph-backend";
+import { buildToolRun, gitShowArgs } from "./mit/external-tools";
 import { WorkingTreeActions } from "./mit/working-tree-actions";
 import { RepositoryManager } from "./read/repository-manager";
 import { parseSubmodulePaths } from "./read/submodule-status";
@@ -40,7 +41,21 @@ type PendingOs =
   | { readonly kind: "openExternalUrl" }
   | { readonly kind: "revealCommitsRepoFolder" }
   | { readonly kind: "readFile"; readonly deliver: (content: string | null) => void }
-  | { readonly kind: "fetchAvatar"; readonly email: string };
+  | { readonly kind: "fetchAvatar"; readonly email: string }
+  | { readonly kind: "runTool" };
+
+/** One diff whose two revisions are still being read out of Git. */
+interface PendingToolDiff {
+  readonly program: string;
+  readonly args: readonly string[];
+  /** Each side keeps its own name, so a rename reaches the tool as one. */
+  readonly oldFilePath: string;
+  readonly newFilePath: string;
+  left?: Uint8Array;
+  right?: Uint8Array;
+  /** Set once a side has failed, so the second side's arrival stays quiet. */
+  failed: boolean;
+}
 
 /** Bones owner of the unchanged MIT webview's host protocol. */
 export class CommitsCore {
@@ -49,6 +64,8 @@ export class CommitsCore {
   private readonly graph: MitGraphBackend;
   private readonly workingTreeActions: WorkingTreeActions;
   private readonly pendingOs = new Map<number, PendingOs>();
+  /** Diffs waiting on `git show`, by the id of each side's Git request. */
+  private readonly pendingToolDiffs = new Map<number, { diff: PendingToolDiff; side: "left" | "right" }>();
   private state: PersistentState = DEFAULT_PERSISTENT_STATE;
   private settings: SettingsDocument = DEFAULT_SETTINGS;
   private settingsError = "";
@@ -410,6 +427,21 @@ export class CommitsCore {
           (status) => this.send({ command: "createBranch", status }),
         );
         return;
+      case "runTool":
+        this.runTool(
+          asString(value.program),
+          Array.isArray(value.args) ? value.args.map((argument) => asString(argument)) : [],
+          isRecord(value.diff)
+            ? {
+                oldFilePath: asString(value.diff.oldFilePath),
+                newFilePath: asString(value.diff.newFilePath),
+                fromHash: asString(value.diff.fromHash),
+                toHash: asString(value.diff.toHash),
+                type: asString(value.diff.type),
+              }
+            : undefined,
+        );
+        return;
       case "rebase":
         this.workingTreeActions.rebase(
           this.currentRepository ?? "",
@@ -565,6 +597,12 @@ export class CommitsCore {
       this.finishSubmoduleDiscovery(submoduleRoot, result);
       return;
     }
+    const toolDiff = this.pendingToolDiffs.get(result.requestId);
+    if (toolDiff !== undefined) {
+      this.pendingToolDiffs.delete(result.requestId);
+      this.finishToolDiffSide(toolDiff, result);
+      return;
+    }
     this.graph.receive(result);
     this.workingTreeActions.receive(result);
   }
@@ -686,6 +724,105 @@ export class CommitsCore {
   private openCommitsRepo(): void {
     if (!this.commitsRepoExists || this.commitsRepoPath === null) return;
     this.openFolder(this.commitsRepoPath);
+  }
+
+  /**
+   * Runs a configured tool, reading both revisions first when it is a diff.
+   *
+   * A diff tool takes two paths on disk, and neither revision is one: they are
+   * objects in the repository. So each side is read with `git show` here and
+   * travels with the run, and the host turns them into the files the tool
+   * actually opens.
+   */
+  private runTool(
+    program: string,
+    args: readonly string[],
+    diff?: {
+      oldFilePath: string;
+      newFilePath: string;
+      fromHash: string;
+      toHash: string;
+      type: string;
+    },
+  ): void {
+    if (program === "") {
+      this.send({ command: "runTool", status: "No tool is configured." });
+      return;
+    }
+    if (diff === undefined) {
+      this.startTool(buildToolRun(program, args));
+      return;
+    }
+    const repo = this.currentRepository ?? "";
+    if (repo === "") {
+      this.send({ command: "runTool", status: "No repository is open." });
+      return;
+    }
+    const pending: PendingToolDiff = {
+      program,
+      args,
+      oldFilePath: diff.oldFilePath,
+      newFilePath: diff.newFilePath,
+      failed: false,
+    };
+    // An added file has nothing on the left and a deleted one nothing on the
+    // right; the tool still wants two files, so that side is an empty one.
+    if (diff.type === "A") pending.left = new Uint8Array();
+    if (diff.type === "D") pending.right = new Uint8Array();
+    // The base is resolved the same way the built-in panel resolves it, so the
+    // two never disagree about which revisions a commit is compared against.
+    this.graph.resolveDiffBase(repo, diff.fromHash, diff.toHash, (oldRevision) => {
+      const sides = [
+        ["left", oldRevision, diff.oldFilePath],
+        ["right", diff.toHash, diff.newFilePath],
+      ] as const;
+      for (const [side, hash, path] of sides) {
+        if (pending[side] !== undefined) continue;
+        const requestId = this.nextGitRequestId++;
+        this.pendingToolDiffs.set(requestId, { diff: pending, side });
+        this.host.runGit({ requestId, cwd: repo, args: gitShowArgs(hash, path), timeoutMs: 30_000 });
+      }
+      this.startToolIfDiffComplete(pending);
+    });
+  }
+
+  /** Takes one side's `git show` result, running the tool once both are in. */
+  private finishToolDiffSide(
+    entry: { diff: PendingToolDiff; side: "left" | "right" },
+    result: GitResult,
+  ): void {
+    const { diff, side } = entry;
+    if (result.status !== "completed" || result.exitCode !== 0) {
+      // The other side is still coming, and one message is enough: a file that
+      // does not exist at one of the two revisions fails only on that side.
+      if (!diff.failed) {
+        diff.failed = true;
+        this.send({ command: "runTool", status: summarizeGitFailure(result) });
+      }
+      return;
+    }
+    diff[side] = result.stdout;
+    this.startToolIfDiffComplete(diff);
+  }
+
+  /** Runs the tool once both sides are in hand, and not before. */
+  private startToolIfDiffComplete(diff: PendingToolDiff): void {
+    if (diff.failed || diff.left === undefined || diff.right === undefined) {
+      return;
+    }
+    this.startTool(
+      buildToolRun(diff.program, diff.args, {
+        left: { path: diff.oldFilePath, content: diff.left },
+        right: { path: diff.newFilePath, content: diff.right },
+      }),
+    );
+  }
+
+  /** Hands one framed run to the OS module. */
+  private startTool(request: string): void {
+    const requestId = this.nextOsRequestId++;
+    this.pendingOs.set(requestId, { kind: "runTool" });
+    this.host.requestOs(requestId, "run-tool", request);
   }
 
   /** Reveals ~/.commits/repo in the OS's native file manager. */

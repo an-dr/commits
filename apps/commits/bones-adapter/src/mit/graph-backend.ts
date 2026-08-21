@@ -532,14 +532,33 @@ export class MitGraphBackend {
     request: FullDiffContentRequest,
     use: (revision: string) => void,
   ): void {
-    if (request.fromHash !== request.toHash) {
-      use(request.fromHash);
+    this.resolveDiffBase(request.repo, request.fromHash, request.toHash, use);
+  }
+
+  /**
+   * The revision a change is measured from.
+   *
+   * Equal hashes mean "this commit against what came before it", which is what
+   * a commit's own file list shows; the parent has to be looked up, and a root
+   * commit is compared against the empty tree because it has none.
+   *
+   * Public because an external diff tool is handed the same two revisions the
+   * built-in panel reads, and they must agree on which they are.
+   */
+  resolveDiffBase(
+    repo: string,
+    fromHash: string,
+    toHash: string,
+    use: (revision: string) => void,
+  ): void {
+    if (fromHash !== toHash) {
+      use(fromHash);
       return;
     }
     // `rev-list --parents -n 1` prints the commit followed by its parents, so a
     // single token means a root commit. This reads the output rather than
     // relying on a non-zero exit, which Git reports inconsistently here.
-    this.run(request.repo, ["rev-list", "--parents", "-n", "1", request.fromHash], (result) => {
+    this.run(repo, ["rev-list", "--parents", "-n", "1", fromHash], (result) => {
       const tokens = successText(result).trim().split(/\s+/).filter((token) => token !== "");
       use(tokens.length > 1 ? tokens[1] : EMPTY_TREE);
     });

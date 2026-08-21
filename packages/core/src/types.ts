@@ -15,6 +15,21 @@ export type GitRepoState = {
   depth?: number;
 };
 
+/**
+ * One external tool the view may offer, as the host has configured it.
+ *
+ * Desktop-only, like `timeFormat`: a host that configures no tools sends none,
+ * and the view then shows no Open in button at all.
+ */
+export type ToolView = {
+  name: string;
+  command: string;
+  /** Arguments for opening the repository; empty means the tool is not offered. */
+  openArgs: readonly string[];
+  /** Arguments for diffing one file; empty means the tool cannot diff. */
+  diffArgs: readonly string[];
+};
+
 export type GitGraphViewState = {
   autoCenterCommitDetailsView: boolean;
   committedVisual: "Avatar" | "Initials";
@@ -41,6 +56,8 @@ export type GitGraphViewState = {
   locale: string;
   repos: GitRepoSet;
   showCurrentBranchByDefault: boolean;
+  /** External tools, in the order the Open in button offers them. */
+  tools?: readonly ToolView[];
 };
 
 export type Avatar = {
@@ -213,6 +230,42 @@ export type RequestInProgressAction = {
   action: "continue" | "abort";
 };
 
+/**
+ * Runs one of the user's configured external tools.
+ *
+ * `args` is an argument vector the host hands the program unchanged, so the
+ * page expands `{repo}` -- the only placeholder it can resolve -- before
+ * sending, and leaves `{left}` and `{right}` to the host, which is where the
+ * two revisions of a diff become files on disk.
+ */
+export type RequestRunTool = {
+  command: "runTool";
+  repo: string;
+  program: string;
+  args: string[];
+  /**
+   * The file and the two revisions to compare, for a diff tool.
+   *
+   * Both paths travel because a renamed file has a different name on each
+   * side, and `type` because an added file has no old revision and a deleted
+   * one no new revision -- that side is handed to the tool as an empty file,
+   * which is what it is being compared against.
+   */
+  diff?: {
+    oldFilePath: string;
+    newFilePath: string;
+    fromHash: string;
+    toHash: string;
+    type: GitFileChangeType;
+  };
+};
+
+/** Whether the tool started; a message says why it did not. */
+export type ResponseRunTool = {
+  command: "runTool";
+  status: string | null;
+};
+
 export type RequestMessage =
   | RequestRepoInProgress
   | RequestInProgressAction
@@ -227,6 +280,7 @@ export type RequestMessage =
   | RequestSaveRepoState
   | RequestCopyToClipboard
   | RequestViewDiff
+  | RequestRunTool
   | RequestUtilityAction;
 
 /** The operation the repository is part-way through, or null when none is. */
@@ -248,6 +302,7 @@ export type ResponseMessage =
   | ResponseLoadRepos
   | ResponseCopyToClipboard
   | ResponseViewDiff
+  | ResponseRunTool
   | ResponseUtilityAction
   | ResponseRefresh
   | ResponseRemoteOperation

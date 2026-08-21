@@ -1288,6 +1288,49 @@ body.vscode-light .gitRef {
 .iconBtn.overflowHidden {
   display: none;
 }
+/* A split button: an action beside its own chevron, in one control. It is the
+   one labelled button in an icon-only row, because the label names the tool
+   the click would run -- an icon could only say "some tool". */
+.iconBtn.splitBtn {
+  width: auto;
+  padding: 0;
+  gap: 0;
+}
+.splitBtnMain,
+.splitBtnMenu {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  border-radius: 5px;
+}
+.splitBtnMain {
+  gap: 6px;
+  padding: 0 6px 0 7px;
+}
+.splitBtnLabel {
+  font-size: 12px;
+  /* The tool name is the user's own text, so it is given room to be long and
+     cut off rather than allowed to push the rest of the toolbar aside. */
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.splitBtnMenu {
+  padding: 0 3px;
+}
+.splitBtnMenu svg {
+  width: 12px;
+  height: 12px;
+}
+/* Each half lights on its own, which is what says they do different things. */
+.iconBtn.splitBtn:hover {
+  background: none;
+}
+.iconBtn.splitBtn:hover .splitBtnMain:hover,
+.iconBtn.splitBtn:hover .splitBtnMenu:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
 /* Fixed width rather than flexible, so it stays put and centered instead of
    stretching or shrinking as the space around it changes. */
 #commitFilterControl {
@@ -1396,6 +1439,10 @@ tr.filterHidden {
 #contextMenu {
   display: none;
   position: absolute;
+  /* Above the fixed top bar (15) and the panels, since a menu opened from a
+     toolbar button starts at the bar's own edge and would otherwise be cut
+     off by it. */
+  z-index: 30;
   background-color: var(--vscode-menu-background);
   box-shadow: 0 1px 4px 1px var(--vscode-widget-shadow);
   color: var(--vscode-menu-foreground);

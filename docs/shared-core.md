@@ -71,6 +71,16 @@ this came from reads the drag payload during `dragover`, which the browser
 blanks until the drop; here the type list is checked instead, so the drop is
 actually accepted.
 
+External tools are a further local addition. `externalTools.ts` is new and
+decides which configured tool answers which gesture, `toolbar.ts` grew a split
+button -- a label plus a chevron half that opens a menu without changing what a
+click runs -- and `main.ts` declares an Open in button last, so the shell's new
+`openInBtn` sits against the app menu. Double-clicking a file in the tree runs
+a configured diff tool instead of the host's own diff view, and falls back to
+it when none is configured. The protocol gained `runTool`, and the view state
+an optional `tools` list, which a host that configures none simply omits --
+that is what keeps the extension flavor's toolbar unchanged.
+
 Every other file remains as imported, and the MIT grant and notice are
 unchanged; MIT permits modification. What is lost is reproducibility: the
 snapshot can no longer be verified by hashing against

@@ -92,6 +92,10 @@ export interface LocalizedStrings {
   readonly unableToPush: string;
   readonly unableToPushTag: string;
   readonly unableToRebase: string;
+  readonly unableToRunTool: string;
+  readonly openIn: string;
+  readonly openInTitle: string;
+  readonly configureTools: string;
   readonly unableToRenameBranch: string;
   readonly unableToReset: string;
   readonly unableToRevert: string;

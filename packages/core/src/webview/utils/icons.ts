@@ -28,6 +28,10 @@ export const toolbarIcons = {
    */
   chevronRight: toolbarIcon('<path d="M6 3.5 10.5 8 6 12.5"/>'),
   chevronDown: toolbarIcon('<path d="M3.5 6 8 10.5 12.5 6"/>'),
+  /** Box with an arrow leaving it: hand what is open to another program. */
+  externalLink: toolbarIcon(
+    '<path d="M13 9.5v3a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 2 12.5v-8A1.5 1.5 0 0 1 3.5 3h3"/><path d="M9.5 2.5H14v4.5"/><path d="M7 9 13.5 2.5"/>'
+  ),
   /** Cross: throw working-tree changes away. */
   cross: toolbarIcon('<path d="M4.5 4.5l7 7"/><path d="M11.5 4.5l-7 7"/>'),
   /** Two commits joined by a check: send the selection to review. */

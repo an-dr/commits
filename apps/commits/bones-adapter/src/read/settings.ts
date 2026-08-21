@@ -124,6 +124,23 @@ export type DisplayMode = "system" | "light" | "dark";
 /** Hour cycle for the compact commit-time display. "system" reads the OS/browser locale. */
 export type TimeFormat = "system" | "12h" | "24h";
 
+/**
+ * One external program the app can hand a repository or a diff to.
+ *
+ * The arguments are templates rather than a command line, because the app
+ * passes them to the program as a vector: `{repo}` is the open repository,
+ * and `{left}` and `{right}` are the two revisions of a file, which the host
+ * writes to temporary files before the tool runs.
+ */
+export interface ToolSetting {
+  readonly name: string;
+  readonly command: string;
+  /** Arguments for opening the repository; an empty list hides the tool from the button. */
+  readonly openArgs: readonly string[];
+  /** Arguments for diffing one file; an empty list means this tool does not diff. */
+  readonly diffArgs: readonly string[];
+}
+
 export type AppSettings = Readonly<Record<string, unknown>> & {
   readonly mode: DisplayMode;
   readonly lightTheme: string;
@@ -131,7 +148,21 @@ export type AppSettings = Readonly<Record<string, unknown>> & {
   readonly timeFormat: TimeFormat;
   /** Manifest URL checked for a newer version at boot; empty disables self-update. */
   readonly updateManifestUrl: string;
+  /**
+   * External tools, in the order the Open in button offers them.
+   *
+   * Keyed under the `external-tools.` division rather than a bare `tools`, so
+   * everything this feature owns reads as one group in the file and in the
+   * editor's own section.
+   */
+  readonly "external-tools.tools": readonly ToolSetting[];
 };
+
+/** How many tools the button offers; beyond this the menu stops being a menu. */
+export const MAX_TOOLS = 5;
+
+/** The key the tools live under, spelled once. */
+export const TOOLS_KEY = "external-tools.tools";
 
 export interface SettingsDocument {
   readonly version: 2;
@@ -143,12 +174,42 @@ export const DEFAULT_CORE_SETTINGS: Readonly<Record<string, unknown>> = Object.f
   CORE_SETTING_DEFINITIONS.map((definition) => [definition.key, cloneValue(definition.defaultValue)]),
 );
 
+/**
+ * The tool a fresh install starts with.
+ *
+ * VS Code is shipped configured rather than merely offered, so the Open in
+ * button is there to be found on first run; a machine without `code` on its
+ * PATH reports that when the button is used, which is a clearer answer than
+ * an app that silently has no such feature.
+ */
+export const VS_CODE_TOOL: ToolSetting = {
+  name: "VS Code",
+  command: "code",
+  openArgs: ["{repo}"],
+  diffArgs: ["--diff", "{left}", "{right}"],
+};
+
+/** Which preset a configured tool corresponds to, for the settings editor. */
+export function toolPreset(tool: ToolSetting | undefined): "vscode" | "custom" | "none" {
+  if (tool === undefined) return "none";
+  return tool.command === VS_CODE_TOOL.command &&
+    sameArgs(tool.openArgs, VS_CODE_TOOL.openArgs) &&
+    sameArgs(tool.diffArgs, VS_CODE_TOOL.diffArgs)
+    ? "vscode"
+    : "custom";
+}
+
+function sameArgs(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   mode: "system",
   lightTheme: "paper",
   darkTheme: "graphite",
   timeFormat: "system",
   updateManifestUrl: "",
+  [TOOLS_KEY]: [VS_CODE_TOOL],
 };
 
 export const DEFAULT_SETTINGS: SettingsDocument = {
@@ -192,8 +253,41 @@ export function validateSettings(candidate: unknown): SettingsDocument {
       darkTheme: typeof value.app.darkTheme === "string" ? value.app.darkTheme : "graphite",
       timeFormat: timeFormat === "12h" || timeFormat === "24h" ? timeFormat : "system",
       updateManifestUrl: typeof value.app.updateManifestUrl === "string" ? value.app.updateManifestUrl : "",
+      // An absent key is a document written before tools existed, which takes
+      // the default; a present empty list is someone who turned the tools off,
+      // and stays off. `tools` is read as a fallback for a document written
+      // while the key was still un-namespaced.
+      [TOOLS_KEY]: readTools(value.app),
     },
   };
+}
+
+/** The tools an `app` block declares, whichever spelling of the key it uses. */
+function readTools(app: Record<string, unknown>): readonly ToolSetting[] {
+  const stored = app[TOOLS_KEY] ?? app.tools;
+  return stored === undefined ? DEFAULT_APP_SETTINGS[TOOLS_KEY] : validateTools(stored);
+}
+
+/**
+ * Keeps the tools that are usable and drops the rest.
+ *
+ * A malformed entry is dropped on its own rather than resetting the list, the
+ * same way an invalid core value falls back without disturbing its neighbours:
+ * one mistyped tool should not cost the user the others.
+ */
+export function validateTools(value: unknown): readonly ToolSetting[] {
+  if (!Array.isArray(value)) return [];
+  const args = (candidate: unknown): string[] =>
+    Array.isArray(candidate) ? candidate.filter((entry): entry is string => typeof entry === "string") : [];
+  return value
+    .flatMap((entry) => {
+      if (!isRecord(entry) || typeof entry.command !== "string" || entry.command === "") return [];
+      const name = typeof entry.name === "string" && entry.name !== "" ? entry.name : entry.command;
+      return [{ name, command: entry.command, openArgs: args(entry.openArgs), diffArgs: args(entry.diffArgs) }];
+    })
+    // The cap is enforced here as well as in the editor, so a hand-written
+    // file cannot grow a menu the button was never meant to carry.
+    .slice(0, MAX_TOOLS);
 }
 
 function migrateVersionOne(value: Record<string, unknown>): SettingsDocument {
