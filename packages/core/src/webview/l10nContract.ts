@@ -9,9 +9,7 @@ export interface LocalizedStrings {
   readonly branch: string;
   readonly loading: string;
   readonly filesPanelPlaceholder: string;
-  readonly filesPanelTitle: string;
   readonly panelClose: string;
-  readonly comparisonTitle: string;
   readonly repoInProgressPrimary: string;
   readonly repoInProgressRebase: string;
   readonly repoInProgressMerge: string;
@@ -32,7 +30,6 @@ export interface LocalizedStrings {
   readonly repoInProgressActionFailed: string;
   readonly branchPanelLocalBranches: string;
   readonly branchPanelTags: string;
-  readonly changesPanelTitle: string;
   readonly changesStagedSection: string;
   readonly changesStageFile: string;
   readonly changesUnstageFile: string;
@@ -139,7 +136,6 @@ export interface LocalizedStrings {
   readonly dropRebase: string;
   readonly dropMoveTag: string;
   readonly dialogMoveBranchConfirm: string;
-  readonly dialogYesMoveBranch: string;
   readonly dialogMoveTagTitle: string;
   readonly dialogMoveTagSubmit: string;
   readonly dialogRebaseConfirm: string;

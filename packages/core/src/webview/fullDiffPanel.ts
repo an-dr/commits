@@ -116,10 +116,6 @@ export class FullDiffPanel {
     this.onStateChange(this.getState());
   }
 
-  public isHidden(): boolean {
-    return this.hidden;
-  }
-
   /** Replaces the body with the rendered file, or with a failure message. */
   public render(data: FullDiffData | null) {
     if (this.hidden) {

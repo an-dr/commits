@@ -43,7 +43,7 @@ export class FilesPanel {
     this.setupResize(resizeHandle);
 
     this.bar = new PanelBar(this.panel);
-    this.bar.addCloseButton(() => this.hide());
+    this.bar.addCloseButton(() => this.setHidden(true));
 
     // The panel owns its toolbar toggle the way the branch panel owns its own,
     // so its visibility has exactly one source of truth.
@@ -105,14 +105,6 @@ export class FilesPanel {
     document.body.style.setProperty("--files-panel-inline-width", width + "px");
   }
 
-  public show() {
-    this.setHidden(false);
-  }
-
-  public hide() {
-    this.setHidden(true);
-  }
-
   public toggle() {
     this.setHidden(!this.panelHidden);
   }
@@ -131,14 +123,6 @@ export class FilesPanel {
     document.body.classList.toggle("filesPanelHidden", this.panelHidden);
     this.applyWidth(this.panelHidden ? 0 : this.panelWidth);
     this.toggleBtn.classList.toggle("active", !this.panelHidden);
-  }
-
-  public isHidden(): boolean {
-    return this.panelHidden;
-  }
-
-  public getWidth(): number {
-    return this.panelWidth;
   }
 
   /** Replaces the file list, restoring the scroll position the user left. */

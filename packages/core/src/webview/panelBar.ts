@@ -38,8 +38,4 @@ export class PanelBar {
     this.closeBtn = this.addButton(svgIcons.close, l10n.panelClose, onClose);
     return this.closeBtn;
   }
-
-  public getElem(): HTMLElement {
-    return this.bar;
-  }
 }
