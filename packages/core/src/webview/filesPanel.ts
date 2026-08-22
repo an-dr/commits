@@ -1,3 +1,5 @@
+import { PanelBar } from "./panelBar";
+import { toolbarIcons } from "./utils/icons";
 import { clamp } from "./utils/math";
 
 /** Narrowest and widest the panel may be dragged, in pixels. */
@@ -15,6 +17,8 @@ export const DEFAULT_FILES_PANEL_WIDTH = 280;
  */
 export class FilesPanel {
   private readonly panel: HTMLElement;
+  private readonly bar: PanelBar;
+  private readonly toggleBtn: HTMLElement;
   private readonly contentElem: HTMLElement;
   private readonly footerElem: HTMLElement;
   private panelHidden: boolean = true;
@@ -22,8 +26,14 @@ export class FilesPanel {
   private scrollTop: number = 0;
   private onWidthChange: (width: number) => void;
 
-  constructor(width: number, onWidthChange: (width: number) => void = () => {}) {
+  constructor(
+    width: number,
+    hidden: boolean,
+    onWidthChange: (width: number) => void = () => {},
+    private readonly onVisibilityChange: (hidden: boolean) => void = () => {}
+  ) {
     this.panelWidth = clampWidth(width);
+    this.panelHidden = hidden;
     this.onWidthChange = onWidthChange;
     this.panel = document.getElementById("filesPanel")!;
 
@@ -31,6 +41,15 @@ export class FilesPanel {
     resizeHandle.id = "filesPanelResizeHandle";
     this.panel.appendChild(resizeHandle);
     this.setupResize(resizeHandle);
+
+    this.bar = new PanelBar(this.panel);
+    this.bar.addCloseButton(() => this.hide());
+
+    // The panel owns its toolbar toggle the way the branch panel owns its own,
+    // so its visibility has exactly one source of truth.
+    this.toggleBtn = document.getElementById("filesPanelToggleBtn")!;
+    this.toggleBtn.innerHTML = toolbarIcons.filesPanel;
+    this.toggleBtn.addEventListener("click", () => this.toggle());
 
     this.contentElem = document.createElement("div");
     this.contentElem.id = "filesPanelContent";
@@ -44,11 +63,10 @@ export class FilesPanel {
       this.scrollTop = this.contentElem.scrollTop;
     });
 
-    // Always starts hidden: the panel has nothing to show until a commit is
-    // selected, and an empty panel would only take space from the table.
+    // Opens as the user last left it: the panel is theirs to show or hide now,
+    // rather than something a selection opens and a cleared selection closes.
     this.applyInlineWidth(this.panelWidth);
-    this.applyWidth(0);
-    document.body.classList.add("filesPanelHidden");
+    this.applyLayout();
     this.showPlaceholder();
   }
 
@@ -88,29 +106,31 @@ export class FilesPanel {
   }
 
   public show() {
-    if (!this.panelHidden) {
-      return;
-    }
-    this.panelHidden = false;
-    document.body.classList.remove("filesPanelHidden");
-    this.applyWidth(this.panelWidth);
+    this.setHidden(false);
   }
 
   public hide() {
-    if (this.panelHidden) {
-      return;
-    }
-    this.panelHidden = true;
-    document.body.classList.add("filesPanelHidden");
-    this.applyWidth(0);
+    this.setHidden(true);
   }
 
   public toggle() {
-    if (this.panelHidden) {
-      this.show();
-    } else {
-      this.hide();
+    this.setHidden(!this.panelHidden);
+  }
+
+  private setHidden(hidden: boolean) {
+    if (this.panelHidden === hidden) {
+      return;
     }
+    this.panelHidden = hidden;
+    this.applyLayout();
+    this.onVisibilityChange(hidden);
+  }
+
+  /** Paints the current visibility onto the body and the toolbar toggle. */
+  private applyLayout() {
+    document.body.classList.toggle("filesPanelHidden", this.panelHidden);
+    this.applyWidth(this.panelHidden ? 0 : this.panelWidth);
+    this.toggleBtn.classList.toggle("active", !this.panelHidden);
   }
 
   public isHidden(): boolean {

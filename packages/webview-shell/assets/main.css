@@ -12,6 +12,8 @@ body {
   padding: 0;
   /* Height of #topBar: a 26px icon button plus its 4px padding and the rule. */
   --top-bar-height: 35px;
+  /* Height of a side panel's button bar: a 22px icon button plus its padding. */
+  --panel-bar-height: 26px;
   /* Defaults until the panels report their own widths. */
   --branch-panel-width: 220px;
   --files-panel-width: 0px;
@@ -68,6 +70,27 @@ body.unableToLoad {
   margin: 0 20px;
 }
 
+/* Panel button bar: the strip of actions every side panel wears along its top
+   edge. Buttons are laid out from the right, where the close button sits. */
+.panelBar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  box-sizing: border-box;
+  height: var(--panel-bar-height);
+  padding: 0 4px;
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+}
+.panelBar .panelBarBtn {
+  width: 22px;
+  height: 22px;
+}
+.panelBar .panelBarBtn svg {
+  width: 12px;
+  height: 12px;
+}
+
 /* Branch panel */
 #branchPanelSidebar {
   position: fixed;
@@ -92,6 +115,14 @@ body.branchPanelHidden #branchPanelSidebar {
   width: 6px;
   cursor: col-resize;
 }
+/* The sidebar is its own scroller, so the bar sticks rather than being pinned:
+   the branch list, filter included, scrolls beneath it. */
+#branchPanelSidebar > .panelBar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 .branchPanelSectionHeader {
   display: flex;
   align-items: baseline;
@@ -496,6 +527,13 @@ body.filesPanelHidden #filesPanel {
   transform: translateX(100%);
   visibility: hidden;
 }
+#filesPanel > .panelBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+}
 #filesPanelResizeHandle {
   position: absolute;
   top: 0;
@@ -514,10 +552,10 @@ body.filesPanelHidden #filesPanel {
   font-size: 12px;
   overflow: hidden;
 }
-/* Inset by the footer height, which the panel sets inline. */
+/* Starts below the button bar; the footer height is inset inline by the panel. */
 #filesPanelContent {
   position: absolute;
-  top: 0;
+  top: var(--panel-bar-height);
   bottom: 0;
   left: 0;
   right: 0;

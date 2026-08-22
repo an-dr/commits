@@ -9,17 +9,25 @@ describe("shared MIT webview shell", () => {
       "refreshBtn", "resetBtn", "pullBtn", "pushBtn", "moreBtn", "findWidget",
       "branchPanel", "repoInProgressBanner", "commitGraph", "commitTable", "footer",
       "filesPanel", "fullDiffPanel", "contextMenu", "dialogBacking", "dialog",
-      "scrollShadow", "openInBtn",
+      "scrollShadow", "openInBtn", "filesPanelToggleBtn",
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
   });
 
-  it("puts Open in last among the buttons, right before the app menu", () => {
+  it("leads the left group with the branch toggle, then the repo and Open in", () => {
     const html = buildGraphShell((message) => message);
 
-    expect(html.indexOf('id="pushBtn"')).toBeLessThan(html.indexOf('id="openInBtn"'));
-    expect(html.indexOf('id="openInBtn"')).toBeLessThan(html.indexOf('id="appMenuSlot"'));
+    expect(html.indexOf('id="sidebarToggleBtn"')).toBeLessThan(html.indexOf('id="repoSelect"'));
+    expect(html.indexOf('id="repoSelect"')).toBeLessThan(html.indexOf('id="openInBtn"'));
+    expect(html.indexOf('id="openInBtn"')).toBeLessThan(html.indexOf('id="commitFilter"'));
+  });
+
+  it("puts the files panel toggle last of all, after the app and more menus", () => {
+    const html = buildGraphShell((message) => message);
+
+    expect(html.indexOf('id="appMenuSlot"')).toBeLessThan(html.indexOf('id="filesPanelToggleBtn"'));
+    expect(html.indexOf('id="moreBtn"')).toBeLessThan(html.indexOf('id="filesPanelToggleBtn"'));
   });
 
   it("escapes host-provided translations before inserting them into HTML", () => {

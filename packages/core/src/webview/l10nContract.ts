@@ -10,6 +10,7 @@ export interface LocalizedStrings {
   readonly loading: string;
   readonly filesPanelPlaceholder: string;
   readonly filesPanelTitle: string;
+  readonly panelClose: string;
   readonly comparisonTitle: string;
   readonly repoInProgressPrimary: string;
   readonly repoInProgressRebase: string;

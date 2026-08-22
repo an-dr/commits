@@ -13,6 +13,10 @@ export const toolbarIcons = {
   sidebar: toolbarIcon(
     '<rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6.5 3v10"/><path d="M4.2 5.5h.1M4.2 8h.1M4.2 10.5h.1"/>'
   ),
+  /** The sidebar glyph mirrored: toggle the changed-files panel on the right. */
+  filesPanel: toolbarIcon(
+    '<rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M9.5 3v10"/><path d="M11.8 5.5h.1M11.8 8h.1M11.8 10.5h.1"/>'
+  ),
   /** Three stacked lines: the app menu. */
   menu: toolbarIcon('<path d="M3 5h10"/><path d="M3 8h10"/><path d="M3 11h10"/>'),
   /** Horizontal ellipsis: the overflow menu. */

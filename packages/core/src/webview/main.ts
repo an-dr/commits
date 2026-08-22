@@ -122,6 +122,7 @@ class GitGraphView {
   private filesPanel: FilesPanel;
   private fullDiffPanel: FullDiffPanel;
   private filesPanelWidth: number;
+  private filesPanelHidden: boolean;
   private repoInProgressBanner: RepoInProgressBanner;
 
   private loadBranchesCallback: ((changes: boolean, isRepo: boolean) => void) | null = null;
@@ -157,6 +158,7 @@ class GitGraphView {
     );
     this.scrollShadowElem = <HTMLInputElement>document.getElementById("scrollShadow")!;
     this.filesPanelWidth = prevState?.filesPanelWidth ?? DEFAULT_FILES_PANEL_WIDTH;
+    this.filesPanelHidden = prevState?.filesPanelHidden ?? true;
     this.repoInProgressBanner = new RepoInProgressBanner((type, action) => {
       const run = () => sendMessage({ command: "inProgressAction", operationType: type, action });
       if (action === "abort" && viewState.confirmAbortRepoInProgress) {
@@ -169,10 +171,18 @@ class GitGraphView {
         run();
       }
     });
-    this.filesPanel = new FilesPanel(this.filesPanelWidth, (width) => {
-      this.filesPanelWidth = width;
-      this.saveState();
-    });
+    this.filesPanel = new FilesPanel(
+      this.filesPanelWidth,
+      this.filesPanelHidden,
+      (width) => {
+        this.filesPanelWidth = width;
+        this.saveState();
+      },
+      (hidden) => {
+        this.filesPanelHidden = hidden;
+        this.saveState();
+      }
+    );
     this.fullDiffPanel = new FullDiffPanel(prevState?.fullDiffPanel, () => this.saveState());
     // The branch panel owns the sidebar toggle button, including its icon and
     // active state, so the toolbar only holds the buttons on the right.
@@ -348,14 +358,15 @@ class GitGraphView {
   }
 
   /**
-   * Closes whatever Escape should close next: the diff panel, then an open
-   * commit, then the selection itself.
+   * Closes whatever Escape should close next: an open commit, then the
+   * selection itself.
+   *
+   * The docked panels are deliberately not in this chain any more: a panel the
+   * user opened should not vanish on a keystroke aimed at something else. Each
+   * carries its own close control instead -- the files panel a toolbar toggle
+   * and a close button, the diff panel the close button in its header.
    */
   public dismissTopLayer() {
-    if (!this.fullDiffPanel.isHidden()) {
-      this.fullDiffPanel.close();
-      return;
-    }
     if (this.expandedCommit !== null) {
       this.hideCommitDetails();
       return;
@@ -373,8 +384,9 @@ class GitGraphView {
     this.previewHash = null;
     this.workingTreeOpen = false;
     this.renderSelection();
+    // The panel's visibility belongs to its toolbar toggle, not to the
+    // selection: clearing the selection empties it rather than closing it.
     this.filesPanel.clear();
-    this.filesPanel.hide();
   }
 
   /**
@@ -398,7 +410,6 @@ class GitGraphView {
     }
     this.hideCommitDetails();
     this.filesPanel.setContentLoading();
-    this.filesPanel.show();
     sendMessage({
       command: "commitComparison",
       repo: this.currentRepo!,
@@ -1061,6 +1072,7 @@ class GitGraphView {
       showRemoteBranches: this.showRemoteBranches,
       expandedCommit: this.expandedCommit,
       filesPanelWidth: this.filesPanelWidth,
+      filesPanelHidden: this.filesPanelHidden,
       branchPanel: this.branchPanel.getState(),
       fullDiffPanel: this.fullDiffPanel.getState()
     });
@@ -2214,7 +2226,6 @@ class GitGraphView {
     this.renderSelection();
     this.hideCommitDetails();
     this.filesPanel.setContentLoading();
-    this.filesPanel.show();
     sendMessage({ command: "workingTreeChanges", repo: this.currentRepo! });
   }
 
@@ -2378,7 +2389,6 @@ class GitGraphView {
     this.filesPanel.setContent(
       generateGitFileTreeHtml(fileTree, commitDetails.fileChanges) + "</table>"
     );
-    this.filesPanel.show();
     this.registerFileTreeListeners(fileTree, hash, hash);
   }
 

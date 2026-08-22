@@ -16,6 +16,7 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     loading: t("Loading ..."),
     filesPanelPlaceholder: t("Select a commit to see the files it changed"),
     filesPanelTitle: t("Changed Files"),
+    panelClose: t("Close Panel"),
     comparisonTitle: t("Comparing"),
     repoInProgressPrimary: t("The working tree is in {0}-state."),
     repoInProgressRebase: t("Rebase"),

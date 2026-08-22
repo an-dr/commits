@@ -525,11 +525,15 @@ function showRepositoryOverlay(reason = ""): void {
   // typed. Enter on the empty box takes it (see wireRepositoryOverlay).
   input.placeholder = lastActiveRepository || "C:/path/to/repository";
   document.getElementById("standaloneRepoOverlay")!.hidden = false;
+  // Lifts the app menu over the overlay: it is the only toolbar control that
+  // still means anything with no repository open (Open..., Recent, settings).
+  document.body.classList.add("repoOverlayOpen");
   input.focus();
 }
 
 function hideRepositoryOverlay(): void {
   document.getElementById("standaloneRepoOverlay")!.hidden = true;
+  document.body.classList.remove("repoOverlayOpen");
 }
 
 function post(message: RequestMessage | StandaloneMessage): void {

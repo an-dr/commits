@@ -89,8 +89,12 @@ export class Toolbar {
       event.stopPropagation();
       this.showOverflowMenu(event);
     });
-    // Delegated so that re-declaring the button set cannot stack up listeners.
-    this.group.addEventListener("click", (event) => {
+    // Delegated from #controls rather than #controlsBtns: Open in sits in the
+    // left group now, and a declared button must work from either side. Both
+    // handlers below match on the declared button set, so the panel toggles --
+    // which live in #controls too and own their own listeners -- fall through
+    // untouched rather than firing twice.
+    this.controls.addEventListener("click", (event) => {
       const elem = (event.target as Element).closest<HTMLElement>(".iconBtn");
       const button = this.buttons.find((candidate) => candidate.id === elem?.id);
       if (button === undefined || !button.visible) {
@@ -123,7 +127,7 @@ export class Toolbar {
         button.onClick();
       }, DOUBLE_CLICK_MS);
     });
-    this.group.addEventListener("contextmenu", (event) => {
+    this.controls.addEventListener("contextmenu", (event) => {
       const elem = (event.target as Element).closest<HTMLElement>(".iconBtn");
       const button = this.buttons.find((candidate) => candidate.id === elem?.id);
       if (button === undefined || !button.visible || button.overflowActions === undefined) {

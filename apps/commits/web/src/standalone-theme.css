@@ -78,6 +78,26 @@ body {
   display: none;
 }
 
+/* The overlay covers the toolbar, but the app menu still has work to do there:
+   Open..., Recent, and the settings editor are how a repository gets chosen at
+   all. #topBar is position:fixed and so opens a stacking context -- a z-index
+   on the menu alone would be capped inside it -- so the bar itself is lifted
+   and everything that needs an open repository is hidden instead. */
+body.repoOverlayOpen #topBar {
+  z-index: 10001;
+  background: none;
+  border-bottom: 0;
+  pointer-events: none;
+}
+/* The menu is the one control still worth clicking, so it alone takes input. */
+body.repoOverlayOpen #standaloneMenuWrap {
+  pointer-events: auto;
+}
+body.repoOverlayOpen #controlsLeft,
+body.repoOverlayOpen #controlsBtns > *:not(#appMenuSlot) {
+  visibility: hidden;
+}
+
 #standaloneRepoForm {
   width: min(680px, calc(100vw - 48px));
   padding: 24px;

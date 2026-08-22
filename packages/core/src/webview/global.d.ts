@@ -124,6 +124,8 @@ declare global {
     expandedCommit: ExpandedCommit | null;
     /** Absent in state saved before the changed-files panel existed. */
     filesPanelWidth?: number;
+    /** Absent in state saved before the panel became toggle-driven. */
+    filesPanelHidden?: boolean;
     /** Absent in state saved before the branch panel existed. */
     branchPanel?: import("./branchPanel").BranchPanelState;
     /** Absent in state saved before the full diff panel existed. */

@@ -1,4 +1,5 @@
 import { renderBranchPanel } from "./branchPanelRender";
+import { PanelBar } from "./panelBar";
 import { toolbarIcons } from "./utils/icons";
 import { clamp } from "./utils/math";
 
@@ -63,6 +64,7 @@ export class BranchPanel {
   private readonly list: HTMLElement;
   private readonly sidebar: HTMLElement;
   private readonly toggle: HTMLElement;
+  private readonly bar: PanelBar;
   private readonly onLayoutChange: (state: BranchPanelState) => void;
   private readonly onSelect: (value: string, additive: boolean) => void;
   private readonly onAction: (
@@ -102,6 +104,10 @@ export class BranchPanel {
 
     this.toggle.innerHTML = toolbarIcons.sidebar;
     this.toggle.addEventListener("click", () => this.setHidden(!this.hidden));
+    // Same state the toolbar toggle drives, so closing here leaves the toggle
+    // able to bring the panel back and the persisted layout correct.
+    this.bar = new PanelBar(this.sidebar);
+    this.bar.addCloseButton(() => this.setHidden(true));
     this.setupResize(document.getElementById("branchPanelResizeHandle")!);
     this.setupBehavior();
     this.applyLayout(false);

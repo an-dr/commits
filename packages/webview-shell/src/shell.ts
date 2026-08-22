@@ -9,8 +9,9 @@ export function buildGraphShell(t: (message: string) => string): string {
     <div id="topBar">
       <div id="controls">
         <div id="controlsLeft">
-          <div id="repoSelect" class="dropdown"></div>
           <div id="sidebarToggleBtn" class="iconBtn" title="${text("Toggle Branch Panel")}"></div>
+          <div id="repoSelect" class="dropdown"></div>
+          <div id="openInBtn" class="iconBtn"></div>
           <div class="controlsSpacer"></div>
           <span id="commitFilterControl"><input id="commitFilter" type="search" spellcheck="false" placeholder="${text("Filter commits...")}" title="${text("Filter by message, author, email, or hash")}"></span>
           <div id="findBtn" class="iconBtn" title="${text("Find Commits")}"></div>
@@ -21,9 +22,9 @@ export function buildGraphShell(t: (message: string) => string): string {
           <div id="resetBtn" class="iconBtn" title="${text("Reset to HEAD")}"></div>
           <div id="pullBtn" class="iconBtn"></div>
           <div id="pushBtn" class="iconBtn" title="${text("Push Current Branch")}"></div>
-          <div id="openInBtn" class="iconBtn"></div>
           <div id="appMenuSlot"></div>
           <div id="moreBtn" class="iconBtn" title="${text("More Actions")}"></div>
+          <div id="filesPanelToggleBtn" class="iconBtn" title="${text("Toggle Changed Files Panel")}"></div>
         </div>
       </div>
     </div>
