@@ -1,17 +1,36 @@
-use std::io::Read;
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
+//! The `repo-os` module: the OS actions that need a repository.
+//!
+//! The generic desktop surface -- clipboard, browser, file pickers, HTTPS
+//! fetch -- is the engine's `os` module, on `os/*`. What is left here is what
+//! no other host could use: reading a file confined to one repository,
+//! scanning a folder for repositories, and launching a configured diff or
+//! merge tool against one.
+//!
+//! The two are separate endpoints rather than one with a wider vocabulary,
+//! because an action space shared between a generic module and an application
+//! one has to leave gaps for both. Each numbers its actions from zero and
+//! answers on its own result topic; a caller pairs answers to questions by
+//! request id and does not care which endpoint replied.
+//!
+//! Also here: `rendezvous`, the file-backed handshake `GIT_ASKPASS` and
+//! `GIT_EDITOR` helpers use to reach a running app, and `discover`, the
+//! repository scan.
 
 use base64::Engine;
+use std::sync::Arc;
+use std::thread;
+
 use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_ipc::native::{NativeResult, OsRequest};
 
 pub mod discover;
 pub mod rendezvous;
 
-pub const REQUEST_TOPIC: &str = "os/request";
-pub const RESULT_TOPIC: &str = "os/result";
+/// This module's topics. The generic desktop actions -- clipboard, urls,
+/// pickers, fetch -- are the engine's `os` module's, on `os/*`; what is left
+/// here needs a repository, which no other host has.
+pub const REPO_REQUEST_TOPIC: &str = "repo-os/request";
+pub const REPO_RESULT_TOPIC: &str = "repo-os/result";
 pub const PROMPT_TOPIC: &str = "os/prompt";
 pub const PROMPT_RESPONSE_TOPIC: &str = "os/prompt-response";
 
@@ -19,22 +38,9 @@ pub const PROMPT_RESPONSE_TOPIC: &str = "os/prompt-response";
 /// unusable anyway, and the text crosses the panel boundary as one string.
 pub const MAX_FILE_READ_BYTES: u64 = 4 * 1024 * 1024;
 
-/// Largest body accepted from `fetch_url`, an avatar-sized image or a small
-/// manifest — never a bulk download.
-pub const MAX_FETCH_BYTES: u64 = 5 * 1024 * 1024;
-/// How long `fetch_url` waits before giving up, so a stalled remote never
-/// blocks the OS module's request thread indefinitely.
-pub const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
-
-pub trait OsBackend: Send + Sync {
-    fn read_clipboard(&self) -> Result<String, String>;
-    fn write_clipboard(&self, value: &str) -> Result<(), String>;
-    fn open_url(&self, value: &str) -> Result<(), String>;
-    /// Reveals a directory in the OS's native file manager (Explorer, Finder,
-    /// or the desktop's configured file manager on Linux).
-    fn open_directory(&self, path: &str) -> Result<(), String>;
-    fn pick_file(&self, title: &str) -> Result<Option<String>, String>;
-    fn pick_folder(&self, title: &str) -> Result<Option<String>, String>;
+/// The git-aware half, which the engine's generic OS surface has no business
+/// knowing about: every action here needs a repository to mean anything.
+pub trait RepoOsBackend: Send + Sync {
     /// Reads a text file inside one repository.
     ///
     /// `request` carries the repository and the path, separated by a newline.
@@ -42,12 +48,11 @@ pub trait OsBackend: Send + Sync {
     /// is reported as absent rather than as an error: not being readable is a
     /// normal outcome for a working-tree entry.
     fn read_file(&self, request: &str) -> Result<Option<String>, String>;
-    /// Fetches an HTTPS URL and returns its body as `"{content-type};base64,{data}"`,
-    /// a generic, self-describing shape any caller can turn into a data URI or
-    /// decode directly. A 404 is reported as `Ok(None)` — a normal "nothing at
-    /// this URL" outcome, e.g. a Gravatar that does not exist — rather than an
-    /// error; other failures (network, non-2xx, oversized body) are `Err`.
-    fn fetch_url(&self, url: &str) -> Result<Option<String>, String>;
+    /// Lists every git repository at or below one folder, newline-separated,
+    /// with the folder itself first when it is one. A folder holding no
+    /// repository at all is reported as absent rather than as an error: it is
+    /// a normal answer to "what is in here".
+    fn find_repositories(&self, path: &str) -> Result<Option<String>, String>;
     /// Runs one external tool the user has configured.
     ///
     /// `request` is the line-framed form [`parse_tool_run`] reads: the
@@ -55,95 +60,16 @@ pub trait OsBackend: Send + Sync {
     /// The tool is started and left to run on its own -- the app does not wait
     /// for an editor the user may keep open for hours.
     fn run_tool(&self, request: &str) -> Result<(), String>;
-    /// Lists every git repository at or below one folder, newline-separated,
-    /// with the folder itself first when it is one. A folder holding no
-    /// repository at all is reported as absent rather than as an error: it is
-    /// a normal answer to "what is in here".
-    fn find_repositories(&self, path: &str) -> Result<Option<String>, String>;
 }
 
 pub struct SystemOsBackend;
 
-impl OsBackend for SystemOsBackend {
-    fn read_clipboard(&self) -> Result<String, String> {
-        arboard::Clipboard::new()
-            .and_then(|mut clipboard| clipboard.get_text())
-            .map_err(|error| error.to_string())
-    }
-    fn write_clipboard(&self, value: &str) -> Result<(), String> {
-        arboard::Clipboard::new()
-            .and_then(|mut clipboard| clipboard.set_text(value))
-            .map_err(|error| error.to_string())
-    }
-    fn open_url(&self, value: &str) -> Result<(), String> {
-        if !value.starts_with("https://")
-            && !value.starts_with("http://")
-            && !value.starts_with("mailto:")
-        {
-            return Err("unsupported external URL scheme".into());
-        }
-        open::that(value).map_err(|error| error.to_string())
-    }
-    fn open_directory(&self, path: &str) -> Result<(), String> {
-        if !std::path::Path::new(path).is_dir() {
-            return Err(format!("{path} is not a directory"));
-        }
-        open::that(path).map_err(|error| error.to_string())
-    }
-    fn pick_file(&self, title: &str) -> Result<Option<String>, String> {
-        Ok(rfd::FileDialog::new()
-            .set_title(title)
-            .pick_file()
-            .map(|path| path.to_string_lossy().into_owned()))
-    }
-    fn pick_folder(&self, title: &str) -> Result<Option<String>, String> {
-        Ok(rfd::FileDialog::new()
-            .set_title(title)
-            .pick_folder()
-            .map(|path| path.to_string_lossy().into_owned()))
-    }
+impl RepoOsBackend for SystemOsBackend {
     fn read_file(&self, request: &str) -> Result<Option<String>, String> {
         let (repository, path) = request
             .split_once('\n')
             .ok_or_else(|| String::from("a file read names a repository and a path"))?;
         read_repository_file(std::path::Path::new(repository), path)
-    }
-    fn fetch_url(&self, url: &str) -> Result<Option<String>, String> {
-        if !url.starts_with("https://") {
-            return Err("only https URLs may be fetched".into());
-        }
-        // A Windows target's Rust toolchain here has no working C compiler for
-        // rustls's usual ring backend, so this goes through native-tls
-        // (Schannel) instead, built fresh per call rather than cached: it is
-        // cheap local setup, not a network round trip.
-        let connector =
-            native_tls::TlsConnector::new().map_err(|error| error.to_string())?;
-        let agent = ureq::builder()
-            .tls_connector(std::sync::Arc::new(connector))
-            .timeout(FETCH_TIMEOUT)
-            .build();
-        let response = match agent.get(url).call() {
-            Ok(response) => response,
-            Err(ureq::Error::Status(404, _)) => return Ok(None),
-            Err(error) => return Err(error.to_string()),
-        };
-        let content_type = response.content_type().to_string();
-        let mut body = Vec::new();
-        // One byte past the cap: reading exactly MAX_FETCH_BYTES would silently
-        // truncate an oversized body into invalid, corrupt-looking data instead
-        // of a clean error.
-        response
-            .into_reader()
-            .take(MAX_FETCH_BYTES + 1)
-            .read_to_end(&mut body)
-            .map_err(|error| error.to_string())?;
-        if body.len() as u64 > MAX_FETCH_BYTES {
-            return Err(format!("response exceeds {MAX_FETCH_BYTES} bytes"));
-        }
-        Ok(Some(format!(
-            "{content_type};base64,{}",
-            base64::engine::general_purpose::STANDARD.encode(body)
-        )))
     }
     fn run_tool(&self, request: &str) -> Result<(), String> {
         let run = parse_tool_run(request)?;
@@ -167,20 +93,6 @@ impl OsBackend for SystemOsBackend {
                 .join("\n"),
         ))
     }
-}
-
-/// Splits a `fetch_url` result of the form `"{content-type};base64,{data}"`
-/// back into its content type and raw bytes. A shared helper rather than
-/// each `fetch_url` consumer re-implementing the same split-and-decode, since
-/// the action is intentionally generic and meant to grow more callers.
-pub fn decode_fetch_result(value: &str) -> Result<(String, Vec<u8>), String> {
-    let (content_type, encoded) = value
-        .split_once(";base64,")
-        .ok_or_else(|| String::from("fetch_url result is not in the expected content-type;base64,data form"))?;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .map_err(|error| error.to_string())?;
-    Ok((content_type.to_string(), bytes))
 }
 
 /// One side of a diff a tool is about to be handed.
@@ -319,23 +231,31 @@ fn read_repository_file(
 
 pub struct OsModule {
     bus: Option<Bus>,
-    backend: Arc<dyn OsBackend>,
+    repo_backend: Arc<dyn RepoOsBackend>,
 }
 
 impl OsModule {
-    pub fn new(backend: Arc<dyn OsBackend>) -> Self {
-        Self { bus: None, backend }
+    pub fn new(repo_backend: Arc<dyn RepoOsBackend>) -> Self {
+        Self {
+            bus: None,
+            repo_backend,
+        }
     }
 
+    /// Runs one request off the bus thread.
+    ///
+    /// A repository scan walks a directory tree and an external tool is
+    /// spawned; neither may stall the engine, so the answer arrives when the
+    /// work finishes, paired by request id.
     fn start(&self, request: OsRequest) {
         let Some(bus) = self.bus.clone() else { return };
-        let backend = self.backend.clone();
+        let repo_backend = self.repo_backend.clone();
         thread::spawn(move || {
-            let result = execute(backend.as_ref(), &request);
+            let result = execute_repo(repo_backend.as_ref(), &request);
             if let Ok(payload) = result.encode() {
                 bus.publish(Envelope {
-                    topic: RESULT_TOPIC.into(),
-                    sender: "os".into(),
+                    topic: REPO_RESULT_TOPIC.into(),
+                    sender: "repo-os".into(),
                     correlation: Some(u64::from(request.request_id)),
                     payload,
                 });
@@ -352,8 +272,8 @@ impl Default for OsModule {
 
 impl Handler for OsModule {
     fn handle(&mut self, envelope: &Envelope) {
-        if envelope.topic == REQUEST_TOPIC {
-            if let Ok(request) = OsRequest::decode(&envelope.payload) {
+        if envelope.topic == REPO_REQUEST_TOPIC {
+            if let Ok(request) = OsRequest::decode_repo(&envelope.payload) {
                 self.start(request);
             }
         } else if envelope.topic == PROMPT_RESPONSE_TOPIC {
@@ -368,11 +288,11 @@ impl Handler for OsModule {
 
 impl Module for OsModule {
     fn name(&self) -> &str {
-        "os"
+        "repo-os"
     }
 
     fn init(&mut self, context: &mut ModuleContext) -> Result<(), String> {
-        context.subscribe(REQUEST_TOPIC);
+        context.subscribe(REPO_REQUEST_TOPIC);
         context.subscribe(PROMPT_RESPONSE_TOPIC);
         self.bus = context.get_service::<Bus>().cloned();
         self.bus
@@ -400,35 +320,31 @@ fn prompt_directory() -> std::path::PathBuf {
     std::env::current_exe().ok().and_then(|path| path.parent().map(|parent| parent.join("saves/prompts"))).unwrap_or_else(|| std::path::PathBuf::from("saves/prompts"))
 }
 
-fn execute(backend: &dyn OsBackend, request: &OsRequest) -> NativeResult {
+fn execute_repo(backend: &dyn RepoOsBackend, request: &OsRequest) -> NativeResult {
     let outcome = match request.action {
-        0 => backend.read_clipboard().map(Some),
-        1 => backend
-            .write_clipboard(&request.value)
-            .map(|_| Some(String::new())),
-        2 => backend
-            .open_url(&request.value)
-            .map(|_| Some(String::new())),
-        3 => backend.pick_file(&request.value),
-        4 => backend.pick_folder(&request.value),
-        5 => backend.read_file(&request.value),
-        6 => backend
-            .open_directory(&request.value)
-            .map(|_| Some(String::new())),
-        7 => backend.fetch_url(&request.value),
-        8 => backend.find_repositories(&request.value),
-        9 => backend.run_tool(&request.value).map(|_| Some(String::new())),
-        _ => Err("unknown OS action".into()),
+        0 => backend.read_file(&request.value),
+        1 => backend.find_repositories(&request.value),
+        2 => backend.run_tool(&request.value).map(|_| Some(String::new())),
+        _ => Err("unknown repo-os action".into()),
     };
+    into_result(request.request_id, outcome)
+}
+
+/// Shapes either endpoint's outcome into the one result both report.
+///
+/// `Ok(None)` is not an error: an absent file, a folder holding no repository
+/// and a 404 are all normal answers, reported as `accepted: false` with no
+/// error text.
+fn into_result(request_id: u32, outcome: Result<Option<String>, String>) -> NativeResult {
     match outcome {
         Ok(value) => NativeResult {
-            request_id: request.request_id,
+            request_id,
             accepted: value.is_some(),
             value: value.unwrap_or_default(),
             error: String::new(),
         },
         Err(error) => NativeResult {
-            request_id: request.request_id,
+            request_id,
             accepted: false,
             value: String::new(),
             error,

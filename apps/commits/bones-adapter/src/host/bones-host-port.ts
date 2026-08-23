@@ -13,10 +13,12 @@ import type { CommitsRepoStatus, HostPort, InstallStatus, LaunchRepository, LogL
 import {
   encodeGitRun,
   encodeOsRequest,
+  encodeRepoOsRequest,
   encodeUpdaterRequest,
   encodeWatchRequest,
   type GitRun,
   type OsAction,
+  type RepoOsAction,
   type UpdaterAction,
 } from "@commits/ipc/native";
 
@@ -134,6 +136,10 @@ export class BonesHostPort implements HostPort {
 
   requestOs(requestId: number, action: OsAction, value = ""): void {
     publish("os/request", encodeOsRequest(requestId, action, value));
+  }
+
+  requestRepoOs(requestId: number, action: RepoOsAction, value = ""): void {
+    publish("repo-os/request", encodeRepoOsRequest(requestId, action, value));
   }
 
   requestUpdate(requestId: number, action: UpdaterAction, manifestUrl: string): void {

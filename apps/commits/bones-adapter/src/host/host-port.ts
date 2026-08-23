@@ -81,6 +81,18 @@ export interface HostPort {
   runGit(request: import("@commits/ipc/native").GitRun): void;
   respondPrompt(id: string, value: string): void;
   requestOs(requestId: number, action: import("@commits/ipc/native").OsAction, value?: string): void;
+  /**
+   * Asks the git-aware endpoint, whose actions all need a repository.
+   *
+   * Separate from `requestOs` because that endpoint is the engine's generic
+   * desktop surface, which knows nothing about repositories. Results from both
+   * arrive the same way, correlated by request id.
+   */
+  requestRepoOs(
+    requestId: number,
+    action: import("@commits/ipc/native").RepoOsAction,
+    value?: string,
+  ): void;
 
   /**
    * Starts or stops watching a repository for changes made outside the app.

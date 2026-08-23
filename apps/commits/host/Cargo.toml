@@ -1,9 +1,9 @@
 [package]
 name = "commits-app"
 # The standalone app's own version: compared against a hosted manifest by
-# the self-updater (commits_upgrader::is_newer) and shown in the About menu.
+# the self-updater (bones_upgrader::is_newer) and shown in the About menu.
 # Bump on every integration into main -- see AGENTS.md.
-version = "1.4.0"
+version = "1.5.0"
 edition = "2021"
 license = "MIT"
 
@@ -19,9 +19,12 @@ path = "src/bin/commits-askpass.rs"
 name = "commits-editor"
 path = "src/bin/commits-editor.rs"
 
-# The launcher is not here. It is built by `commits-upgrader`, which owns
-# both halves of the replace-each-other mechanism, and is placed at the
-# install root as `commits.exe` by dist.ps1 and by an install.
+# The permanent entry point, placed at the install root as `commits.exe` by
+# dist.ps1 and by an install. The mechanism is `bones-upgrader`'s; the name
+# is ours, which is why the binary is declared here -- users see it.
+[[bin]]
+name = "commits-launcher"
+path = "src/bin/commits-launcher.rs"
 
 [build-dependencies]
 winresource = "0.1"
@@ -32,12 +35,13 @@ winresource = "0.1"
 # features off because this app draws its interface in a web panel -- it
 # needs `web` (which pulls in the window and the presentation stack) but
 # never the audio or game-core native modules.
-bones-engine = { path = "../../../vendor/bones/crates/bones-engine", default-features = false, features = ["web"] }
+bones-engine = { path = "../../../vendor/bones/crates/bones-engine", default-features = false, features = ["web", "os"] }
 bones-messages = { path = "../../../vendor/bones/crates/bones-messages" }
 commits-git = { path = "../../../crates/git" }
 commits-ipc = { path = "../../../ipc/rust" }
+bones-module-os = { path = "../../../vendor/bones/crates/bones-engine/bones-module-os" }
 commits-os = { path = "../../../crates/os" }
-commits-upgrader = { path = "../../../crates/upgrader" }
+bones-upgrader = { path = "../../../vendor/bones/crates/bones-upgrader" }
 commits-watcher = { path = "../../../crates/watcher" }
 dirs = "6.0.0"
 rfd = "0.15"

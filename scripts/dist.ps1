@@ -92,10 +92,10 @@ if ($Part -in @("wasm", "all")) {
 }
 
 if ($Part -in @("host", "all")) {
-    # Two packages: the app, and the upgrader that builds the launcher. The
-    # launcher lives there because the app can only replace an entry point
-    # something else produced -- see crates/upgrader/src/launcher.rs.
-    cargo build --release -p commits-app -p commits-upgrader
+    # One package, three binaries: the app, the launcher that starts it, and
+    # the askpass/editor helpers. The mechanism behind the launcher is
+    # bones-upgrader's; the name is ours, so the binary is declared here.
+    cargo build --release -p commits-app
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     # The launcher is the permanent entry point: it picks the current version
     # folder before running the real app logic, built separately as

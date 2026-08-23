@@ -368,10 +368,11 @@ dependencies = [
 
 [[package]]
 name = "bones-engine"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "bones-kernel",
  "bones-messages",
+ "bones-module-os",
  "bones-module-renderer",
  "bones-module-ui",
  "bones-module-web",
@@ -380,7 +381,7 @@ dependencies = [
 
 [[package]]
 name = "bones-kernel"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "bones-messages",
  "pubsub-bus",
@@ -391,11 +392,25 @@ dependencies = [
 
 [[package]]
 name = "bones-messages"
-version = "1.0.0"
+version = "1.1.0"
+
+[[package]]
+name = "bones-module-os"
+version = "1.1.0"
+dependencies = [
+ "arboard",
+ "base64",
+ "bones-kernel",
+ "bones-messages",
+ "native-tls",
+ "open",
+ "rfd",
+ "ureq",
+]
 
 [[package]]
 name = "bones-module-renderer"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "ab_glyph",
  "bones-kernel",
@@ -407,7 +422,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-ui"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "bones-kernel",
  "bones-messages",
@@ -417,7 +432,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-web"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "bones-kernel",
  "bones-messages",
@@ -426,6 +441,18 @@ dependencies = [
  "send_wrapper",
  "serde_json",
  "wry",
+]
+
+[[package]]
+name = "bones-upgrader"
+version = "1.1.0"
+dependencies = [
+ "base64",
+ "dirs",
+ "serde_json",
+ "sha2",
+ "winresource",
+ "zip",
 ]
 
 [[package]]
@@ -606,16 +633,17 @@ dependencies = [
 
 [[package]]
 name = "commits-app"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "base64",
  "bones-engine",
  "bones-kernel",
  "bones-messages",
+ "bones-module-os",
+ "bones-upgrader",
  "commits-git",
  "commits-ipc",
  "commits-os",
- "commits-upgrader",
  "commits-watcher",
  "dirs",
  "rfd",
@@ -644,29 +672,10 @@ dependencies = [
 name = "commits-os"
 version = "0.1.0"
 dependencies = [
- "arboard",
  "base64",
  "bones-engine",
  "commits-ipc",
- "native-tls",
- "open",
- "rfd",
  "tempfile",
- "ureq",
-]
-
-[[package]]
-name = "commits-upgrader"
-version = "0.1.0"
-dependencies = [
- "base64",
- "commits-os",
- "dirs",
- "serde_json",
- "sha2",
- "tempfile",
- "winresource",
- "zip",
 ]
 
 [[package]]

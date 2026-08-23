@@ -11,7 +11,8 @@
 - [`mit-webview-transition.md`](mit-webview-transition.md) — executable plan for replacing the old page with the shared Git Graph interface
 - [`adr/`](adr/) — settled architectural decisions, including the repository
   layout (ADR-007), run-time page delivery (ADR-006), the shared core
-  divergence (ADR-008) and the MIT relicense (ADR-011)
+  divergence (ADR-008), the MIT relicense (ADR-011) and what belongs
+  upstream in bones rather than here (ADR-012)
 - [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) — upstream lineage and licensing
 
 The `vendor/bones` documentation remains the authority for engine protocols

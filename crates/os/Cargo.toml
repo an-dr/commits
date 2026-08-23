@@ -5,17 +5,12 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-arboard = "3.6"
 base64 = "0.22"
 # A native module joins the engine through the same facade an embedder
 # uses (bones ADR-030); default features off so this crate never drags
 # in the presentation stack the host composes for itself.
 bones-engine = { path = "../../vendor/bones/crates/bones-engine", default-features = false }
 commits-ipc = { path = "../../ipc/rust" }
-open = "5.3"
-rfd = "0.15"
-ureq = { version = "2.12", default-features = false, features = ["native-tls", "gzip"] }
-native-tls = "0.2"
 
 [dev-dependencies]
 tempfile = "3.20"

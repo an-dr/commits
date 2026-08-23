@@ -5,7 +5,20 @@ use bones_messages::persistence::{Save, ENDPOINT as PERSISTENCE_ENDPOINT};
 use bones_messages::{EncodeMessage, Message};
 use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext, Registry};
 use commits_ipc::native::{UpdaterRequest, UpdaterResult};
-use commits_os::{OsBackend, SystemOsBackend};
+use bones_module_os::{OsBackend, SystemOsBackend};
+
+/// Lets the OS module's backend serve the upgrader's narrower need.
+///
+/// The upgrader asks only for `fetch_url`, so that it stays reusable by a host
+/// with no clipboard or file pickers. This host has both traits in scope and is
+/// where they meet; neither crate has to know about the other.
+struct FetchBackend<'a>(&'a dyn OsBackend);
+
+impl bones_upgrader::Fetch for FetchBackend<'_> {
+    fn fetch_url(&self, url: &str) -> Result<Option<String>, String> {
+        self.0.fetch_url(url)
+    }
+}
 
 pub const REQUEST_TOPIC: &str = "updater/request";
 pub const COMPLETED_TOPIC: &str = "updater/completed";
@@ -110,11 +123,11 @@ impl UpdaterModule {
 }
 
 fn check(backend: &dyn OsBackend, request_id: u32, manifest_url: &str) -> UpdaterResult {
-    match commits_upgrader::fetch_manifest(backend, manifest_url) {
+    match bones_upgrader::fetch_manifest(&FetchBackend(backend), manifest_url) {
         Ok(manifest) => UpdaterResult {
             request_id,
             ok: true,
-            available: commits_upgrader::is_newer(CURRENT_VERSION, &manifest.version),
+            available: bones_upgrader::is_newer(CURRENT_VERSION, &manifest.version),
             fresh: false,
             version: manifest.version,
             error: String::new(),
@@ -142,11 +155,11 @@ fn stage(backend: &dyn OsBackend, request_id: u32, manifest_url: &str) -> Update
 }
 
 fn stage_inner(backend: &dyn OsBackend, manifest_url: &str) -> Result<String, String> {
-    let manifest = commits_upgrader::fetch_manifest(backend, manifest_url)?;
-    let asset = commits_upgrader::download_asset_verified(backend, &manifest)?;
-    let install_dir = commits_upgrader::default_install_dir(&commits_upgrader::host_identity())
+    let manifest = bones_upgrader::fetch_manifest(&FetchBackend(backend), manifest_url)?;
+    let asset = bones_upgrader::download_asset_verified(&FetchBackend(backend), &manifest)?;
+    let install_dir = bones_upgrader::default_install_dir(&bones_upgrader::host_identity())
         .ok_or_else(|| String::from("could not resolve the install directory"))?;
-    commits_upgrader::extract_version(&asset, &install_dir, &manifest.version)?;
+    bones_upgrader::extract_version(&asset, &install_dir, &manifest.version)?;
     Ok(manifest.version)
 }
 
@@ -193,14 +206,14 @@ fn install_inner(source_dir: &Path) -> Result<bool, String> {
         // itself would be destructive, so refuse instead.
         return Err(String::from("this build is already the one installed; nothing to do"));
     }
-    let identity = commits_upgrader::host_identity();
-    let install_dir = commits_upgrader::default_install_dir(&identity)
+    let identity = bones_upgrader::host_identity();
+    let install_dir = bones_upgrader::default_install_dir(&identity)
         .ok_or_else(|| String::from("could not resolve the install directory"))?;
     if install_dir.join(identity.launcher_exe()).is_file() {
-        commits_upgrader::copy_version_from_dir(&identity, source_dir, &install_dir, CURRENT_VERSION)?;
+        bones_upgrader::copy_version_from_dir(&identity, source_dir, &install_dir, CURRENT_VERSION)?;
         Ok(false)
     } else {
-        commits_upgrader::install_fresh(&identity, source_dir, &install_dir, CURRENT_VERSION)?;
+        bones_upgrader::install_fresh(&identity, source_dir, &install_dir, CURRENT_VERSION)?;
         Ok(true)
     }
 }
@@ -222,7 +235,7 @@ fn is_installed() -> bool {
 /// launcher) launching a version folder it picked, rather than a dev build
 /// or an ad-hoc launch.
 fn is_install_dir(current: &Path) -> bool {
-    commits_upgrader::is_installed_version_dir(&commits_upgrader::host_identity(), current)
+    bones_upgrader::is_installed_version_dir(&bones_upgrader::host_identity(), current)
 }
 
 /// `[SUCCESS, installed_byte, just_updated_byte, ...version_utf8]` -- the
@@ -324,7 +337,7 @@ mod tests {
     /// otherwise race.
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
-    /// Serves fixed `fetch_url` responses, matching `commits-upgrader`'s own
+    /// Serves fixed `fetch_url` responses, matching `bones-upgrader`'s own
     /// `StubBackend` test pattern; the other `OsBackend` methods are unused
     /// here.
     struct StubBackend {
@@ -338,12 +351,9 @@ mod tests {
         fn open_directory(&self, _path: &str) -> Result<(), String> { Err("unused".into()) }
         fn pick_file(&self, _title: &str) -> Result<Option<String>, String> { Err("unused".into()) }
         fn pick_folder(&self, _title: &str) -> Result<Option<String>, String> { Err("unused".into()) }
-        fn read_file(&self, _request: &str) -> Result<Option<String>, String> { Err("unused".into()) }
         fn fetch_url(&self, url: &str) -> Result<Option<String>, String> {
             self.responses.get(url).cloned().unwrap_or_else(|| Err(format!("no stub response for {url}")))
         }
-        fn find_repositories(&self, _path: &str) -> Result<Option<String>, String> { Err("unused".into()) }
-        fn run_tool(&self, _request: &str) -> Result<(), String> { Err("unused".into()) }
     }
 
     fn stub_fetch_result(content_type: &str, bytes: &[u8]) -> String {
@@ -451,7 +461,7 @@ mod tests {
         let source_dir = tempfile::tempdir().unwrap();
         std::fs::write(source_dir.path().join("commits-app.exe"), b"a dev build").unwrap();
         let install_dir = tempfile::tempdir().unwrap();
-        let launcher = commits_upgrader::host_identity().launcher_exe();
+        let launcher = bones_upgrader::host_identity().launcher_exe();
         std::fs::write(install_dir.path().join(&launcher), b"already installed").unwrap();
         let _guard = ENV_LOCK.lock().unwrap();
         unsafe { std::env::set_var("COMMITS_INSTALL_DIR", install_dir.path()) };
@@ -476,7 +486,7 @@ mod tests {
     #[test]
     fn install_from_places_files_directly_when_nothing_is_installed_yet() {
         let source_dir = tempfile::tempdir().unwrap();
-        let launcher = commits_upgrader::host_identity().launcher_exe();
+        let launcher = bones_upgrader::host_identity().launcher_exe();
         std::fs::write(source_dir.path().join(&launcher), b"the launcher").unwrap();
         std::fs::write(source_dir.path().join("commits-app.exe"), b"a dev build").unwrap();
         let install_root = tempfile::tempdir().unwrap();

@@ -1,4 +1,4 @@
-use crate::web::{Reader, WireError, Writer};
+use bones_messages::codec::{DecodeError, EncodeError, Reader, Writer};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitRequest {
@@ -7,16 +7,23 @@ pub enum GitRequest {
 }
 
 impl GitRequest {
-    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(bytes);
-        match reader.u8()? {
-            0 => Ok(Self::Run(GitRun::decode_body(&mut reader)?)),
+        match reader.read_u8()? {
+            0 => {
+                let run = GitRun::decode_body(&mut reader)?;
+                reader.finish()?;
+                Ok(Self::Run(run))
+            }
             1 => {
-                let request_id = reader.u32()?;
+                let request_id = reader.read_u32()?;
                 reader.finish()?;
                 Ok(Self::Cancel(request_id))
             }
-            _ => Err(WireError::from("unknown git request")),
+            tag => Err(DecodeError::InvalidTag {
+                message: "git request",
+                tag,
+            }),
         }
     }
 }
@@ -31,44 +38,51 @@ pub struct GitRun {
 }
 
 impl GitRun {
-    pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-        let args = u16::try_from(self.args.len()).map_err(|_| WireError::from("too many args"))?;
-        let env =
-            u16::try_from(self.env.len()).map_err(|_| WireError::from("too many env vars"))?;
-        let mut writer = Writer::default()
+    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
+        let args = u16::try_from(self.args.len()).map_err(|_| EncodeError::StringTooLong)?;
+        let env = u16::try_from(self.env.len()).map_err(|_| EncodeError::StringTooLong)?;
+        let mut writer = Writer::new()
             .u8(0)
             .u32(self.request_id)
-            .string(&self.cwd)?
+            .try_str(&self.cwd)?
             .u16(args);
         for arg in &self.args {
-            writer = writer.string(arg)?;
+            writer = writer.try_str(arg)?;
         }
         writer = writer.u16(env);
         for (name, value) in &self.env {
-            writer = writer.string(name)?.string(value)?;
+            writer = writer.try_str(name)?.try_str(value)?;
         }
         Ok(writer.u32(self.timeout_ms).finish())
     }
 
-    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(bytes);
-        if reader.u8()? != 0 {
-            return Err(WireError::from("not a git run request"));
+        let tag = reader.read_u8()?;
+        if tag != 0 {
+            return Err(DecodeError::InvalidTag {
+                message: "git run",
+                tag,
+            });
         }
-        Self::decode_body(&mut reader)
+        let run = Self::decode_body(&mut reader)?;
+        reader.finish()?;
+        Ok(run)
     }
 
-    fn decode_body(reader: &mut Reader<'_>) -> Result<Self, WireError> {
-        let request_id = reader.u32()?;
-        let cwd = reader.string()?;
+    fn decode_body(reader: &mut Reader<'_>) -> Result<Self, DecodeError> {
+        let request_id = reader.read_u32()?;
+        let cwd = reader.read_str()?.to_string();
         let args = read_strings(reader)?;
-        let env_count = reader.u16()?;
+        let env_count = reader.read_u16()?;
         let mut env = Vec::with_capacity(env_count as usize);
         for _ in 0..env_count {
-            env.push((reader.string()?, reader.string()?));
+            env.push((
+                reader.read_str()?.to_string(),
+                reader.read_str()?.to_string(),
+            ));
         }
-        let timeout_ms = reader.u32()?;
-        reader.finish()?;
+        let timeout_ms = reader.read_u32()?;
         Ok(Self {
             request_id,
             cwd,
@@ -89,27 +103,30 @@ pub struct GitResult {
 }
 
 impl GitResult {
-    pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-        Ok(Writer::default()
+    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
+        Ok(Writer::new()
             .u32(self.request_id)
             .u8(self.status)
             .i32(self.exit_code)
-            .blob(&self.stdout)?
-            .blob(&self.stderr)?
+            .try_blob(&self.stdout)?
+            .try_blob(&self.stderr)?
             .finish())
     }
 
-    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(bytes);
         let result = Self {
-            request_id: reader.u32()?,
-            status: reader.u8()?,
-            exit_code: reader.i32()?,
-            stdout: reader.blob()?,
-            stderr: reader.blob()?,
+            request_id: reader.read_u32()?,
+            status: reader.read_u8()?,
+            exit_code: reader.read_i32()?,
+            stdout: reader.read_blob()?.to_vec(),
+            stderr: reader.read_blob()?.to_vec(),
         };
         if result.status > 2 {
-            return Err(WireError::from("unknown git result status"));
+            return Err(DecodeError::InvalidTag {
+                message: "git result status",
+                tag: result.status,
+            });
         }
         reader.finish()?;
         Ok(result)
@@ -124,23 +141,26 @@ pub struct WatchRequest {
 }
 
 impl WatchRequest {
-    pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-        Ok(Writer::default()
+    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
+        Ok(Writer::new()
             .u32(self.request_id)
             .u8(self.action)
-            .string(&self.repository)?
+            .try_str(&self.repository)?
             .finish())
     }
 
-    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(bytes);
         let request = Self {
-            request_id: reader.u32()?,
-            action: reader.u8()?,
-            repository: reader.string()?,
+            request_id: reader.read_u32()?,
+            action: reader.read_u8()?,
+            repository: reader.read_str()?.to_string(),
         };
         if request.action > 1 {
-            return Err(WireError::from("unknown watch action"));
+            return Err(DecodeError::InvalidTag {
+                message: "watch action",
+                tag: request.action,
+            });
         }
         reader.finish()?;
         Ok(request)
@@ -156,16 +176,23 @@ pub struct WatchEvent {
 }
 
 impl WatchEvent {
-    pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-        Ok(Writer::default()
+    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
+        Ok(Writer::new()
             .u32(self.request_id)
             .u8(self.kind)
-            .string(&self.repository)?
-            .string(&self.path)?
+            .try_str(&self.repository)?
+            .try_str(&self.path)?
             .finish())
     }
 }
 
+/// A request to one of the two OS endpoints.
+///
+/// Both carry the same shape -- a correlation id, an action tag and one string
+/// -- and differ only in which actions they accept. `os` is the engine's
+/// generic desktop surface; `repo-os` is this application's git-aware one,
+/// whose actions need a repository to mean anything. They number their actions
+/// independently, so neither has to leave gaps for the other.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OsRequest {
     pub request_id: u32,
@@ -173,24 +200,42 @@ pub struct OsRequest {
     pub value: String,
 }
 
+/// Highest action tag the generic `os` endpoint defines.
+pub const MAX_OS_ACTION: u8 = 6;
+/// Highest action tag the git-aware `repo-os` endpoint defines.
+pub const MAX_REPO_OS_ACTION: u8 = 2;
+
 impl OsRequest {
-    pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-        Ok(Writer::default()
+    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
+        Ok(Writer::new()
             .u32(self.request_id)
             .u8(self.action)
-            .string(&self.value)?
+            .try_str(&self.value)?
             .finish())
     }
 
-    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+    /// Decodes a request for the generic `os` endpoint.
+    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
+        Self::decode_within(bytes, MAX_OS_ACTION, "os action")
+    }
+
+    /// Decodes a request for the git-aware `repo-os` endpoint.
+    pub fn decode_repo(bytes: &[u8]) -> Result<Self, DecodeError> {
+        Self::decode_within(bytes, MAX_REPO_OS_ACTION, "repo-os action")
+    }
+
+    fn decode_within(bytes: &[u8], max: u8, message: &'static str) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(bytes);
         let request = Self {
-            request_id: reader.u32()?,
-            action: reader.u8()?,
-            value: reader.string()?,
+            request_id: reader.read_u32()?,
+            action: reader.read_u8()?,
+            value: reader.read_str()?.to_string(),
         };
-        if request.action > 9 {
-            return Err(WireError::from("unknown os action"));
+        if request.action > max {
+            return Err(DecodeError::InvalidTag {
+                message,
+                tag: request.action,
+            });
         }
         reader.finish()?;
         Ok(request)
@@ -206,28 +251,33 @@ pub struct NativeResult {
 }
 
 impl NativeResult {
-    pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-        Ok(Writer::default()
+    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
+        Ok(Writer::new()
             .u32(self.request_id)
             .u8(u8::from(self.accepted))
-            .string(&self.value)?
-            .string(&self.error)?
+            .try_str(&self.value)?
+            .try_str(&self.error)?
             .finish())
     }
 
-    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(bytes);
-        let request_id = reader.u32()?;
-        let accepted = match reader.u8()? {
+        let request_id = reader.read_u32()?;
+        let accepted = match reader.read_u8()? {
             0 => false,
             1 => true,
-            _ => return Err(WireError::from("invalid native result boolean")),
+            tag => {
+                return Err(DecodeError::InvalidTag {
+                    message: "native result boolean",
+                    tag,
+                })
+            }
         };
         let result = Self {
             request_id,
             accepted,
-            value: reader.string()?,
-            error: reader.string()?,
+            value: reader.read_str()?.to_string(),
+            error: reader.read_str()?.to_string(),
         };
         reader.finish()?;
         Ok(result)
@@ -247,23 +297,26 @@ pub struct UpdaterRequest {
 }
 
 impl UpdaterRequest {
-    pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-        Ok(Writer::default()
+    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
+        Ok(Writer::new()
             .u32(self.request_id)
             .u8(self.action)
-            .string(&self.manifest_url)?
+            .try_str(&self.manifest_url)?
             .finish())
     }
 
-    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(bytes);
         let request = Self {
-            request_id: reader.u32()?,
-            action: reader.u8()?,
-            manifest_url: reader.string()?,
+            request_id: reader.read_u32()?,
+            action: reader.read_u8()?,
+            manifest_url: reader.read_str()?.to_string(),
         };
         if request.action > 2 {
-            return Err(WireError::from("unknown updater action"));
+            return Err(DecodeError::InvalidTag {
+                message: "updater action",
+                tag: request.action,
+            });
         }
         reader.finish()?;
         Ok(request)
@@ -287,52 +340,109 @@ pub struct UpdaterResult {
 }
 
 impl UpdaterResult {
-    pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-        Ok(Writer::default()
+    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
+        Ok(Writer::new()
             .u32(self.request_id)
             .u8(u8::from(self.ok))
             .u8(u8::from(self.available))
             .u8(u8::from(self.fresh))
-            .string(&self.version)?
-            .string(&self.error)?
+            .try_str(&self.version)?
+            .try_str(&self.error)?
             .finish())
     }
 
-    pub fn decode(bytes: &[u8]) -> Result<Self, WireError> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(bytes);
-        let request_id = reader.u32()?;
-        let ok = decode_bool(reader.u8()?)?;
-        let available = decode_bool(reader.u8()?)?;
-        let fresh = decode_bool(reader.u8()?)?;
+        let request_id = reader.read_u32()?;
+        let ok = decode_bool(reader.read_u8()?)?;
+        let available = decode_bool(reader.read_u8()?)?;
+        let fresh = decode_bool(reader.read_u8()?)?;
         let result = Self {
             request_id,
             ok,
             available,
             fresh,
-            version: reader.string()?,
-            error: reader.string()?,
+            version: reader.read_str()?.to_string(),
+            error: reader.read_str()?.to_string(),
         };
         reader.finish()?;
         Ok(result)
     }
 }
 
-fn decode_bool(byte: u8) -> Result<bool, WireError> {
+fn decode_bool(byte: u8) -> Result<bool, DecodeError> {
     match byte {
         0 => Ok(false),
         1 => Ok(true),
-        _ => Err(WireError::from("invalid boolean")),
+        tag => Err(DecodeError::InvalidTag {
+            message: "boolean",
+            tag,
+        }),
     }
 }
 
-fn read_strings(reader: &mut Reader<'_>) -> Result<Vec<String>, WireError> {
-    let count = reader.u16()?;
-    (0..count).map(|_| reader.string()).collect()
+fn read_strings(reader: &mut Reader<'_>) -> Result<Vec<String>, DecodeError> {
+    let count = reader.read_u16()?;
+    (0..count)
+        .map(|_| reader.read_str().map(str::to_string))
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{GitRequest, GitResult, GitRun, OsRequest, UpdaterRequest, UpdaterResult, WatchRequest};
+    use super::{
+        GitRequest, GitResult, GitRun, OsRequest, UpdaterRequest, UpdaterResult, WatchRequest,
+    };
+    use bones_messages::codec::DecodeError;
+
+    /// The generic `os` endpoint is the engine's now, so its bytes are
+    /// defined by `bones_messages::os`, not here. This asserts the two agree:
+    /// a drift would leave the guest talking to a module that mis-parses it,
+    /// with no compiler anywhere to catch it.
+    #[test]
+    fn os_requests_match_what_the_engine_module_decodes() {
+        use bones_messages::os::{Action, Request};
+        use bones_messages::DecodeMessage;
+
+        for (action, tag) in [
+            (Action::ReadClipboard, 0u8),
+            (Action::WriteClipboard, 1),
+            (Action::OpenUrl, 2),
+            (Action::PickFile, 3),
+            (Action::PickFolder, 4),
+            (Action::OpenDirectory, 5),
+            (Action::FetchUrl, 6),
+        ] {
+            let ours = OsRequest {
+                request_id: 42,
+                action: tag,
+                value: String::from("value"),
+            }
+            .encode()
+            .unwrap();
+            let theirs = Request::decode(&ours).unwrap();
+            assert_eq!(theirs.request_id, 42);
+            assert_eq!(theirs.action, action);
+            assert_eq!(theirs.value, "value");
+        }
+    }
+
+    /// The codec swap moved `finish` from `decode_body` to its callers, since
+    /// bones' reader consumes itself. Trailing bytes must still be refused.
+    #[test]
+    fn git_request_run_refuses_trailing_bytes() {
+        let mut bytes = GitRun {
+            request_id: 1,
+            cwd: String::from("."),
+            args: Vec::new(),
+            env: Vec::new(),
+            timeout_ms: 0,
+        }
+        .encode()
+        .unwrap();
+        bytes.push(0);
+        assert_eq!(GitRequest::decode(&bytes), Err(DecodeError::TrailingBytes));
+    }
 
     #[test]
     fn requests_and_results_round_trip() {
@@ -362,24 +472,51 @@ mod tests {
 
         let fetch = OsRequest {
             request_id: 9,
-            action: 7,
+            action: 6,
             value: "https://www.gravatar.com/avatar/deadbeef?s=80&d=404".into(),
         };
         assert_eq!(OsRequest::decode(&fetch.encode().unwrap()).unwrap(), fetch);
+
+        // The two endpoints number independently, so the same byte means a
+        // different action on each, and neither accepts the other's range.
+        let read = OsRequest {
+            request_id: 10,
+            action: 0,
+            value: "C:/repo
+src/a.ts"
+                .into(),
+        };
+        assert_eq!(
+            OsRequest::decode_repo(&read.encode().unwrap()).unwrap(),
+            read
+        );
+        assert_eq!(
+            OsRequest::decode_repo(&fetch.encode().unwrap()),
+            Err(DecodeError::InvalidTag {
+                message: "repo-os action",
+                tag: 6
+            })
+        );
 
         let check = UpdaterRequest {
             request_id: 3,
             action: 0,
             manifest_url: "https://example.com/manifest.json".into(),
         };
-        assert_eq!(UpdaterRequest::decode(&check.encode().unwrap()).unwrap(), check);
+        assert_eq!(
+            UpdaterRequest::decode(&check.encode().unwrap()).unwrap(),
+            check
+        );
 
         let install = UpdaterRequest {
             request_id: 4,
             action: 2,
             manifest_url: String::new(),
         };
-        assert_eq!(UpdaterRequest::decode(&install.encode().unwrap()).unwrap(), install);
+        assert_eq!(
+            UpdaterRequest::decode(&install.encode().unwrap()).unwrap(),
+            install
+        );
 
         let staged = UpdaterResult {
             request_id: 3,
@@ -389,7 +526,10 @@ mod tests {
             version: "1.2.0".into(),
             error: String::new(),
         };
-        assert_eq!(UpdaterResult::decode(&staged.encode().unwrap()).unwrap(), staged);
+        assert_eq!(
+            UpdaterResult::decode(&staged.encode().unwrap()).unwrap(),
+            staged
+        );
 
         let installed_fresh = UpdaterResult {
             request_id: 4,
@@ -399,7 +539,10 @@ mod tests {
             version: String::new(),
             error: String::new(),
         };
-        assert_eq!(UpdaterResult::decode(&installed_fresh.encode().unwrap()).unwrap(), installed_fresh);
+        assert_eq!(
+            UpdaterResult::decode(&installed_fresh.encode().unwrap()).unwrap(),
+            installed_fresh
+        );
     }
 
     #[test]

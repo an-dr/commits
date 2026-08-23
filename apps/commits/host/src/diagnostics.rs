@@ -27,13 +27,13 @@ const LOG_FILE: &str = "commits.log";
 const PREVIOUS_LOG_FILE: &str = "commits.prev.log";
 
 /// Resolves the log the same way `saves_dir`/`extensions_dir` do (see
-/// `commits_upgrader::shared_or_exe_relative`): beside the running
+/// `bones_upgrader::shared_or_exe_relative`): beside the running
 /// executable for a dev build, so a copied `dist/app` keeps its diagnostics
 /// with it, or at the shared install-wide location when running from an
 /// installed version folder, so `commits.log` survives across updates
 /// instead of starting over in each new version folder.
 pub fn log_path() -> Option<PathBuf> {
-    commits_upgrader::shared_or_exe_relative(&commits_upgrader::host_identity(), LOG_FILE)
+    bones_upgrader::shared_or_exe_relative(&bones_upgrader::host_identity(), LOG_FILE)
 }
 
 /// Installs the file logger, returning it alongside the channel that carries

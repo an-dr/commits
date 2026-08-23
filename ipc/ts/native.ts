@@ -63,17 +63,29 @@ export function encodeWatchRequest(
     .finish();
 }
 
+/**
+ * Actions the engine's generic `os` endpoint accepts.
+ *
+ * Nothing here needs a repository, which is what makes the endpoint reusable
+ * by any desktop host rather than only by this one.
+ */
 export type OsAction =
   | "clipboard-read"
   | "clipboard-write"
   | "open-url"
   | "pick-file"
   | "pick-folder"
-  | "read-file"
   | "reveal-directory"
-  | "fetch-url"
-  | "find-repositories"
-  | "run-tool";
+  | "fetch-url";
+
+/**
+ * Actions this application's git-aware `repo-os` endpoint accepts.
+ *
+ * Each needs a repository to mean anything: a read confined to one, a scan for
+ * them, or a tool launched against one. They number from zero independently of
+ * `OsAction`, because the two endpoints are separate wire surfaces.
+ */
+export type RepoOsAction = "read-file" | "find-repositories" | "run-tool";
 
 /**
  * Value of a `read-file` request: the repository the read is confined to, then
@@ -81,7 +93,8 @@ export type OsAction =
  * that repository and refuses anything that leaves it.
  */
 export function encodeFileRead(repository: string, path: string): string {
-  return `${repository}\n${path}`;
+  return `${repository}
+${path}`;
 }
 
 export function encodeOsRequest(
@@ -95,14 +108,25 @@ export function encodeOsRequest(
     "open-url": 2,
     "pick-file": 3,
     "pick-folder": 4,
-    "read-file": 5,
-    "reveal-directory": 6,
-    "fetch-url": 7,
-    "find-repositories": 8,
-    "run-tool": 9,
+    "reveal-directory": 5,
+    "fetch-url": 6,
   };
   return new Writer().u32(requestId).u8(tag[action]).string(value).finish();
 }
+
+export function encodeRepoOsRequest(
+  requestId: number,
+  action: RepoOsAction,
+  value = "",
+): Uint8Array {
+  const tag: Record<RepoOsAction, number> = {
+    "read-file": 0,
+    "find-repositories": 1,
+    "run-tool": 2,
+  };
+  return new Writer().u32(requestId).u8(tag[action]).string(value).finish();
+}
+
 
 /** One file the host writes before the tool runs, for a side of a diff. */
 export interface ToolBlob {

@@ -54,7 +54,10 @@ function onMessage(
       if (event.owner === OWNER && event.panel === PANEL) {
         core.panelFailed(event.reason);
       }
-    } else if (topic === "os/result") {
+    } else if (topic === "os/result" || topic === "repo-os/result") {
+      // One handler for both endpoints: the result shape is identical and
+      // requests are correlated by id, so which endpoint answered does not
+      // change what the core does with the answer.
       core.receiveOsResult(decodeNativeResult(payload));
     } else if (topic === "git/completed") {
       core.receiveGitResult(decodeGitResult(payload));

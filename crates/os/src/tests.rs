@@ -1,50 +1,17 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use base64::Engine;
 use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use commits_ipc::native::{NativeResult, OsRequest};
 
-use crate::{OsBackend, OsModule, REQUEST_TOPIC, RESULT_TOPIC};
+use crate::{OsModule, RepoOsBackend, REPO_REQUEST_TOPIC, REPO_RESULT_TOPIC};
 
 #[derive(Default)]
-struct StubBackend {
-    clipboard: Mutex<String>,
-}
+struct StubBackend;
 
-impl OsBackend for StubBackend {
-    fn read_clipboard(&self) -> Result<String, String> {
-        Ok(self.clipboard.lock().unwrap().clone())
-    }
-    fn write_clipboard(&self, value: &str) -> Result<(), String> {
-        *self.clipboard.lock().unwrap() = value.into();
-        Ok(())
-    }
-    fn open_url(&self, value: &str) -> Result<(), String> {
-        value
-            .starts_with("https://")
-            .then_some(())
-            .ok_or("unsafe URL".into())
-    }
-    fn open_directory(&self, path: &str) -> Result<(), String> {
-        path.starts_with("C:/").then_some(()).ok_or("not a directory".into())
-    }
-    fn pick_file(&self, _title: &str) -> Result<Option<String>, String> {
-        Ok(Some("C:/chosen.txt".into()))
-    }
-    fn pick_folder(&self, _title: &str) -> Result<Option<String>, String> {
-        Ok(None)
-    }
+impl RepoOsBackend for StubBackend {
     fn read_file(&self, request: &str) -> Result<Option<String>, String> {
         Ok(Some(request.replace('\n', ":")))
-    }
-    fn fetch_url(&self, url: &str) -> Result<Option<String>, String> {
-        if url == "https://example.com/missing" {
-            return Ok(None);
-        }
-        url.starts_with("https://")
-            .then(|| Some("image/png;base64,c3R1Yg==".to_string()))
-            .ok_or("only https URLs may be fetched".into())
     }
     fn find_repositories(&self, path: &str) -> Result<Option<String>, String> {
         Ok((path == "C:/code").then(|| String::from("C:/code/alpha\nC:/code/beta")))
@@ -59,7 +26,7 @@ fn publishes_results_for_every_capability() {
     let bus = Bus::new();
     let mut services = ServiceRegistry::new();
     services.provide(bus.clone()).unwrap();
-    let mut module = OsModule::new(Arc::new(StubBackend::default()));
+    let mut module = OsModule::new(Arc::new(StubBackend));
     module.init(&mut ModuleContext::new(&mut services)).unwrap();
     let results = Arc::new(Mutex::new(Vec::<NativeResult>::new()));
     let output = results.clone();
@@ -69,24 +36,16 @@ fn publishes_results_for_every_capability() {
             .unwrap()
             .push(NativeResult::decode(&event.payload).unwrap());
     });
-    endpoint.subscribe(RESULT_TOPIC);
+    endpoint.subscribe(REPO_RESULT_TOPIC);
 
     for (request_id, action, value) in [
-        (1, 1, "copied"),
-        (2, 0, ""),
-        (3, 2, "https://example.com"),
-        (4, 3, "file"),
-        (5, 4, "folder"),
-        (6, 2, "file:///private"),
-        (7, 6, "C:/repo"),
-        (8, 6, "not-a-directory"),
-        (9, 7, "https://example.com/avatar.png"),
-        (10, 8, "C:/code"),
-        (11, 9, "code\n\n\n\n\nC:/repo"),
-        (12, 9, ""),
+        (10, 1, "C:/code"),
+        (11, 2, "code\n\n\n\n\nC:/repo"),
+        (12, 2, ""),
+        (13, 0, "C:/repo\nsrc/a.ts"),
     ] {
         module.handle(&Envelope {
-            topic: REQUEST_TOPIC.into(),
+            topic: REPO_REQUEST_TOPIC.into(),
             sender: "test".into(),
             correlation: Some(request_id.into()),
             payload: OsRequest {
@@ -99,35 +58,18 @@ fn publishes_results_for_every_capability() {
         });
     }
     let deadline = Instant::now() + Duration::from_secs(3);
-    while results.lock().unwrap().len() < 12 && Instant::now() < deadline {
+    while results.lock().unwrap().len() < 4 && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
         bus.dispatch();
     }
     let results = results.lock().unwrap();
-    assert_eq!(results.len(), 12);
+    assert_eq!(results.len(), 4);
+    // The scan reports what it found, newline-separated.
     assert!(results
         .iter()
-        .any(|result| result.request_id == 1 && result.accepted));
-    assert!(results.iter().any(|result| result.request_id == 2));
-    assert!(results.iter().any(|result| result.value == "C:/chosen.txt"));
-    assert!(results
-        .iter()
-        .any(|result| result.request_id == 5 && !result.accepted));
-    assert!(results
-        .iter()
-        .any(|result| result.request_id == 6 && result.error == "unsafe URL"));
-    assert!(results
-        .iter()
-        .any(|result| result.request_id == 7 && result.accepted));
-    assert!(results
-        .iter()
-        .any(|result| result.request_id == 8 && result.error == "not a directory"));
-    assert!(results
-        .iter()
-        .any(|result| result.request_id == 9 && result.value == "image/png;base64,c3R1Yg=="));
-    assert!(results
-        .iter()
-        .any(|result| result.request_id == 10 && result.value == "C:/code/alpha\nC:/code/beta"));
+        .any(|result| result.request_id == 10
+            && result.value == "C:/code/alpha
+C:/code/beta"));
     assert!(results
         .iter()
         .any(|result| result.request_id == 11 && result.accepted));
@@ -136,6 +78,10 @@ fn publishes_results_for_every_capability() {
     assert!(results
         .iter()
         .any(|result| result.request_id == 12 && !result.accepted));
+    // A file read is answered with the repository and path it resolved.
+    assert!(results
+        .iter()
+        .any(|result| result.request_id == 13 && result.value == "C:/repo:src/a.ts"));
 }
 
 /// The framing is positional, so the parser is what keeps a tool's arguments
@@ -202,7 +148,7 @@ fn leaves_a_run_without_diff_sides_untouched() {
 #[test]
 fn reports_a_program_that_cannot_be_started() {
     let backend = crate::SystemOsBackend;
-    let outcome = <crate::SystemOsBackend as OsBackend>::run_tool(
+    let outcome = <crate::SystemOsBackend as RepoOsBackend>::run_tool(
         &backend,
         "commits-no-such-program-3f9a\n\n\n\n\n--version",
     );
@@ -238,18 +184,4 @@ fn reads_only_text_files_inside_the_repository() {
 
     std::fs::remove_dir_all(&root).ok();
     std::fs::remove_file(&outside).ok();
-}
-
-#[test]
-fn decodes_a_fetch_result_back_into_content_type_and_bytes() {
-    let value = format!(
-        "image/png;base64,{}",
-        base64::engine::general_purpose::STANDARD.encode(b"hello")
-    );
-    let (content_type, bytes) = crate::decode_fetch_result(&value).unwrap();
-    assert_eq!(content_type, "image/png");
-    assert_eq!(bytes, b"hello");
-
-    assert!(crate::decode_fetch_result("not-the-right-shape").is_err());
-    assert!(crate::decode_fetch_result("image/png;base64,not valid base64!!").is_err());
 }

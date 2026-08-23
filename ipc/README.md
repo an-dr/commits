@@ -11,3 +11,11 @@ drift.
 
 A definition belongs here when both sides of a boundary must agree on its exact
 bytes. Types used on only one side belong with that side's code.
+
+The framing underneath those definitions is not ours. `Reader` and `Writer` come
+from `bones-messages`, which the engine and every guest already share, so the
+primitives are defined once rather than reimplemented on each side of the
+submodule. What lives here is the message shapes built on them: which fields a
+git run or an OS request carries, and in what order. The TypeScript `Reader` and
+`Writer` in `ts/` remain a local reimplementation because bones ships no
+TypeScript, and the fixtures are what hold the two in agreement.

@@ -11,6 +11,7 @@ import {
   encodeGitRun,
   encodeFileRead,
   encodeOsRequest,
+  encodeRepoOsRequest,
   encodeToolRun,
   encodeUpdaterRequest,
   encodeWatchRequest,
@@ -85,9 +86,12 @@ describe("native protocol", () => {
     expect(encodeWatchRequest(1, "stop", "x")[4]).toBe(1);
     expect(encodeOsRequest(1, "clipboard-read")[4]).toBe(0);
     expect(encodeOsRequest(1, "pick-folder")[4]).toBe(4);
-    expect(encodeOsRequest(1, "read-file")[4]).toBe(5);
-    expect(encodeOsRequest(1, "reveal-directory")[4]).toBe(6);
-    expect(encodeOsRequest(1, "fetch-url")[4]).toBe(7);
+    expect(encodeOsRequest(1, "reveal-directory")[4]).toBe(5);
+    expect(encodeOsRequest(1, "fetch-url")[4]).toBe(6);
+    // The git-aware endpoint numbers from zero independently: the two are
+    // separate wire surfaces, so neither leaves gaps for the other.
+    expect(encodeRepoOsRequest(1, "read-file")[4]).toBe(0);
+    expect(encodeRepoOsRequest(1, "find-repositories")[4]).toBe(1);
     // A file read carries its repository and path as one value, so the host can
     // confine the read without a second field on the wire.
     expect(encodeFileRead("C:/repo", "src/a.ts")).toBe("C:/repo\nsrc/a.ts");
@@ -97,7 +101,7 @@ describe("native protocol", () => {
   });
 
   it("frames a tool run so the host can tell its fields apart", () => {
-    expect(encodeOsRequest(1, "run-tool")[4]).toBe(9);
+    expect(encodeRepoOsRequest(1, "run-tool")[4]).toBe(2);
     // Opening a repository carries no diff sides, so all four of their lines
     // are empty and the arguments start straight after them.
     expect(encodeToolRun({ program: "code", args: ["-n", "C:/repo"] })).toBe(

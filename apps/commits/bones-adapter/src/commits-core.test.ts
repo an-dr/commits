@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GitResult, GitRun, NativeResult, OsAction, UpdaterAction } from "@commits/ipc/native";
+import type { GitResult, GitRun, NativeResult, OsAction, RepoOsAction, UpdaterAction } from "@commits/ipc/native";
 import { CommitsCore } from "./commits-core";
 import type { CommitsRepoStatus, HostPort, InstallStatus, LaunchRepository, LogLevel, PageSource, SettingsIoResult } from "./host/host-port";
 
@@ -46,6 +46,11 @@ class StubHost implements HostPort {
   requestOs(requestId: number, action: OsAction, value?: string): void {
     this.osRequests.push({ requestId, action, value });
   }
+  // Both endpoints record into one list: the action names already say which
+  // is which, and every assertion here is about what was asked for.
+  requestRepoOs(requestId: number, action: RepoOsAction, value?: string): void {
+    this.osRequests.push({ requestId, action, value });
+  }
   requestUpdate(requestId: number, action: UpdaterAction, manifestUrl: string): void {
     this.updateRequests.push({ requestId, action, manifestUrl });
   }
@@ -82,6 +87,7 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.topics).toEqual([
       "web/*",
       "os/result",
+      "repo-os/result",
       "os/prompt",
       "git/completed",
       "updater/completed",
@@ -2332,7 +2338,7 @@ function pendingGit(host: StubHost, core: CommitsCore): boolean {
 function completeFindRepositories(host: StubHost, core: CommitsCore, paths: readonly string[]): void {
   const request = [...host.osRequests]
     .reverse()
-    .find((candidate) => (candidate as { action: OsAction }).action === "find-repositories") as
+    .find((candidate) => (candidate as { action: RepoOsAction }).action === "find-repositories") as
     | { requestId: number }
     | undefined;
   if (request === undefined) throw new Error("missing find-repositories request");

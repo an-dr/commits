@@ -44,7 +44,7 @@ $ErrorActionPreference = "Stop"
 $isWindowsPlatform = $env:OS -eq "Windows_NT"
 $launcherName = if ($isWindowsPlatform) { "commits.exe" } else { "commits" }
 
-# Mirrors commits_upgrader::install::is_runtime_artifact (Rust): a build that
+# Mirrors bones_upgrader::install::is_runtime_artifact (Rust): a build that
 # was ever run directly out of a version folder accumulates WebView2's own
 # per-exe browser profile, the bones state-slot directory, and log files
 # right next to the real app -- none of that is part of the distributable
@@ -83,7 +83,7 @@ function Get-SourceVersionDir([string]$Source) {
 # disambiguating a version-string collision (typically a dev build that
 # never bumps its version) with a short content hash, and pruning anything
 # beyond the current and previous version -- mirroring
-# commits_upgrader::extract_version/copy_version_from_dir (Rust) exactly.
+# bones_upgrader::extract_version/copy_version_from_dir (Rust) exactly.
 function Install-VersionFolder([string]$Source, [string]$InstallDir) {
     $sourceVersionDir = Get-SourceVersionDir -Source $Source
     $versionDir = Join-Path $InstallDir $sourceVersionDir.Name
@@ -100,7 +100,7 @@ function Install-VersionFolder([string]$Source, [string]$InstallDir) {
 
 # Keeps only the two most recently installed version folders under
 # $InstallDir (the current version and one fallback), deleting the rest --
-# the same retention commits_upgrader::install (Rust) applies after every
+# the same retention bones_upgrader::install (Rust) applies after every
 # extract/copy. Matched by name so commits.exe, updater/, and state/ are
 # never mistaken for a version folder.
 function Remove-OldVersions([string]$InstallDir) {

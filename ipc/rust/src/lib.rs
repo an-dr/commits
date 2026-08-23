@@ -6,8 +6,14 @@ use bones_messages::web::{
 use bones_messages::EncodeMessage;
 use native::{GitResult, GitRun, OsRequest, WatchRequest};
 
+/// Renders a payload as lowercase hex, the form the checked-in fixtures record
+/// so a cross-language mismatch reads as a diff rather than two byte arrays.
+/// Fixture presentation only -- nothing on the wire depends on it.
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 pub mod native;
-pub mod web;
 
 pub fn web_fixtures() -> BTreeMap<&'static str, String> {
     let mut fixtures = BTreeMap::new();
@@ -59,8 +65,6 @@ pub fn web_fixtures() -> BTreeMap<&'static str, String> {
     );
     fixtures
 }
-
-use web::hex;
 
 pub fn native_fixtures() -> BTreeMap<&'static str, String> {
     let mut fixtures = BTreeMap::new();

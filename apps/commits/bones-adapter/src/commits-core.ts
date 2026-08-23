@@ -139,12 +139,13 @@ export class CommitsCore {
   ): void {
     const requestId = this.nextOsRequestId++;
     this.pendingOs.set(requestId, { kind: "readFile", deliver });
-    this.host.requestOs(requestId, "read-file", encodeFileRead(repo, path));
+    this.host.requestRepoOs(requestId, "read-file", encodeFileRead(repo, path));
   }
 
   start(): void {
     this.host.subscribe("web/*");
     this.host.subscribe("os/result");
+    this.host.subscribe("repo-os/result");
     this.host.subscribe("os/prompt");
     this.host.subscribe("git/completed");
     this.host.subscribe("updater/completed");
@@ -822,7 +823,7 @@ export class CommitsCore {
   private startTool(request: string): void {
     const requestId = this.nextOsRequestId++;
     this.pendingOs.set(requestId, { kind: "runTool" });
-    this.host.requestOs(requestId, "run-tool", request);
+    this.host.requestRepoOs(requestId, "run-tool", request);
   }
 
   /** Reveals ~/.commits/repo in the OS's native file manager. */
@@ -988,7 +989,7 @@ export class CommitsCore {
   private openFolder(path: string): void {
     const requestId = this.nextOsRequestId++;
     this.pendingOs.set(requestId, { kind: "findRepositories", folder: path });
-    this.host.requestOs(requestId, "find-repositories", path);
+    this.host.requestRepoOs(requestId, "find-repositories", path);
   }
 
   private finishFindRepositories(folder: string, result: NativeResult): void {

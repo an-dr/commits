@@ -47,7 +47,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         // folder", exactly where dist.ps1/install.ps1 place them. State is
         // different: it must survive an update, so it resolves to the
         // shared, install-wide location one level up (see
-        // commits_upgrader::shared_or_exe_relative) rather than being
+        // bones_upgrader::shared_or_exe_relative) rather than being
         // siloed inside whichever version folder happens to be running.
         // Named "components"/"state" rather than bones' own
         // "extensions"/"states" defaults -- this app's own vocabulary,
@@ -66,6 +66,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(splash)
         .module(commits_git::GitModule::default())
         .module(commits_watcher::WatcherModule::default())
+        // Two OS endpoints: the engine's generic desktop one, and ours for
+        // the actions that need a repository.
+        .os()
         .module(commits_os::OsModule::default())
         .module(settings::SettingsModule::default())
         .module(commits_repo::CommitsRepoModule::default())
@@ -76,13 +79,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Resolves `name` for the engine builder's `saves_dir`: see
-/// `commits_upgrader::shared_or_exe_relative` for why this needs to be
+/// `bones_upgrader::shared_or_exe_relative` for why this needs to be
 /// install-wide rather than always exe-relative. Falls back to the plain
 /// relative name (the engine's own default behavior) if the running
 /// executable's path cannot be resolved at all.
 fn shared_data_dir(name: &str) -> std::path::PathBuf {
-    let identity = commits_upgrader::host_identity();
-    commits_upgrader::shared_or_exe_relative(&identity, name)
+    let identity = bones_upgrader::host_identity();
+    bones_upgrader::shared_or_exe_relative(&identity, name)
         .unwrap_or_else(|| std::path::PathBuf::from(name))
 }
 
@@ -121,7 +124,7 @@ fn satisfy_legacy_launcher() {
 /// point that was already there, which is a worse launcher rather than a
 /// broken app, and refusing to open over it would be the larger failure.
 fn refresh_launcher(logger: &bones_engine::logging::Logger) {
-    match commits_upgrader::refresh_launcher_from_running_exe(&commits_upgrader::host_identity()) {
+    match bones_upgrader::refresh_launcher_from_running_exe(&bones_upgrader::host_identity()) {
         Ok(true) => logger.log(
             bones_engine::logging::Level::Info,
             "updater",

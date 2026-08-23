@@ -1,10 +1,11 @@
-//! This repository's launcher binary: the permanent entry point installed
-//! at the install root as `commits.exe`, and the name users type.
+//! This application's launcher: the permanent entry point installed at the
+//! install root as `commits.exe`, and the name users type.
 //!
-//! Everything it does lives in `commits_upgrader::launcher`, so a host that
-//! wants its own binary name declares a `[[bin]]` like this one instead of
-//! reimplementing the mechanism. See `docs/updating.md` for the layout it
-//! walks.
+//! Everything it does lives in `bones_upgrader::launcher`. Declaring the
+//! binary here rather than taking the engine's reference `bones-launcher` is
+//! the expected shape: the entry point carries the application's name, not
+//! the engine's, because it is what users see in Explorer and the taskbar.
+//! See `docs/updating.md` for the layout it walks.
 
 // Same reasoning as the app: a release build is a desktop entry point, not
 // a console tool, so Windows must not open a terminal behind it. Debug
@@ -13,10 +14,13 @@
 
 use std::path::Path;
 
-use commits_upgrader::launcher::report_error;
+use bones_upgrader::launcher::report_error;
 
 fn main() {
-    let Some(install_dir) = std::env::current_exe().ok().and_then(|path| path.parent().map(Path::to_path_buf)) else {
+    let Some(install_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf))
+    else {
         report_error("could not resolve the launcher's own directory\n");
         std::process::exit(1);
     };
@@ -26,7 +30,9 @@ fn main() {
     // deliberately interprets nothing, so a future app argument needs no
     // change here.
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if let Err(error) = commits_upgrader::launcher::run(&commits_upgrader::host_identity(), &install_dir, &args) {
+    if let Err(error) =
+        bones_upgrader::launcher::run(&bones_upgrader::host_identity(), &install_dir, &args)
+    {
         report_error(&format!("{error}\n"));
         std::process::exit(1);
     }

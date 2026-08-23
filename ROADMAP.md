@@ -57,7 +57,8 @@ graph TD
 | Running `git` | native module | WASI-p2 has no process spawn; a WASM guest cannot fork `git` |
 | Parsing `git` output | WASM core (TS) | It is the ported product logic; keeps native modules dumb and swappable |
 | File watching | native module | Needs OS watch APIs and threads |
-| Clipboard, URLs, native dialogs, `GIT_ASKPASS` | native module | OS surface |
+| Clipboard, URLs, native dialogs, HTTPS fetch | engine module | OS surface, and nothing about it needs a repository (ADR-012) |
+| Repo-scoped file reads, repository scans, external tools, `GIT_ASKPASS` | native module | OS surface that only means something inside a repository |
 | Graph, table, diffs, dialogs | web panel | Direct reuse of `web/` |
 | Repo discovery, state, protocol, actions | WASM core | The thing we are actually porting |
 
@@ -79,7 +80,8 @@ apps/commits/        the standalone application
   scripts/             page, bundle and component builds
 crates/git/          native git module (endpoint "git")
 crates/watcher/      native repo watcher module (endpoint "watcher")
-crates/os/           native OS-surface module (endpoint "os")
+crates/os/           native repo-aware OS module (endpoint "repo-os");
+                     the generic desktop surface is the engine's "os" module
 ipc/                 wire contract: bones-codec messages, shared by Rust + TS
 packages/            MIT code shared with the VS Code extension
 vendor/bones/        upstream submodule, read-only
