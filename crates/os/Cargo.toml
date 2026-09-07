@@ -11,6 +11,22 @@ base64 = "0.22"
 # in the presentation stack the host composes for itself.
 bones-engine = { path = "../../vendor/bones/crates/bones-engine", default-features = false }
 commits-ipc = { path = "../../ipc/rust" }
+serde_json = "1.0"
+# "tls" (rustls + bundled webpki-roots), not "native-tls": ureq's own docs
+# say native-tls "must be configured via the AgentBuilder... never used by
+# `ureq::get`/`ureq::post`", which is exactly the plain shortcut API this
+# module calls. "tls" is also self-contained -- no system OpenSSL/cert
+# store to find on whatever machine this desktop app ends up running on.
+ureq = { version = "2.12", default-features = false, features = ["tls", "gzip", "json"] }
+
+# keyring's own integration pattern: one dependency entry per platform, all
+# resolving to the same `keyring` crate name so calling code needs no `#[cfg]`.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["sync-secret-service"] }
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["apple-native"] }
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
 
 [dev-dependencies]
 tempfile = "3.20"

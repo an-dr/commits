@@ -19,6 +19,15 @@ impl RepoOsBackend for StubBackend {
     fn run_tool(&self, request: &str) -> Result<(), String> {
         crate::parse_tool_run(request).map(|_| ())
     }
+    fn start_github_device_code(&self) -> Result<Option<String>, String> {
+        Ok(Some("ABCD-1234\nhttps://github.com/login/device\ndevice-code\n5\n900".into()))
+    }
+    fn poll_github_token(&self, _request: &str) -> Result<Option<String>, String> {
+        Ok(Some("gho_stub".into()))
+    }
+    fn store_github_token(&self, _token: &str) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[test]

@@ -34,6 +34,20 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     repoInProgressAbort: t("Abort"),
     repoInProgressAbortConfirm: t("Abort the {0} operation?"),
     repoInProgressActionFailed: t("Unable to update the repository operation"),
+
+    // Submodules ({0} is a count or a path)
+    submodulesPrimary: t("{0} submodules need attention"),
+    submodulesOne: t("1 submodule needs attention"),
+    submodulesUninitialized: t("not initialized"),
+    submodulesOutOfDate: t("out of date"),
+    submodulesConflicted: t("conflicted"),
+    submodulesUpToDate: t("up to date"),
+    submodulesMore: t("and {0} more"),
+    submodulesUpdate: t("Initialize & Update All"),
+    submodulesUpdating: t("Updating submodules ..."),
+    submodulesDismiss: t("Not now"),
+    submodulesUpdateFailed: t("Unable to update the submodules"),
+    submodulesOpenUninitialized: t("{0} is not initialized yet, so it has no history to show. Initialize and update every submodule now?"),
     branchPanelLocalBranches: t("Local Branches"),
     branchPanelTags: t("Tags"),
     changesStagedSection: t("Staged Changes"),
@@ -105,6 +119,12 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     unableToRenameBranch: t("Unable to Rename Branch"),
     unableToReset: t("Unable to Reset to Commit"),
     unableToRevert: t("Unable to Revert Commit"),
+    unableToPushBranch: t("Unable to Push Branch"),
+    unableToAddRemote: t("Unable to Add Remote"),
+    unableToRenameRemote: t("Unable to Rename Remote"),
+    unableToRemoveRemote: t("Unable to Remove Remote"),
+    unableToSetRemoteUrl: t("Unable to Change Remote URL"),
+    unableToSetDefaultRemote: t("Unable to Set Default Remote"),
     invalidCharacters: t("Unable to {0}, one or more invalid characters entered."),
 
     // Actions
@@ -126,6 +146,16 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     deleteBranch: t("Delete Branch"),
     deleteRemoteBranch: t("Delete Remote Branch"),
     pullIntoCurrentBranch: t("Pull into current branch"),
+    push: t("Push"),
+    pushTo: t("Push to"),
+    addRemote: t("Add Remote"),
+    renameRemote: t("Rename Remote"),
+    changeRemoteUrl: t("Change URL"),
+    removeRemote: t("Remove Remote"),
+    setDefaultRemote: t("Set as Default Remote"),
+    copyRemoteUrl: t("Copy URL to Clipboard"),
+    defaultRemoteMarker: t("★"),
+    defaultRemoteTooltip: t("Default remote for push"),
 
     typeCommitHash: t("Commit Hash"),
     typeTagName: t("Tag Name"),
@@ -136,6 +166,7 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     labelTag: t("the tag"),
     labelBranch: t("the branch"),
     labelCurrentBranch: t("the current branch"),
+    labelRemote: t("the remote"),
 
     // Dialog
     dialogAddTagTitle: t("Add tag to commit {0}"),
@@ -174,8 +205,18 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     dialogDeleteForceDelete: t("Force Delete"),
     dialogRenameBranchTitle: t("Enter the new name for the branch {0}:"),
     dialogRenameBranchSubmit: t("Rename Branch"),
-    dialogPushTagConfirm: t("Are you sure you want to push the tag {0}?"),
+    dialogPushTagConfirm: t("Are you sure you want to push the tag {0} to {1}?"),
+    dialogPushBranchConfirm: t("Are you sure you want to push {0} to {1}?"),
+    dialogPushToTitle: t("Choose a remote to push {0} to"),
     dialogPullBranchConfirm: t("Are you sure you want to pull {0} into {1}?"),
+    dialogAddRemoteTitle: t("Add a new remote"),
+    dialogAddRemoteName: t("Name"),
+    dialogAddRemoteUrl: t("URL"),
+    dialogAddRemoteSubmit: t("Add Remote"),
+    dialogRenameRemoteTitle: t("Enter the new name for the remote {0}:"),
+    dialogRenameRemoteSubmit: t("Rename Remote"),
+    dialogChangeRemoteUrlTitle: t("Enter the new URL for the remote {0}:"),
+    dialogChangeRemoteUrlSubmit: t("Change URL"),
     dialogYes: t("Yes"),
     dialogYesCherryPick: t("Yes, cherry pick commit"),
     dialogYesRevert: t("Yes, revert commit"),
@@ -186,6 +227,8 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
 
     // Status
     pushingTag: t("Pushing Tag"),
+    pushingBranch: t("Pushing Branch"),
+    noRemotesConfigured: t("No remotes are configured for this repository."),
 
     // Relative commit dates are formatted by Intl.RelativeTimeFormat in the
     // webview (see utils/date.ts), so no time units are declared here.

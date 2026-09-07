@@ -72,6 +72,29 @@
   background-color: var(--vscode-menu-selectionBackground);
   color: var(--vscode-menu-selectionForeground);
 }
+/* Marker on a submodule row that is not checked out where its parent says.
+   Inline with the name rather than in a column of its own: the menu is as
+   wide as its widest row already, and a column would widen every row for the
+   sake of the rare marked one. */
+.dropdownOptionBadge {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 14px;
+  vertical-align: 1px;
+  white-space: nowrap;
+  background-color: rgba(128, 128, 128, 0.2);
+}
+.dropdownOptionBadge.warning {
+  color: var(--vscode-editorWarning-foreground, rgb(204, 137, 0));
+  background-color: rgba(204, 137, 0, 0.18);
+}
+.dropdownOptionBadge.error {
+  color: var(--vscode-editorError-foreground, rgb(214, 64, 64));
+  background-color: rgba(214, 64, 64, 0.18);
+}
+
 .dropdownOptionInfo {
   position: absolute;
   width: 14px;

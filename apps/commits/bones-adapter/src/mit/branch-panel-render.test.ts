@@ -119,6 +119,7 @@ describe("renderBranchPanel", () => {
       remoteInfo: {
         upstreams: { main: "origin/main", work: "origin/other" },
         remotes: {},
+        defaultRemote: null,
       },
     });
 
@@ -130,13 +131,26 @@ describe("renderBranchPanel", () => {
   it("shows a remote's fetch URL beside its header", () => {
     const html = render({
       options: [{ name: "origin/main", value: "remotes/origin/main", selected: false, current: false }],
-      remoteInfo: { upstreams: {}, remotes: { origin: "https://github.com/an-dr/commits" } },
+      remoteInfo: { upstreams: {}, remotes: { origin: "https://github.com/an-dr/commits" }, defaultRemote: null },
     });
 
     expect(html).toContain("origin (1)");
     expect(html).toContain("https:&#x2F;&#x2F;github.com&#x2F;an-dr&#x2F;commits");
     // The name and count stay together; only the URL beside them may shrink.
     expect(html).toContain('<span class="branchPanelSectionName">origin (1)</span>');
+  });
+
+  it("marks the section header of the default push remote", () => {
+    const html = render({
+      options: [
+        { name: "origin/main", value: "remotes/origin/main", selected: false, current: false },
+        { name: "upstream/main", value: "remotes/upstream/main", selected: false, current: false },
+      ],
+      remoteInfo: { upstreams: {}, remotes: {}, defaultRemote: "upstream" },
+    });
+
+    expect(html).toContain('<span class="branchPanelSectionName">origin (1)</span>');
+    expect(html).toContain('<span class="branchPanelSectionName">upstream<span class="branchPanelDefaultRemote"');
   });
 
   it("renders without tracking data, which is what a host that sends none gets", () => {

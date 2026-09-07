@@ -140,8 +140,12 @@ describe("CommitsCore MIT webview host", () => {
       command: "loadRepos",
       repos: {
         "C:/repo": { columnWidths: null, depth: 0 },
-        "C:/repo/vendor/bones": { columnWidths: null, depth: 1 },
-        "C:/repo/vendor/bones/vendor/pubsub-bus": { columnWidths: null, depth: 2 },
+        "C:/repo/vendor/bones": { columnWidths: null, depth: 1, submodule: "upToDate" },
+        "C:/repo/vendor/bones/vendor/pubsub-bus": {
+          columnWidths: null,
+          depth: 2,
+          submodule: "upToDate",
+        },
       },
       lastActiveRepo: "C:/repo",
     }]);
@@ -159,17 +163,172 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.gitRequests.filter((request) => request.args[0] === "submodule")).toHaveLength(1);
   });
 
-  it("stays quiet about submodules when the repository has none", () => {
+  it("leaves the repository list alone when the repository has no submodules", () => {
     const host = new StubHost();
     host.paths = ["C:/repo"];
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
-    const sentBefore = host.sent.length;
+    const lists = () => host.sent.filter(([, message]) => commandOf(message) === "loadRepos").length;
+    const listsBefore = lists();
 
     completeGit(host, core, "submodule", "");
 
-    expect(host.sent.length).toBe(sentBefore);
+    expect(lists()).toBe(listsBefore);
+  });
+
+  it("answers the view with an empty list, which is what takes the banner down", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    completeGit(host, core, "submodule", "");
+
+    expect(host.sent).toContainEqual([
+      "main",
+      { command: "submoduleStatus", repo: "C:/repo", submodules: [] },
+    ]);
+  });
+
+  it("reports each submodule's state to the view", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    completeGit(host, core, "submodule", [
+      "-6d769aa0f01d86acd112cf59869bfbc5f79abd1d vendor/bones",
+      "+e425e3d2f92c96d2146f83a1b23de235c75d1758 vendor/other (heads/main)",
+    ].join("\n"));
+
+    expect(host.sent).toContainEqual([
+      "main",
+      {
+        command: "submoduleStatus",
+        repo: "C:/repo",
+        submodules: [
+          { path: "vendor/bones", state: "uninitialized" },
+          { path: "vendor/other", state: "outOfDate" },
+        ],
+      },
+    ]);
+  });
+
+  it("marks an uninitialized submodule in the repository list", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    completeGit(host, core, "submodule", "-6d769aa0f01d86acd112cf59869bfbc5f79abd1d vendor/bones");
+
+    expect(host.sent).toContainEqual([
+      "main",
+      {
+        command: "loadRepos",
+        repos: {
+          "C:/repo": { columnWidths: null, depth: 0 },
+          "C:/repo/vendor/bones": { columnWidths: null, depth: 1, submodule: "uninitialized" },
+        },
+        lastActiveRepo: "C:/repo",
+      },
+    ]);
+  });
+
+  it("rescans on the view's status request, so an added submodule is noticed", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+    completeGit(host, core, "submodule", "");
+
+    core.receivePageJson(JSON.stringify({ command: "submoduleStatus" }));
+
+    expect(host.gitRequests.filter((request) => request.args[0] === "submodule")).toHaveLength(2);
+  });
+
+  it("does not stack a second scan on one already running", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "submoduleStatus" }));
+    core.receivePageJson(JSON.stringify({ command: "submoduleStatus" }));
+
+    expect(host.gitRequests.filter((request) => request.args[0] === "submodule")).toHaveLength(1);
+  });
+
+  it("runs the recursive update in the root, even with a submodule row open", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+    completeGit(host, core, "submodule", "-6d769aa0f01d86acd112cf59869bfbc5f79abd1d vendor/bones");
+    // The row the user picked is the uninitialized submodule itself, whose
+    // folder holds no repository to run anything in.
+    core.receivePageJson(
+      JSON.stringify({ command: "selectRepo", repo: "C:/repo/vendor/bones" }),
+    );
+
+    core.receivePageJson(JSON.stringify({ command: "submoduleUpdate" }));
+
+    const update = host.gitRequests.find((request) => request.args[1] === "update");
+    expect(update?.cwd).toBe("C:/repo");
+  });
+
+  it("reports the root's submodules while a submodule row is open", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+    completeGit(host, core, "submodule", "-6d769aa0f01d86acd112cf59869bfbc5f79abd1d vendor/bones");
+    core.receivePageJson(
+      JSON.stringify({ command: "selectRepo", repo: "C:/repo/vendor/bones" }),
+    );
+
+    core.receivePageJson(JSON.stringify({ command: "submoduleStatus" }));
+
+    expect(host.sent).toContainEqual([
+      "main",
+      {
+        command: "submoduleStatus",
+        repo: "C:/repo",
+        submodules: [{ path: "vendor/bones", state: "uninitialized" }],
+      },
+    ]);
+  });
+
+  it("initializes and updates every submodule recursively, then rereads them", () => {
+    const host = new StubHost();
+    host.paths = ["C:/repo"];
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+    completeGit(host, core, "submodule", "-6d769aa0f01d86acd112cf59869bfbc5f79abd1d vendor/bones");
+
+    core.receivePageJson(JSON.stringify({ command: "submoduleUpdate" }));
+    const update = host.gitRequests.find((request) => request.args[1] === "update");
+    expect(update?.args).toEqual(["submodule", "update", "--init", "--recursive"]);
+
+    const scansBefore = host.gitRequests.filter((request) => request.args[1] === "status").length;
+    // The update is the second Git run of this test: the scan above was the first.
+    completeGitAt(host, core, 1, "");
+
+    expect(host.sent).toContainEqual(["main", { command: "submoduleUpdate", status: null }]);
+    // The update changed what the scan above reported, so it is rerun rather
+    // than the old answer being kept.
+    expect(host.gitRequests.filter((request) => request.args[1] === "status").length).toBe(
+      scansBefore + 1,
+    );
   });
 
   it("opens every repository a chosen folder holds and selects the first", () => {
@@ -1140,16 +1299,96 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.sent).toContainEqual(["main", { command: "deleteTag", status: null }]);
   });
 
-  it("pushes a tag to origin", () => {
+  it("pushes a tag to the chosen remote", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
 
-    core.receivePageJson(JSON.stringify({ command: "pushTag", repo: "C:/repo", tagName: "v1.0.0" }));
-    expect(host.gitRequests[0].args).toEqual(["push", "origin", "v1.0.0"]);
+    core.receivePageJson(JSON.stringify({ command: "pushTag", repo: "C:/repo", tagName: "v1.0.0", remote: "upstream" }));
+    expect(host.gitRequests[0].args).toEqual(["push", "upstream", "v1.0.0"]);
     completeGitAt(host, core, 0, "");
     expect(host.sent).toContainEqual(["main", { command: "pushTag", status: null }]);
+  });
+
+  it("pushes a branch to the chosen remote", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "pushBranch", repo: "C:/repo", branchName: "feature", remote: "origin",
+    }));
+    expect(host.gitRequests[0].args).toEqual(["push", "origin", "feature"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "pushBranch", status: null }]);
+  });
+
+  it("adds a remote", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "addRemote", repo: "C:/repo", name: "upstream", url: "https://github.com/an-dr/commits.git",
+    }));
+    expect(host.gitRequests[0].args).toEqual(["remote", "add", "upstream", "https://github.com/an-dr/commits.git"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "addRemote", status: null }]);
+  });
+
+  it("renames a remote", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "renameRemote", repo: "C:/repo", oldName: "origin", newName: "upstream",
+    }));
+    expect(host.gitRequests[0].args).toEqual(["remote", "rename", "origin", "upstream"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "renameRemote", status: null }]);
+  });
+
+  it("removes a remote", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({ command: "removeRemote", repo: "C:/repo", name: "upstream" }));
+    expect(host.gitRequests[0].args).toEqual(["remote", "remove", "upstream"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "removeRemote", status: null }]);
+  });
+
+  it("changes a remote's URL", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({
+      command: "setRemoteUrl", repo: "C:/repo", name: "origin", url: "https://github.com/an-dr/commits2.git",
+    }));
+    expect(host.gitRequests[0].args).toEqual(["remote", "set-url", "origin", "https://github.com/an-dr/commits2.git"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "setRemoteUrl", status: null }]);
+  });
+
+  it("sets the default push remote in local config", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+
+    core.receivePageJson(JSON.stringify({ command: "setDefaultRemote", repo: "C:/repo", name: "upstream" }));
+    expect(host.gitRequests[0].args).toEqual(["config", "remote.pushDefault", "upstream"]);
+    completeGitAt(host, core, 0, "");
+    expect(host.sent).toContainEqual(["main", { command: "setDefaultRemote", status: null }]);
   });
 
   it("pulls one remote branch into the current branch", () => {
@@ -1300,12 +1539,14 @@ describe("CommitsCore MIT webview host", () => {
     completeGitAt(host, core, 2, "main\u001forigin/main\nwork\u001f\n");
     completeGitAt(host, core, 3,
       "origin\thttps://github.com/an-dr/commits (fetch)\norigin\tssh://git@github.com/an-dr/commits (push)\n");
-    completeGitAt(host, core, 4, "v1.0.0\nv1.1.0\n");
+    completeGitAt(host, core, 4, "origin\n");
+    completeGitAt(host, core, 5, "v1.0.0\nv1.1.0\n");
 
     expect(host.sent).toContainEqual(["main", expect.objectContaining({
       command: "loadBranches",
       upstreams: { main: "origin/main" },
       remotes: { origin: "https://github.com/an-dr/commits" },
+      defaultRemote: "origin",
       tags: ["v1.0.0", "v1.1.0"],
     })]);
   });
@@ -1324,11 +1565,13 @@ describe("CommitsCore MIT webview host", () => {
     completeGitAt(host, core, 1, "main\n");
     completeGitAt(host, core, 2, "main\u001f\n");
     completeGitAt(host, core, 3, "");
-    completeGitAt(host, core, 4, "");
+    completeGitAt(host, core, 4, "", 1);
+    completeGitAt(host, core, 5, "");
 
     expect(host.sent).toContainEqual(["main", expect.objectContaining({
       command: "loadBranches",
       tags: [],
+      defaultRemote: null,
     })]);
   });
 
@@ -1756,6 +1999,77 @@ describe("CommitsCore MIT webview host", () => {
 
     expect(host.sent.some(([, message]) => (message as { command?: string }).command === "fetchAvatar"))
       .toBe(false);
+  });
+
+  it("signs in to GitHub via device flow and answers the waiting prompt", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "githubSignIn", id: "askpass-1" }));
+    expect(host.osRequests).toEqual([
+      { requestId: 50_000, action: "start-github-device-code", value: undefined },
+    ]);
+
+    core.receiveOsResult({
+      requestId: 50_000, accepted: true,
+      value: "ABCD-1234\nhttps://github.com/login/device\ndevice-code\n5\n900",
+      error: "",
+    });
+    expect(host.sent).toContainEqual(["main", {
+      command: "githubSignIn", promptId: "askpass-1", signInStatus: "code",
+      userCode: "ABCD-1234", verificationUri: "https://github.com/login/device",
+    }]);
+    expect(host.osRequests.at(-1)).toEqual({
+      requestId: 50_001, action: "poll-github-token", value: "device-code\n5\n900",
+    });
+
+    core.receiveOsResult({ requestId: 50_001, accepted: true, value: "gho_abc123", error: "" });
+    expect(host.osRequests.at(-1)).toEqual({
+      requestId: 50_002, action: "store-github-token", value: "gho_abc123",
+    });
+    expect(host.promptReplies).toContainEqual("askpass-1:x-access-token");
+    expect(host.sent).toContainEqual(["main", { command: "githubSignIn", promptId: "askpass-1", signInStatus: "done" }]);
+  });
+
+  it("reports a GitHub sign-in that fails to start", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "githubSignIn", id: "askpass-1" }));
+    core.receiveOsResult({
+      requestId: 50_000, accepted: false, value: "",
+      error: "GitHub sign-in is not configured for this build.",
+    });
+
+    expect(host.sent).toContainEqual(["main", {
+      command: "githubSignIn", promptId: "askpass-1", signInStatus: "error",
+      message: "GitHub sign-in is not configured for this build.",
+    }]);
+  });
+
+  it("reports a GitHub sign-in that expires before it is approved", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+
+    core.receivePageJson(JSON.stringify({ command: "githubSignIn", id: "askpass-1" }));
+    core.receiveOsResult({
+      requestId: 50_000, accepted: true,
+      value: "ABCD-1234\nhttps://github.com/login/device\ndevice-code\n5\n900",
+      error: "",
+    });
+    core.receiveOsResult({
+      requestId: 50_001, accepted: false, value: "",
+      error: "The sign-in code expired before it was approved.",
+    });
+
+    expect(host.promptReplies).toEqual([]);
+    expect(host.sent).toContainEqual(["main", {
+      command: "githubSignIn", promptId: "askpass-1", signInStatus: "error",
+      message: "The sign-in code expired before it was approved.",
+    }]);
   });
 
   it("creates a branch at a commit, checking it out only when asked", () => {
@@ -2350,6 +2664,13 @@ function completeFindRepositories(host: StubHost, core: CommitsCore, paths: read
   });
 }
 
+/** The `command` field of a message the core sent, for filtering the log. */
+function commandOf(message: unknown): string {
+  return typeof message === "object" && message !== null && "command" in message
+    ? String((message as { command: unknown }).command)
+    : "";
+}
+
 function completeGit(host: StubHost, core: CommitsCore, command: string, stdout: string): void {
   const request = host.gitRequests.find((candidate) => candidate.args[0] === command);
   if (request === undefined) throw new Error(`missing ${command} request`);
@@ -2413,3 +2734,37 @@ function fullDiffReply(host: StubHost): unknown {
     .map(([, message]) => message as { command: string })
     .find((message) => message.command === "fullDiffContent");
 }
+
+it("rescans after an update even when an older status scan is still running", () => {
+  const host = new StubHost();
+  host.paths = ["C:/repo"];
+  const core = new CommitsCore(host);
+  core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+  core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+  core.receivePageJson(JSON.stringify({ command: "submoduleUpdate" }));
+  const updateIndex = host.gitRequests.findIndex((request) => request.args[1] === "update");
+  completeGitAt(host, core, updateIndex, "");
+  completeGit(host, core, "submodule", "-" + "a".repeat(40) + " vendor/lib");
+  const scans = host.gitRequests.filter((request) => request.args[1] === "status");
+  expect(scans).toHaveLength(2);
+  completeGitAt(host, core, host.gitRequests.indexOf(scans[1]), " " + "a".repeat(40) + " vendor/lib (main)");
+  expect(host.sent.at(-1)).toEqual(["main", {
+    command: "submoduleStatus", repo: "C:/repo",
+    submodules: [{ path: "vendor/lib", state: "upToDate" }],
+  }]);
+});
+
+it("updates a named uninitialized row without selecting its empty directory", () => {
+  const host = new StubHost();
+  host.paths = ["C:/repo", "C:/other"];
+  const core = new CommitsCore(host);
+  core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+  core.receivePageJson(JSON.stringify({ command: "standaloneViewReady" }));
+  core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+  core.receivePageJson(JSON.stringify({ command: "submoduleStatus" }));
+  const scan = host.gitRequests.findIndex((request) => request.cwd === "C:/repo" && request.args[1] === "status");
+  completeGitAt(host, core, scan, "-" + "a".repeat(40) + " vendor/lib");
+  core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/other" }));
+  core.receivePageJson(JSON.stringify({ command: "submoduleUpdate", repo: "C:/repo/vendor/lib" }));
+  expect(host.gitRequests.find((request) => request.args[1] === "update")?.cwd).toBe("C:/repo");
+});

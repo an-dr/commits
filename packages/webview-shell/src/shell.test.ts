@@ -7,7 +7,7 @@ describe("shared MIT webview shell", () => {
     for (const id of [
       "view", "repoSelect", "sidebarToggleBtn", "findBtn", "commitFilter",
       "refreshBtn", "resetBtn", "pullBtn", "pushBtn", "moreBtn", "findWidget",
-      "branchPanel", "repoInProgressBanner", "commitGraph", "commitTable", "footer",
+      "branchPanel", "repoInProgressBanner", "submoduleBanner", "commitGraph", "commitTable", "footer",
       "filesPanel", "fullDiffPanel", "contextMenu", "dialogBacking", "dialog",
       "scrollShadow", "openInBtn", "filesPanelToggleBtn",
     ]) {

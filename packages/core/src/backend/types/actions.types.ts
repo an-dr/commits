@@ -31,7 +31,14 @@ type ActionPayloads = {
   commitChanges: { message: string; amend: boolean };
   mergeBranch: { branchName: string; createNewCommit: boolean };
   mergeCommit: { commitHash: string; createNewCommit: boolean };
-  pushTag: { tagName: string };
+  pushTag: { tagName: string; remote: string };
+  pushBranch: { branchName: string; remote: string };
+  addRemote: { name: string; url: string };
+  renameRemote: { oldName: string; newName: string };
+  removeRemote: { name: string };
+  setRemoteUrl: { name: string; url: string };
+  /** Sets `remote.pushDefault` (local config), the remote a plain `git push` resolves to when a branch has no upstream. */
+  setDefaultRemote: { name: string };
   /**
    * Replays the current branch onto a commit. Only the non-interactive form
    * exists: an interactive rebase needs a terminal to edit its todo list in,

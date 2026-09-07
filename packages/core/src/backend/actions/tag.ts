@@ -21,5 +21,5 @@ export async function deleteTag(git: SimpleGit, input: ActionPayload<"deleteTag"
 }
 
 export async function pushTag(git: SimpleGit, input: ActionPayload<"pushTag">): Promise<void> {
-  await git.push("origin", input.tagName);
+  await git.push(input.remote, input.tagName);
 }

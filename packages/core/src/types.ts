@@ -13,6 +13,26 @@ export type GitRepoState = {
   /** Indentation level in the repo selector. Omitted when the host has no
    *  opinion, which leaves the view to infer nesting from the paths. */
   depth?: number;
+  /** For a row that is a submodule of the row above it: how its checkout
+   *  stands against the commit its parent records. Absent for a repository
+   *  that is nobody's submodule, which is what leaves the row unmarked. */
+  submodule?: SubmoduleState;
+};
+
+/**
+ * How one submodule's checkout stands against the commit its parent records,
+ * as the leading character of `git submodule status` reports it.
+ *
+ * "uninitialized" is the one that costs the user real time: the folder is
+ * empty, so a build fails for a reason that names a missing file rather than a
+ * missing submodule.
+ */
+export type SubmoduleState = "uninitialized" | "outOfDate" | "conflicted" | "upToDate";
+
+/** One submodule of the open repository, by root-relative path. */
+export type SubmoduleView = {
+  readonly path: string;
+  readonly state: SubmoduleState;
 };
 
 /**
@@ -222,6 +242,36 @@ export type ResponseRefresh = {
   scope?: "all" | "worktree";
 };
 
+/**
+ * Asks for every submodule of the open repository and how each one stands.
+ *
+ * Sent alongside `repoInProgress` on each refresh, for the same reason: a
+ * `git submodule add` or a branch switch that moves a submodule pointer
+ * happens outside the panel as often as inside it.
+ */
+export type RequestSubmoduleStatus = { command: "submoduleStatus" };
+export type ResponseSubmoduleStatus = {
+  command: "submoduleStatus";
+  repo: string;
+  submodules: readonly SubmoduleView[];
+};
+
+/**
+ * Initializes and checks out every submodule recursively
+ * (`git submodule update --init --recursive`).
+ *
+ * One command for the whole tree rather than a per-submodule request: a
+ * submodule that was never initialized reveals its own submodules only once it
+ * is, so a caller working through a list would always be one round trip behind
+ * the tree it is trying to complete.
+ */
+export type RequestSubmoduleUpdate = { command: "submoduleUpdate"; repo?: string };
+/** `status` is null on success, Git's own failure words otherwise. */
+export type ResponseSubmoduleUpdate = {
+  command: "submoduleUpdate";
+  status: string | null;
+};
+
 /** Asks for the operation the repository is part-way through. */
 export type RequestRepoInProgress = { command: "repoInProgress" };
 export type RequestInProgressAction = {
@@ -268,6 +318,8 @@ export type ResponseRunTool = {
 
 export type RequestMessage =
   | RequestRepoInProgress
+  | RequestSubmoduleStatus
+  | RequestSubmoduleUpdate
   | RequestInProgressAction
   | ActionRequest
   | QueryRequest
@@ -295,6 +347,8 @@ export type ResponseInProgressAction = {
 
 export type ResponseMessage =
   | ResponseRepoInProgress
+  | ResponseSubmoduleStatus
+  | ResponseSubmoduleUpdate
   | ResponseInProgressAction
   | ActionResponse
   | QueryResponse

@@ -20,6 +20,16 @@ export interface CommitAction {
   readonly amend: boolean;
 }
 
+/**
+ * Ceiling for a Git command that may need to reach a remote -- long enough to
+ * outlast `commits-askpass`'s own wait (20 minutes, `PROMPT_TIMEOUT` in
+ * commits-askpass.rs), covering a GitHub device-flow sign-in approved from
+ * its credential prompt. Shorter than that would let this timeout fire and
+ * kill the outer Git process first, orphaning the askpass helper still
+ * waiting underneath it -- reparented to init, answered by nothing.
+ */
+const NETWORK_TIMEOUT_MS = 1_200_000;
+
 /** Failure text of a Git run, preferring what Git itself said. */
 function failureText(result: GitResult): string {
   const text = new TextDecoder().decode(result.stderr).trim();
@@ -103,9 +113,26 @@ export class WorkingTreeActions {
       return;
     }
     const args = operation === "fetch" ? ["fetch", "--all"] : [operation];
-    // Network-bound, unlike the local working-tree mutations above -- matches
-    // cloneCommitsRepo's own 120s allowance for a remote round trip.
-    this.send(repo, args, deliver, 120_000);
+    this.send(repo, args, deliver, NETWORK_TIMEOUT_MS);
+  }
+
+  /**
+   * Initializes and checks out every submodule, recursively.
+   *
+   * `--init` is what makes this one command rather than two, and `--recursive`
+   * is what makes it complete: a submodule that was never initialized hides
+   * its own submodules until it exists, so anything short of a recursive
+   * update leaves a tree that still needs another pass.
+   *
+   * Timed like the network operations above, because it is one: an
+   * uninitialized submodule has to be cloned before it can be checked out.
+   */
+  updateSubmodules(repo: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["submodule", "update", "--init", "--recursive"], deliver, NETWORK_TIMEOUT_MS);
   }
 
   /** Pulls one specific remote branch into the current branch. */
@@ -114,7 +141,7 @@ export class WorkingTreeActions {
       deliver("No repository is open.");
       return;
     }
-    this.send(repo, ["pull", remote, branchName], deliver, 120_000);
+    this.send(repo, ["pull", remote, branchName], deliver, NETWORK_TIMEOUT_MS);
   }
 
   /** Deletes a branch on its remote. */
@@ -123,7 +150,7 @@ export class WorkingTreeActions {
       deliver("No repository is open.");
       return;
     }
-    this.send(repo, ["push", remote, "--delete", branchName], deliver, 120_000);
+    this.send(repo, ["push", remote, "--delete", branchName], deliver, NETWORK_TIMEOUT_MS);
   }
 
   /** Checks out a local branch, or a remote one as a new local branch tracking it. */
@@ -350,13 +377,62 @@ export class WorkingTreeActions {
     this.send(repo, ["tag", "-d", tagName], deliver);
   }
 
-  /** Pushes one tag to `origin`, the same remote `packages/core`'s own (currently unused) backend targets. */
-  pushTag(repo: string, tagName: string, deliver: (status: string | null) => void): void {
+  pushTag(repo: string, tagName: string, remote: string, deliver: (status: string | null) => void): void {
     if (repo === "") {
       deliver("No repository is open.");
       return;
     }
-    this.send(repo, ["push", "origin", tagName], deliver, 120_000);
+    this.send(repo, ["push", remote, tagName], deliver, NETWORK_TIMEOUT_MS);
+  }
+
+  /** Pushes one local branch to a remote, current-checkout or not. */
+  pushBranch(repo: string, remote: string, branchName: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["push", remote, branchName], deliver, NETWORK_TIMEOUT_MS);
+  }
+
+  addRemote(repo: string, name: string, url: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["remote", "add", name, url], deliver);
+  }
+
+  renameRemote(repo: string, oldName: string, newName: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["remote", "rename", oldName, newName], deliver);
+  }
+
+  removeRemote(repo: string, name: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["remote", "remove", name], deliver);
+  }
+
+  setRemoteUrl(repo: string, name: string, url: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["remote", "set-url", name, url], deliver);
+  }
+
+  /** Sets `remote.pushDefault` in local config, so a plain push resolves to it. */
+  setDefaultRemote(repo: string, name: string, deliver: (status: string | null) => void): void {
+    if (repo === "") {
+      deliver("No repository is open.");
+      return;
+    }
+    this.send(repo, ["config", "remote.pushDefault", name], deliver);
   }
 
   private send(repo: string, args: string[], deliver: (status: string | null) => void, timeoutMs = 30_000): void {

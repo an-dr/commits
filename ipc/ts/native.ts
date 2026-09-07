@@ -85,7 +85,13 @@ export type OsAction =
  * them, or a tool launched against one. They number from zero independently of
  * `OsAction`, because the two endpoints are separate wire surfaces.
  */
-export type RepoOsAction = "read-file" | "find-repositories" | "run-tool";
+export type RepoOsAction =
+  | "read-file"
+  | "find-repositories"
+  | "run-tool"
+  | "start-github-device-code"
+  | "poll-github-token"
+  | "store-github-token";
 
 /**
  * Value of a `read-file` request: the repository the read is confined to, then
@@ -123,6 +129,9 @@ export function encodeRepoOsRequest(
     "read-file": 0,
     "find-repositories": 1,
     "run-tool": 2,
+    "start-github-device-code": 3,
+    "poll-github-token": 4,
+    "store-github-token": 5,
   };
   return new Writer().u32(requestId).u8(tag[action]).string(value).finish();
 }

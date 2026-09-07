@@ -38,6 +38,7 @@ export function buildGraphShell(t: (message: string) => string): string {
       </div>
       <aside id="branchPanelSidebar"><div id="branchPanel"></div><div id="branchPanelResizeHandle"></div></aside>
       <div id="repoInProgressBanner"></div>
+      <div id="submoduleBanner"></div>
       <div id="graphScroll">
         <div id="content"><div id="commitGraph"></div><div id="commitTable"></div></div>
         <div id="footer"></div>

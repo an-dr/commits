@@ -13,7 +13,9 @@
   --vscode-editor-font-family: "Cascadia Code", Consolas, monospace;
   --vscode-editor-font-size: 13px;
   --vscode-editor-foreground: #1f2328;
+  --vscode-editorError-foreground: #cf222e;
   --vscode-editorWarning-background: #cca700;
+  --vscode-editorWarning-foreground: #9a6700;
   --vscode-editorWidget-background: #f8f8f8;
   --vscode-focusBorder: #007fd4;
   --vscode-foreground: #24292f;
@@ -131,11 +133,27 @@ body.repoOverlayOpen #controlsBtns > *:not(#appMenuSlot) {
 
 #standaloneCredentialControls {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-#standaloneCredentialValue {
-  flex: 1;
+#standaloneCredentialControls[hidden] {
+  display: none;
+}
+
+#standaloneCredentialValue,
+#standaloneCredentialPassword {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+#standaloneCredentialGithubRow {
+  margin-top: 12px;
+}
+
+#standaloneCredentialGithubStatus {
+  margin: 12px 0 0;
+  word-break: break-word;
 }
 
 #standaloneRepoForm {

@@ -7,7 +7,7 @@ import { buildGraphShell } from "@an-dr/commits-webview-shell/shell";
 import { DEFAULT_SETTINGS, type SettingsDocument } from "@commits/adapter/read/settings";
 import { toolbarIcons } from "@an-dr/commits-core/webview/utils/icons";
 import "./standalone-theme.css";
-import { CredentialPrompts } from "./credential-prompts";
+import { CredentialPrompts, credentialPromptHost } from "./credential-prompts";
 import { createViewState } from "./settings";
 import { SettingsEditor } from "./settings-editor";
 import { createAppearanceController } from "./themes";
@@ -28,6 +28,7 @@ type StandaloneMessage =
     }
   | { command: "standaloneOpenRepository"; path: string }
   | { command: "credentialResponse"; id: string; value: string }
+  | { command: "githubSignIn"; id: string }
   | { command: "standaloneSaveSettings"; requestId: number; settings: SettingsDocument };
 
 interface StandaloneResponse {
@@ -39,7 +40,8 @@ interface StandaloneResponse {
     | "standaloneCommitsRepoStatus"
     | "standaloneUpdateStatus"
     | "standaloneInstallStatus"
-    | "standaloneCredentialPrompt";
+    | "standaloneCredentialPrompt"
+    | "githubSignIn";
   recent?: readonly string[];
   lastActive?: string;
   settings?: SettingsDocument;
@@ -53,6 +55,11 @@ interface StandaloneResponse {
   version?: string;
   ready?: boolean;
   status?: "hidden" | "ready" | "staged" | "done";
+  /** `githubSignIn` only: the askpass prompt this sign-in is answering. */
+  promptId?: string;
+  signInStatus?: "code" | "done" | "error";
+  userCode?: string;
+  verificationUri?: string;
 }
 
 declare global {
@@ -120,6 +127,11 @@ async function boot(): Promise<void> {
         updateInstallStatus(data.status ?? "hidden", data.version ?? "", data.message ?? "");
       } else if (data.command === "standaloneCredentialPrompt") {
         credentialPrompts.receive(data.id ?? "", data.message ?? "");
+      } else if (data.command === "githubSignIn") {
+        handleGithubSignIn(
+          data.promptId ?? "", data.signInStatus ?? "error",
+          data.userCode ?? "", data.verificationUri ?? "", data.message ?? "",
+        );
       }
       window.dispatchEvent(new MessageEvent("message", { data }));
     } catch {
@@ -446,9 +458,14 @@ function credentialPromptHtml(): string {
       <p id="standaloneCredentialMessage"></p>
       <div id="standaloneCredentialControls">
         <input id="standaloneCredentialValue" autocomplete="off">
+        <input id="standaloneCredentialPassword" type="password" placeholder="Password" autocomplete="off" hidden>
         <button type="submit">Send</button>
         <button id="standaloneCredentialCancel" type="button">Cancel</button>
       </div>
+      <div id="standaloneCredentialGithubRow" hidden>
+        <button id="standaloneCredentialGithubButton" type="button">Sign in to GitHub</button>
+      </div>
+      <p id="standaloneCredentialGithubStatus" hidden></p>
     </form>
   </div>`;
 }
@@ -463,16 +480,19 @@ const credentialPrompts = new CredentialPrompts(
  * Answers the credential prompt a running Git command is waiting on.
  *
  * Without this the command simply hung: `commits-askpass` writes its question
- * and waits two minutes for an answer that nothing on this side ever asked
- * for, so a push over HTTPS did nothing at all and then failed with no
- * explanation of what it had been waiting for.
+ * and waits for an answer that nothing on this side ever asked for, so a push
+ * over HTTPS did nothing at all and then failed with no explanation of what
+ * it had been waiting for.
  */
 function wireCredentialPrompt(): void {
   const form = document.getElementById("standaloneCredentialForm") as HTMLFormElement;
   const input = document.getElementById("standaloneCredentialValue") as HTMLInputElement;
+  const password = document.getElementById("standaloneCredentialPassword") as HTMLInputElement;
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    credentialPrompts.answer(input.value);
+    // A username prompt collects its password in the same form, so the
+    // password prompt Git asks moments later never needs its own dialog.
+    credentialPrompts.answer(input.value, password.hidden ? undefined : password.value);
   });
   // Cancelling answers with nothing rather than staying silent: Git then
   // fails on the spot with its own authentication error, where silence
@@ -480,6 +500,29 @@ function wireCredentialPrompt(): void {
   document.getElementById("standaloneCredentialCancel")!.addEventListener("click", () => {
     credentialPrompts.answer("");
   });
+  document.getElementById("standaloneCredentialGithubButton")!.addEventListener("click", () => {
+    const id = credentialPrompts.currentId();
+    if (id === null) return;
+    post({ command: "githubSignIn", id });
+    document.getElementById("standaloneCredentialControls")!.hidden = true;
+    document.getElementById("standaloneCredentialGithubRow")!.hidden = true;
+    setGithubStatus("Starting sign-in…");
+  });
+}
+
+/**
+ * Renders each argument as its own line via text nodes, not `innerHTML`:
+ * `userCode`/`verificationUri` come from GitHub's own response, not this
+ * app's own literal text, so they are not safe to interpolate as markup.
+ */
+function setGithubStatus(...lines: string[]): void {
+  const status = document.getElementById("standaloneCredentialGithubStatus")!;
+  status.replaceChildren(
+    ...lines.flatMap((line, index) =>
+      index === 0 ? [document.createTextNode(line)] : [document.createElement("br"), document.createTextNode(line)],
+    ),
+  );
+  status.hidden = false;
 }
 
 /**
@@ -490,18 +533,52 @@ function wireCredentialPrompt(): void {
 function showCredentialPrompt(id: string, message: string): void {
   const overlay = document.getElementById("standaloneCredentialOverlay")!;
   const input = document.getElementById("standaloneCredentialValue") as HTMLInputElement;
+  const password = document.getElementById("standaloneCredentialPassword") as HTMLInputElement;
   document.getElementById("standaloneCredentialMessage")!.textContent = message.trim();
+  const usernameHost = credentialPromptHost(message, "Username");
   // Git says which of the two it is asking for, and a password must not be
   // left readable on screen.
-  input.type = /password|passphrase/i.test(message) ? "password" : "text";
+  input.type = usernameHost === null && /password|passphrase/i.test(message) ? "password" : "text";
   input.value = "";
+  password.hidden = usernameHost === null;
+  password.value = "";
+  document.getElementById("standaloneCredentialControls")!.hidden = false;
+  document.getElementById("standaloneCredentialGithubRow")!.hidden = usernameHost !== "github.com";
+  const status = document.getElementById("standaloneCredentialGithubStatus")!;
+  status.hidden = true;
+  status.replaceChildren();
   overlay.hidden = false;
   input.focus();
 }
 
 function hideCredentialPrompt(): void {
   (document.getElementById("standaloneCredentialValue") as HTMLInputElement).value = "";
+  (document.getElementById("standaloneCredentialPassword") as HTMLInputElement).value = "";
   document.getElementById("standaloneCredentialOverlay")!.hidden = true;
+}
+
+/** A running GitHub sign-in's progress, for the prompt it is answering. */
+function handleGithubSignIn(
+  promptId: string,
+  signInStatus: string,
+  userCode: string,
+  verificationUri: string,
+  message: string,
+): void {
+  if (promptId !== credentialPrompts.currentId()) return;
+  if (signInStatus === "done") {
+    credentialPrompts.resolve(promptId);
+    return;
+  }
+  if (signInStatus === "code") {
+    setGithubStatus(
+      `Enter code ${userCode} at ${verificationUri}`,
+      "Leave this window open after approving it there — it can take a few seconds to notice.",
+    );
+    post({ command: "openExternalUrl", url: verificationUri });
+  } else {
+    setGithubStatus(message || "GitHub sign-in failed.");
+  }
 }
 
 /**

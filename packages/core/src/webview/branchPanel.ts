@@ -43,9 +43,14 @@ export interface BranchPanelRemoteInfo {
   upstreams: Readonly<Record<string, string>>;
   /** Fetch URL of each remote, by remote name. */
   remotes: Readonly<Record<string, string>>;
+  /** `remote.pushDefault` (local config): the remote a plain push resolves to. */
+  defaultRemote: string | null;
 }
 
-export const NO_REMOTE_INFO: BranchPanelRemoteInfo = { upstreams: {}, remotes: {} };
+export const NO_REMOTE_INFO: BranchPanelRemoteInfo = { upstreams: {}, remotes: {}, defaultRemote: null };
+
+/** A right-click on a remote's section header; never a real ref name (`:` cannot appear in one). */
+export const REMOTE_HEADER_PREFIX = "remote:";
 
 export interface BranchPanelRenderModel {
   options: readonly BranchPanelRenderOption[];
@@ -90,7 +95,8 @@ export class BranchPanel {
       kind: "doubleClick" | "contextMenu",
       source: HTMLElement,
       event: MouseEvent
-    ) => void
+    ) => void,
+    onAddRemote: () => void
   ) {
     this.sidebar = document.getElementById("branchPanelSidebar")!;
     this.list = document.getElementById("branchPanel")!;
@@ -107,6 +113,7 @@ export class BranchPanel {
     // Same state the toolbar toggle drives, so closing here leaves the toggle
     // able to bring the panel back and the persisted layout correct.
     this.bar = new PanelBar(this.sidebar);
+    this.bar.addButton(toolbarIcons.plus, l10n.addRemote, onAddRemote);
     this.bar.addCloseButton(() => this.setHidden(true));
     this.setupResize(document.getElementById("branchPanelResizeHandle")!);
     this.setupBehavior();
@@ -241,11 +248,20 @@ export class BranchPanel {
 
   private dispatchAction(event: MouseEvent, kind: "doubleClick" | "contextMenu") {
     const item = (event.target as Element).closest<HTMLElement>(".branchPanelItem");
-    if (item?.dataset.value === undefined || item.dataset.value === "") {
+    if (item?.dataset.value !== undefined && item.dataset.value !== "") {
+      event.stopPropagation();
+      this.onAction(item.dataset.value, kind, item, event);
       return;
     }
-    event.stopPropagation();
-    this.onAction(item.dataset.value, kind, item, event);
+    // A remote's own row, rather than one of the refs beneath it: it has no
+    // ref value of its own, so the header's folder key stands in for one.
+    if (kind === "contextMenu") {
+      const header = (event.target as Element).closest<HTMLElement>(".branchPanelSectionHeader");
+      if (header?.dataset.folder?.startsWith(REMOTE_HEADER_PREFIX) === true) {
+        event.stopPropagation();
+        this.onAction(header.dataset.folder, kind, header, event);
+      }
+    }
   }
 
   private render() {

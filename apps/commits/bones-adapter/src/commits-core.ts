@@ -1,5 +1,5 @@
 import type { GitFileChangeType } from "@an-dr/commits-core/backend/types";
-import type { RequestMessage, ResponseMessage } from "@an-dr/commits-core/types";
+import type { GitRepoSet, RequestMessage, ResponseMessage, SubmoduleView } from "@an-dr/commits-core/types";
 import { encodeFileRead, type GitResult, type NativeResult, type UpdaterResult, type WatchEvent } from "@commits/ipc/native";
 import { gravatarUrl } from "./gravatar";
 import type { HostPort } from "./host/host-port";
@@ -8,7 +8,7 @@ import { MitGraphBackend } from "./mit/graph-backend";
 import { buildToolRun, gitShowArgs } from "./mit/external-tools";
 import { WorkingTreeActions } from "./mit/working-tree-actions";
 import { RepositoryManager } from "./read/repository-manager";
-import { parseSubmodulePaths } from "./read/submodule-status";
+import { parseSubmoduleEntries } from "./read/submodule-status";
 import {
   DEFAULT_PERSISTENT_STATE,
   MAX_RECENT_REPOSITORIES,
@@ -42,7 +42,12 @@ type PendingOs =
   | { readonly kind: "revealCommitsRepoFolder" }
   | { readonly kind: "readFile"; readonly deliver: (content: string | null) => void }
   | { readonly kind: "fetchAvatar"; readonly email: string }
-  | { readonly kind: "runTool" };
+  | { readonly kind: "runTool" }
+  /** Awaits the device code; `promptId` is the askpass prompt this sign-in answers. */
+  | { readonly kind: "githubDeviceCode"; readonly promptId: string }
+  /** Awaits the user approving the code in their browser. */
+  | { readonly kind: "githubToken"; readonly promptId: string }
+  | { readonly kind: "githubTokenStored" };
 
 /** One diff whose two revisions are still being read out of Git. */
 interface PendingToolDiff {
@@ -100,12 +105,16 @@ export class CommitsCore {
   private nextOsRequestId = 50_000;
   private nextGitRequestId = 60_000;
   private nextUpdateRequestId = 70_000;
-  /** Nested submodule paths discovered per repository root, keyed by root path. */
-  private readonly submodulePaths = new Map<string, readonly string[]>();
+  /** Nested submodules discovered per repository root, keyed by root path. */
+  private readonly submodules = new Map<string, readonly SubmoduleView[]>();
   /** Root paths a submodule discovery has already been issued for, so a
    *  repeated `sendRepos` never re-queries the same root. */
   private readonly requestedSubmoduleRoots = new Set<string>();
   private readonly pendingSubmoduleDiscovery = new Map<number, string>();
+  /** Roots with a discovery in flight, so the refresh the view asks for on
+   *  every reread never stacks a second scan on top of the running one. */
+  private readonly scanningSubmoduleRoots = new Set<string>();
+  private readonly rescanSubmoduleRoots = new Set<string>();
   /** Counts panel file reads so only the newest one answers. */
   private fullDiffSequence = 0;
   /** Counts comparisons so only the newest selection answers. */
@@ -370,6 +379,12 @@ export class CommitsCore {
       case "repoInProgress":
         this.send({ command: "repoInProgress", state: null });
         return;
+      case "submoduleStatus":
+        this.reportSubmodules();
+        return;
+      case "submoduleUpdate":
+        this.updateSubmodules(typeof value.repo === "string" ? value.repo : undefined);
+        return;
       case "remoteOperation": {
         const operation = value.operation;
         if (operation !== "fetch" && operation !== "pull" && operation !== "push") return;
@@ -528,7 +543,54 @@ export class CommitsCore {
         this.workingTreeActions.pushTag(
           this.currentRepository ?? "",
           asString(value.tagName),
+          asString(value.remote),
           (status) => this.send({ command: "pushTag", status }),
+        );
+        return;
+      case "pushBranch":
+        this.workingTreeActions.pushBranch(
+          this.currentRepository ?? "",
+          asString(value.remote),
+          asString(value.branchName),
+          (status) => this.send({ command: "pushBranch", status }),
+        );
+        return;
+      case "addRemote":
+        this.workingTreeActions.addRemote(
+          this.currentRepository ?? "",
+          asString(value.name),
+          asString(value.url),
+          (status) => this.send({ command: "addRemote", status }),
+        );
+        return;
+      case "renameRemote":
+        this.workingTreeActions.renameRemote(
+          this.currentRepository ?? "",
+          asString(value.oldName),
+          asString(value.newName),
+          (status) => this.send({ command: "renameRemote", status }),
+        );
+        return;
+      case "removeRemote":
+        this.workingTreeActions.removeRemote(
+          this.currentRepository ?? "",
+          asString(value.name),
+          (status) => this.send({ command: "removeRemote", status }),
+        );
+        return;
+      case "setRemoteUrl":
+        this.workingTreeActions.setRemoteUrl(
+          this.currentRepository ?? "",
+          asString(value.name),
+          asString(value.url),
+          (status) => this.send({ command: "setRemoteUrl", status }),
+        );
+        return;
+      case "setDefaultRemote":
+        this.workingTreeActions.setDefaultRemote(
+          this.currentRepository ?? "",
+          asString(value.name),
+          (status) => this.send({ command: "setDefaultRemote", status }),
         );
         return;
       case "copyToClipboard":
@@ -555,6 +617,13 @@ export class CommitsCore {
           this.host.requestOs(requestId, "fetch-url", gravatarUrl(value.email));
         }
         return;
+      case "githubSignIn": {
+        const promptId = asString(value.id);
+        const requestId = this.nextOsRequestId++;
+        this.pendingOs.set(requestId, { kind: "githubDeviceCode", promptId });
+        this.host.requestRepoOs(requestId, "start-github-device-code");
+        return;
+      }
       default:
         this.host.log("debug", `ignored unsupported MIT view command: ${value.command}`);
     }
@@ -589,6 +658,36 @@ export class CommitsCore {
       } else if (result.error) {
         this.host.log("warn", result.error);
       }
+    } else if (pending.kind === "githubDeviceCode") {
+      if (!result.accepted || !result.value) {
+        this.send({
+          command: "githubSignIn", promptId: pending.promptId, signInStatus: "error",
+          message: result.error || "Unable to start GitHub sign-in.",
+        });
+        return;
+      }
+      const [userCode, verificationUri, deviceCode, interval, expiresIn] = result.value.split("\n");
+      this.send({ command: "githubSignIn", promptId: pending.promptId, signInStatus: "code", userCode, verificationUri });
+      const pollId = this.nextOsRequestId++;
+      this.pendingOs.set(pollId, { kind: "githubToken", promptId: pending.promptId });
+      this.host.requestRepoOs(pollId, "poll-github-token", `${deviceCode}\n${interval}\n${expiresIn}`);
+    } else if (pending.kind === "githubToken") {
+      if (!result.accepted || !result.value) {
+        this.send({
+          command: "githubSignIn", promptId: pending.promptId, signInStatus: "error",
+          message: result.error || "GitHub sign-in was not completed.",
+        });
+        return;
+      }
+      const storeId = this.nextOsRequestId++;
+      this.pendingOs.set(storeId, { kind: "githubTokenStored" });
+      this.host.requestRepoOs(storeId, "store-github-token", result.value);
+      // The username-phase askpass process is still waiting on this same
+      // prompt; the password phase moments later reads the keychain itself.
+      this.host.respondPrompt(pending.promptId, "x-access-token");
+      this.send({ command: "githubSignIn", promptId: pending.promptId, signInStatus: "done" });
+    } else if (pending.kind === "githubTokenStored") {
+      if (!result.accepted && result.error) this.host.log("warn", result.error);
     } else {
       this.send({ command: "openExternalUrl", error: result.accepted ? null : result.error || "Unable to open URL" });
     }
@@ -1113,21 +1212,28 @@ export class CommitsCore {
    * opened, which is where a repository belongs anyway.
    */
   private sendRepos(): void {
-    const repos: Record<string, { columnWidths: number[] | null; depth: number }> = {};
-    if (this.currentRepository !== null) this.discoverSubmodulesIfNeeded(this.currentRepository);
+    const repos: GitRepoSet = {};
+    if (this.currentRepository !== null) {
+      this.discoverSubmodulesIfNeeded(this.rootFor(this.currentRepository));
+    }
     for (const repository of this.repositories.all()) {
       repos[repository.path] = { columnWidths: null, depth: 0 };
     }
     for (const repository of this.repositories.all()) {
-      const submodules = this.submodulePaths.get(repository.path) ?? [];
-      for (const submodulePath of submodules) {
+      const submodules = this.submodules.get(repository.path) ?? [];
+      for (const submodule of submodules) {
+        const submodulePath = `${repository.path}/${submodule.path}`;
         // A submodule of a submodule is one level deeper again, which its own
         // path already says: `--recursive` reports both, and the nested one
         // is a path extension of the outer one.
         const nesting = submodules.filter(
-          (other) => other !== submodulePath && submodulePath.startsWith(`${other}/`),
+          (other) => other.path !== submodule.path && submodule.path.startsWith(`${other.path}/`),
         ).length;
-        repos[submodulePath] = { columnWidths: null, depth: nesting + 1 };
+        repos[submodulePath] = {
+          columnWidths: null,
+          depth: nesting + 1,
+          submodule: submodule.state,
+        };
       }
     }
     this.send({ command: "loadRepos", repos, lastActiveRepo: this.currentRepository });
@@ -1138,9 +1244,46 @@ export class CommitsCore {
    * repo selector can nest them the way `git submodule status --recursive`
    * reports them -- including submodules of submodules.
    */
+  /**
+   * The repository row that owns a path: the path itself when it is one of the
+   * open repositories, and otherwise the root whose submodule it is.
+   *
+   * A submodule row in the selector is not a repository the app opened -- it
+   * is a path inside one -- so everything that concerns the tree as a whole,
+   * the recursive update and the scan that reports it, runs in the root. An
+   * uninitialized submodule makes this more than tidiness: its folder holds
+   * no repository to run anything in, and may not exist at all.
+   */
+  private rootFor(path: string): string {
+    if (this.repositories.all().some((repository) => repository.path === path)) return path;
+    for (const repository of this.repositories.all()) {
+      if (!path.startsWith(`${repository.path}/`)) continue;
+      const relative = path.slice(repository.path.length + 1);
+      const submodules = this.submodules.get(repository.path) ?? [];
+      if (submodules.some((submodule) => submodule.path === relative)) return repository.path;
+    }
+    return path;
+  }
+
   private discoverSubmodulesIfNeeded(rootPath: string): void {
     if (this.requestedSubmoduleRoots.has(rootPath)) return;
+    this.scanSubmodules(rootPath);
+  }
+
+  /**
+   * Rereads one repository's submodules, whether or not it has been scanned
+   * before.
+   *
+   * The view asks for this on every refresh, and a refresh arrives whenever
+   * the watcher sees the repository move -- which is exactly when a submodule
+   * pointer changes under a branch switch, or a `git submodule add` lands a
+   * new one. A scan already in flight is left to finish rather than joined by
+   * a second: they would read the same tree and answer with the same list.
+   */
+  private scanSubmodules(rootPath: string): void {
+    if (this.scanningSubmoduleRoots.has(rootPath)) return;
     this.requestedSubmoduleRoots.add(rootPath);
+    this.scanningSubmoduleRoots.add(rootPath);
     const requestId = this.nextGitRequestId++;
     this.pendingSubmoduleDiscovery.set(requestId, rootPath);
     this.host.runGit({
@@ -1151,23 +1294,92 @@ export class CommitsCore {
     });
   }
 
-  /** Reacts to a submodule discovery's GitResult: records the paths found (if
-   *  any) and, only when that changes what the selector should show, re-sends
-   *  the repo list. A plain repository with no submodules stays silent. */
+  /** Reacts to a submodule discovery's GitResult: records what was found (if
+   *  anything) and, only when that changes what the selector should show,
+   *  re-sends the repo list. A plain repository with no submodules stays
+   *  silent there, but still answers the view's status request, because
+   *  "this repository has none" is the answer that takes the banner down. */
   private finishSubmoduleDiscovery(rootPath: string, result: GitResult): void {
-    if (result.status !== "completed" || result.exitCode !== 0) {
-      this.submodulePaths.set(rootPath, []);
+    this.scanningSubmoduleRoots.delete(rootPath);
+    if (this.rescanSubmoduleRoots.delete(rootPath)) {
+      this.scanSubmodules(rootPath);
       return;
     }
-    const relativePaths = parseSubmodulePaths(new TextDecoder().decode(result.stdout));
-    const absolutePaths = relativePaths.map((relative) => `${rootPath}/${relative}`);
-    this.submodulePaths.set(rootPath, absolutePaths);
-    if (absolutePaths.length > 0) this.sendRepos();
+    const previous = this.submodules.get(rootPath) ?? [];
+    const found =
+      result.status === "completed" && result.exitCode === 0
+        ? parseSubmoduleEntries(new TextDecoder().decode(result.stdout))
+        : [];
+    this.submodules.set(rootPath, found);
+    // Only when the rows or their markers actually differ: this scan reruns on
+    // every refresh, and a repo list resent each time would re-render the
+    // selector -- under an open dropdown -- to say nothing new.
+    if (describe(found) !== describe(previous)) this.sendRepos();
+    if (this.currentRepository !== null && this.rootFor(this.currentRepository) === rootPath) {
+      this.sendSubmoduleStatus(rootPath);
+    }
+  }
+
+  /** Publishes the open repository's submodules, which is what the banner and
+   *  the selector's markers are drawn from. */
+  private sendSubmoduleStatus(rootPath: string): void {
+    this.send({
+      command: "submoduleStatus",
+      repo: rootPath,
+      submodules: this.submodules.get(rootPath) ?? [],
+    });
+  }
+
+  /**
+   * Answers the view's status request from what is already known and starts a
+   * fresh scan behind it.
+   *
+   * Answering first is what keeps the banner steady across a refresh: waiting
+   * for the scan would blank it and paint it again a moment later, on a
+   * repository nothing about had changed. A repository never scanned answers
+   * empty, which is right for the case that matters -- the user has just
+   * switched to it, and the banner still shows the one they left.
+   */
+  private reportSubmodules(): void {
+    if (this.currentRepository === null) {
+      this.send({ command: "submoduleStatus", repo: "", submodules: [] });
+      return;
+    }
+    const rootPath = this.rootFor(this.currentRepository);
+    this.sendSubmoduleStatus(rootPath);
+    this.scanSubmodules(rootPath);
+  }
+
+  /**
+   * Initializes and checks out every submodule of the open repository, then
+   * rereads them so the banner and the selector reflect what the update did
+   * rather than what was true before it.
+   */
+  private updateSubmodules(repository = this.currentRepository): void {
+    const rootPath = repository === null ? null : this.rootFor(repository);
+    this.workingTreeActions.updateSubmodules(rootPath ?? "", (status) => {
+      if (rootPath !== null) {
+        // An update that failed part-way still cloned some of the tree, so the
+        // recorded state is stale either way.
+        this.requestedSubmoduleRoots.delete(rootPath);
+        if (this.scanningSubmoduleRoots.has(rootPath)) {
+          this.rescanSubmoduleRoots.add(rootPath);
+        } else {
+          this.scanSubmodules(rootPath);
+        }
+      }
+      this.send({ command: "submoduleUpdate", status });
+    });
   }
 
   private send(message: ResponseMessage | Record<string, unknown>): void {
     this.host.sendPageMessage(PANEL, message);
   }
+}
+
+/** One comparable string for a submodule list, paths and states together. */
+function describe(submodules: readonly SubmoduleView[]): string {
+  return submodules.map((submodule) => `${submodule.path}:${submodule.state}`).join("\n");
 }
 
 /** Puts a path at the head of the recent list, bounded and deduplicated. */

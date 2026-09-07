@@ -208,7 +208,8 @@ function renderSection(
   sectionKey: string,
   options: readonly BranchPanelRenderOption[],
   model: BranchPanelRenderModel,
-  detail = ""
+  detail = "",
+  isDefaultRemote = false
 ): string {
   if (options.length === 0) {
     return "";
@@ -219,9 +220,12 @@ function renderSection(
   }
   const url =
     detail === "" ? "" : `<span class="branchPanelRemoteUrl">${escapeHtml(detail)}</span>`;
+  const defaultMarker = isDefaultRemote
+    ? `<span class="branchPanelDefaultRemote" title="${escapeHtml(l10n.defaultRemoteTooltip)}">${escapeHtml(l10n.defaultRemoteMarker)}</span>`
+    : "";
   // The name and its count are one unbreakable unit; only the detail beside
   // them gives way when the sidebar is narrow.
-  const name = `<span class="branchPanelSectionName">${escapeHtml(label)} (${options.length})</span>`;
+  const name = `<span class="branchPanelSectionName">${escapeHtml(label)}${defaultMarker} (${options.length})</span>`;
   // The header folds through the same mechanism as the folders beneath it: the
   // section key can never collide with a folder path, because every folder path
   // is already prefixed with it.
@@ -262,7 +266,8 @@ function renderRemoteSections(
         `remote:${remote}`,
         byRemote.get(remote)!,
         model,
-        model.remoteInfo.remotes[remote] ?? ""
+        model.remoteInfo.remotes[remote] ?? "",
+        model.remoteInfo.defaultRemote === remote
       )
     )
     .join("");

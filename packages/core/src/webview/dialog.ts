@@ -50,6 +50,23 @@ export function showRefInputDialog(
   );
 }
 
+/** Like `showRefInputDialog`, but for a name that is not a ref (e.g. a remote). */
+export function showTextInputDialog(
+  message: string,
+  defaultValue: string,
+  actionName: string,
+  actioned: (value: string) => void,
+  source: HTMLElement | null
+) {
+  showFormDialog(
+    message,
+    [{ type: "text", name: "", default: defaultValue, placeholder: null }],
+    actionName,
+    (values) => actioned(values[0]),
+    source
+  );
+}
+
 export function showCheckboxDialog(
   message: string,
   checkboxLabel: string,

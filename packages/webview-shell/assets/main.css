@@ -224,6 +224,10 @@ body.branchPanelHidden #branchPanelSidebar {
   flex: 0 0 auto;
   white-space: nowrap;
 }
+.branchPanelDefaultRemote {
+  margin-left: 4px;
+  opacity: 0.7;
+}
 .branchPanelRemoteUrl {
   margin-left: 6px;
   flex: 0 1 auto;
@@ -361,6 +365,73 @@ body.unableToLoad p {
   display: flex;
   gap: 6px;
   margin-top: 6px;
+}
+
+/* Submodule banner. Sits under the in-progress banner and reads like it, so
+   the two stack rather than compete when a repository is in both states. */
+#submoduleBanner {
+  display: none;
+  padding: 8px 10px;
+  margin-left: var(--branch-panel-width);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.5);
+  border-left: 3px solid var(--vscode-editorWarning-foreground, rgb(204, 137, 0));
+  /* A tint rather than the solid warning fill the in-progress banner uses:
+     this one is raised by an everyday state, not by a half-finished rebase,
+     and it has to stay readable under both the light and the dark themes. */
+  background: rgba(204, 167, 0, 0.14);
+  font-size: 12px;
+}
+#submoduleBanner.active {
+  display: block;
+}
+/* A conflicted submodule needs a merge resolved, not an update, so it reads
+   as an error rather than as something one button can finish. */
+#submoduleBanner.conflicted {
+  border-left-color: var(--vscode-editorError-foreground, rgb(214, 64, 64));
+  background: rgba(214, 64, 64, 0.14);
+}
+#submoduleBannerSecondary {
+  opacity: 0.8;
+  margin-top: 2px;
+  word-break: break-word;
+}
+#submoduleBannerActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+#submoduleBannerActions .roundedBtn {
+  padding: 3px 10px;
+  border-radius: 4px;
+}
+#submoduleBannerActions .roundedBtn.secondary {
+  background-color: transparent;
+  border-color: rgba(128, 128, 128, 0.35);
+  opacity: 0.85;
+}
+#submoduleBannerActions .roundedBtn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+/* The update clones, so it can run for a while: the stripe keeps moving to
+   say the app is still waiting on Git rather than stuck. */
+#submoduleBanner.updating {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(128, 128, 128, 0.18) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: submoduleBannerProgress 1.4s linear infinite;
+}
+@keyframes submoduleBannerProgress {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
 }
 
 /* Full diff panel, docked to the bottom of the view.

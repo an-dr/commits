@@ -7,6 +7,24 @@ interface DropdownOption {
   value: string;
   /** Nesting level for tree-style options (e.g. a repo's submodules); 0 when absent. */
   depth?: number;
+  /**
+   * A short marker rendered after the name, for a row that needs a word of
+   * its own -- a submodule nobody has initialized, say. `kind` only picks the
+   * colour; the option stays selectable either way.
+   */
+  badge?: { text: string; kind: "warning" | "error" };
+}
+
+/** The optional marker after an option's name; nothing at all when absent. */
+function badgeHtml(badge: DropdownOption["badge"]): string {
+  if (badge === undefined) return "";
+  return (
+    '<span class="dropdownOptionBadge ' +
+    badge.kind +
+    '">' +
+    escapeHtml(badge.text) +
+    "</span>"
+  );
 }
 
 export class Dropdown {
@@ -152,6 +170,7 @@ export class Dropdown {
         (depth > 0 ? ' style="padding-left:' + (10 + depth * 14) + 'px"' : "") +
         '>' +
         escapeHtml(this.options[i].name) +
+        badgeHtml(this.options[i].badge) +
         (this.showInfo
           ? '<div class="dropdownOptionInfo" title="' +
             escapeHtml(this.options[i].value) +

@@ -57,6 +57,8 @@ type QueryPayloads = {
       upstreams?: { [branch: string]: string };
       /** Fetch URL of each remote, by remote name. */
       remotes?: { [remote: string]: string };
+      /** `remote.pushDefault` (local config), or null when unset. */
+      defaultRemote?: string | null;
       /**
        * Tag names, for the panel's own section. Optional, so a host that does
        * not report them gets the panel without it.

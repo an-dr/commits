@@ -89,6 +89,11 @@ function applyTheme(theme: ThemePreset): void {
     "--vscode-gitDecoration-addedResourceForeground": colours.positive,
     "--vscode-gitDecoration-deletedResourceForeground": colours.negative,
     "--vscode-gitDecoration-modifiedResourceForeground": colours.warning,
+    // The banners and the repo selector's submodule markers read as warnings
+    // and errors, so they follow the theme's own two colours for those rather
+    // than a hard-coded amber that goes muddy on half the presets.
+    "--vscode-editorWarning-foreground": colours.warning,
+    "--vscode-editorError-foreground": colours.negative,
     "--vscode-gitDecoration-untrackedResourceForeground": colours.positive,
     "--vscode-widget-shadow": colours.shadow,
   };

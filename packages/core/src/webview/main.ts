@@ -12,6 +12,7 @@ import type { GitWorkingTreeChange } from "@an-dr/commits-core/data-source/model
 import {
   BranchPanel,
   NO_REMOTE_INFO,
+  REMOTE_HEADER_PREFIX,
   TAG_PREFIX,
   type BranchPanelRemoteInfo
 } from "./branchPanel";
@@ -36,7 +37,8 @@ import {
   showErrorDialog,
   showFormDialog,
   showRefInputDialog,
-  showSelectDialog
+  showSelectDialog,
+  showTextInputDialog
 } from "./dialog";
 import { Dropdown } from "./dropdown";
 import { diffTool, openInMenuEntries, repositoryTools } from "./externalTools";
@@ -48,6 +50,7 @@ import { FullDiffPanel } from "./fullDiffPanel";
 import { Graph } from "./graph";
 import { observeExternalUrls } from "./observers/urlEvents";
 import { RepoInProgressBanner } from "./repoInProgressBanner";
+import { SubmoduleBanner } from "./submoduleBanner";
 import { Toolbar } from "./toolbar";
 import { renderAuthorVisualHtml } from "./utils/avatarVisuals";
 import { formatIsoDate, formatShortDate, formatShortTime, isSameLocalDay, pad2 } from "./utils/date";
@@ -74,6 +77,8 @@ class GitGraphView {
   /** A branch was chosen while a load was running; run it when that finishes. */
   private branchSelectionPending = false;
   private gitBranchHead: string | null = null;
+  /** Tracking and remote data, kept alongside the branch list that arrived with it. */
+  private remoteInfo: BranchPanelRemoteInfo = NO_REMOTE_INFO;
   private commits: GitCommitNode[] = [];
   private commitFilterText: string = "";
   private commitHead: string | null = null;
@@ -124,6 +129,7 @@ class GitGraphView {
   private filesPanelWidth: number;
   private filesPanelHidden: boolean;
   private repoInProgressBanner: RepoInProgressBanner;
+  private submoduleBanner: SubmoduleBanner;
 
   private loadBranchesCallback: ((changes: boolean, isRepo: boolean) => void) | null = null;
   private loadCommitsCallback: ((changes: boolean) => void) | null = null;
@@ -146,6 +152,17 @@ class GitGraphView {
     this.findWidget = new FindWidget(this.tableElem);
     this.footerElem = document.getElementById("footer")!;
     this.repoDropdown = new Dropdown("repoSelect", true, l10n.repo, (value) => {
+      if (this.gitRepos[value]?.submodule === "uninitialized") {
+        // Git in an empty submodule folder walks up to its parent. Keep the
+        // current selection until initialization prevents showing the wrong history.
+        this.repoDropdown.setSelected(this.currentRepo);
+        showConfirmationDialog(
+          l10n.submodulesOpenUninitialized.replace("{0}", value),
+          () => this.updateSubmodules(value),
+          document.getElementById("repoSelect")
+        );
+        return;
+      }
       this.changeRepo(value);
       sendMessage({ command: "selectRepo", repo: value });
       this.refresh(true);
@@ -154,7 +171,8 @@ class GitGraphView {
       prevState?.branchPanel,
       () => this.saveState(),
       (value, additive) => this.selectBranch(value, additive),
-      (value, kind, source, event) => this.handleBranchPanelAction(value, kind, source, event)
+      (value, kind, source, event) => this.handleBranchPanelAction(value, kind, source, event),
+      () => this.showAddRemoteDialog()
     );
     this.scrollShadowElem = <HTMLInputElement>document.getElementById("scrollShadow")!;
     this.filesPanelWidth = prevState?.filesPanelWidth ?? DEFAULT_FILES_PANEL_WIDTH;
@@ -171,6 +189,7 @@ class GitGraphView {
         run();
       }
     });
+    this.submoduleBanner = new SubmoduleBanner(() => this.updateSubmodules());
     this.filesPanel = new FilesPanel(
       this.filesPanelWidth,
       this.filesPanelHidden,
@@ -285,7 +304,12 @@ class GitGraphView {
         typeof stated === "number"
           ? stated
           : sortedPaths.filter((other) => other !== path && path.startsWith(other + "/")).length;
-      options.push({ name: repoComps[repoComps.length - 1], value: path, depth });
+      options.push({
+        name: repoComps[repoComps.length - 1],
+        value: path,
+        depth,
+        badge: submoduleBadge(repos[path].submodule)
+      });
     }
     this.repoDropdown.setOptions(options, this.currentRepo);
 
@@ -308,6 +332,7 @@ class GitGraphView {
     }
     // Tracking and remote data arrive with the branches but are not part of
     // what decides whether the list itself changed.
+    this.remoteInfo = remoteInfo;
     this.branchPanel.setRemoteInfo(remoteInfo);
     // Tags are part of what the panel shows, so a tag created since the last
     // read is a change even when every branch is identical. Leaving them out
@@ -601,15 +626,180 @@ class GitGraphView {
     );
   }
 
+  /** The remote a plain push resolves to: the only remote, or the configured default. */
+  private resolveRemote(): string | null {
+    const names = Object.keys(this.remoteInfo.remotes);
+    if (names.length === 1) {
+      return names[0];
+    }
+    const configured = this.remoteInfo.defaultRemote;
+    return configured !== null && names.includes(configured) ? configured : null;
+  }
+
+  /**
+   * "Push" and "Push to...", shared by branch and tag menus in both the
+   * sidebar and the graph. "Push" degrades to the same picker as "Push to..."
+   * when no remote is configured or unambiguous, rather than guessing.
+   */
+  private pushMenuItems(
+    kind: "branch" | "tag",
+    refName: string,
+    source: HTMLElement | null
+  ): ContextMenuElement[] {
+    const remotes = Object.keys(this.remoteInfo.remotes);
+    const runningLabel = kind === "branch" ? l10n.pushingBranch : l10n.pushingTag;
+    const confirmText = kind === "branch" ? l10n.dialogPushBranchConfirm : l10n.dialogPushTagConfirm;
+    const send = (remote: string) => {
+      if (kind === "branch") {
+        sendMessage({ command: "pushBranch", repo: this.currentRepo!, remote, branchName: refName });
+      } else {
+        sendMessage({ command: "pushTag", repo: this.currentRepo!, remote, tagName: refName });
+      }
+      showActionRunningDialog(runningLabel);
+    };
+    const pick = () => {
+      if (remotes.length === 0) {
+        showErrorDialog(l10n.noRemotesConfigured, null, source);
+        return;
+      }
+      showSelectDialog(
+        l10n.dialogPushToTitle.replace("{0}", `<b><i>${escapeHtml(refName)}</i></b>`),
+        this.resolveRemote() ?? remotes[0],
+        remotes.map((name) => ({ name, value: name })),
+        l10n.push,
+        send,
+        source
+      );
+    };
+    return [
+      {
+        title: l10n.push + ELLIPSIS,
+        onClick: () => {
+          const remote = this.resolveRemote();
+          if (remote === null) {
+            pick();
+            return;
+          }
+          showConfirmationDialog(
+            confirmText
+              .replace("{0}", `<b><i>${escapeHtml(refName)}</i></b>`)
+              .replace("{1}", `<b><i>${escapeHtml(remote)}</i></b>`),
+            () => send(remote),
+            source
+          );
+        }
+      },
+      { title: l10n.pushTo + ELLIPSIS, onClick: pick }
+    ];
+  }
+
+  private buildTagMenu(tagName: string, source: HTMLElement | null): ContextMenuElement[] {
+    const menu: ContextMenuElement[] = [
+      {
+        title: l10n.deleteTag + ELLIPSIS,
+        onClick: () =>
+          showConfirmationDialog(
+            l10n.dialogDeleteConfirm
+              .replace("{0}", l10n.labelTag)
+              .replace("{1}", `<b><i>${escapeHtml(tagName)}</i></b>`),
+            () => sendMessage({ command: "deleteTag", repo: this.currentRepo!, tagName }),
+            source
+          )
+      },
+      ...this.pushMenuItems("tag", tagName, source)
+    ];
+    menu.push(null, {
+      title: l10n.copyTagName,
+      onClick: () => sendMessage({ command: "copyToClipboard", type: "Tag Name", data: tagName })
+    });
+    return menu;
+  }
+
+  private showAddRemoteDialog() {
+    showFormDialog(
+      l10n.dialogAddRemoteTitle,
+      [
+        { type: "text", name: l10n.dialogAddRemoteName, default: "", placeholder: null },
+        { type: "text", name: l10n.dialogAddRemoteUrl, default: "", placeholder: null }
+      ],
+      l10n.dialogAddRemoteSubmit,
+      (values) =>
+        sendMessage({ command: "addRemote", repo: this.currentRepo!, name: values[0], url: values[1] }),
+      null
+    );
+  }
+
+  private showRemoteHeaderMenu(remoteName: string, source: HTMLElement, event: MouseEvent) {
+    const url = this.remoteInfo.remotes[remoteName] ?? "";
+    const menu: ContextMenuElement[] = [
+      {
+        title: l10n.renameRemote + ELLIPSIS,
+        onClick: () =>
+          showTextInputDialog(
+            l10n.dialogRenameRemoteTitle.replace("{0}", `<b><i>${escapeHtml(remoteName)}</i></b>`),
+            remoteName,
+            l10n.dialogRenameRemoteSubmit,
+            (newName) =>
+              sendMessage({ command: "renameRemote", repo: this.currentRepo!, oldName: remoteName, newName }),
+            source
+          )
+      },
+      {
+        title: l10n.changeRemoteUrl + ELLIPSIS,
+        onClick: () =>
+          showTextInputDialog(
+            l10n.dialogChangeRemoteUrlTitle.replace("{0}", `<b><i>${escapeHtml(remoteName)}</i></b>`),
+            url,
+            l10n.dialogChangeRemoteUrlSubmit,
+            (newUrl) =>
+              sendMessage({ command: "setRemoteUrl", repo: this.currentRepo!, name: remoteName, url: newUrl }),
+            source
+          )
+      }
+    ];
+    if (this.remoteInfo.defaultRemote !== remoteName) {
+      menu.push({
+        title: l10n.setDefaultRemote,
+        onClick: () => sendMessage({ command: "setDefaultRemote", repo: this.currentRepo!, name: remoteName })
+      });
+    }
+    menu.push(
+      {
+        title: l10n.removeRemote + ELLIPSIS,
+        onClick: () =>
+          showConfirmationDialog(
+            l10n.dialogDeleteConfirm
+              .replace("{0}", l10n.labelRemote)
+              .replace("{1}", `<b><i>${escapeHtml(remoteName)}</i></b>`),
+            () => sendMessage({ command: "removeRemote", repo: this.currentRepo!, name: remoteName }),
+            source
+          )
+      },
+      null,
+      {
+        title: l10n.copyRemoteUrl,
+        onClick: () => sendMessage({ command: "copyToClipboard", type: "Remote URL", data: url })
+      }
+    );
+    showContextMenu(event, menu, source);
+  }
+
   private handleBranchPanelAction(
     value: string,
     kind: "doubleClick" | "contextMenu",
     source: HTMLElement,
     event: MouseEvent
   ) {
+    if (value.startsWith(REMOTE_HEADER_PREFIX)) {
+      if (kind === "contextMenu") {
+        this.showRemoteHeaderMenu(value.slice(REMOTE_HEADER_PREFIX.length), source, event);
+      }
+      return;
+    }
     const remote = value.startsWith("remotes/");
+    const tag = value.startsWith(TAG_PREFIX);
     const current = source.classList.contains("currentBranch");
-    const name = remote ? value.slice("remotes/".length) : value;
+    const name = remote ? value.slice("remotes/".length) : tag ? value.slice(TAG_PREFIX.length) : value;
     const checkout = () => {
       if (remote) {
         const parts = name.split("/");
@@ -641,6 +831,10 @@ class GitGraphView {
       }
       return;
     }
+    if (tag) {
+      showContextMenu(event, this.buildTagMenu(name, source), source);
+      return;
+    }
     const menu: ContextMenuElement[] = current
       ? []
       : [{ title: l10n.checkoutBranch, onClick: checkout }];
@@ -662,6 +856,7 @@ class GitGraphView {
             source
           )
       });
+      menu.push(...this.pushMenuItems("branch", name, source));
       if (!current) {
         menu.push(
           {
@@ -942,6 +1137,29 @@ class GitGraphView {
     this.findWidget.refresh();
   }
 
+  public renderSubmodules(repo: string, submodules: readonly GG.SubmoduleView[]) {
+    this.submoduleBanner.render(repo, submodules);
+  }
+
+  /** Runs `submodule update --init --recursive`, from the banner or from the
+   *  prompt an uninitialized row raises when it is opened. */
+  public updateSubmodules(repo?: string) {
+    this.submoduleBanner.setUpdating(true);
+    sendMessage({ command: "submoduleUpdate", repo });
+  }
+
+  /** Ends the banner's running state, whichever way the update went. */
+  public afterSubmoduleUpdate(status: string | null) {
+    this.submoduleBanner.setUpdating(false);
+    if (status !== null) {
+      showErrorDialog(l10n.submodulesUpdateFailed, status, null);
+      return;
+    }
+    // The tree the graph reads is the parent's, and a submodule checkout moves
+    // the gitlinks in it, so this is a reread rather than a repaint.
+    this.refresh(false);
+  }
+
   public renderRepoInProgress(state: RepoInProgressState | null) {
     this.repoInProgressBanner.render(state);
   }
@@ -1041,6 +1259,9 @@ class GitGraphView {
     // Asked for on every refresh: the state changes outside the panel, when
     // the user runs a rebase or merge from a terminal.
     sendMessage({ command: "repoInProgress" });
+    // Asked for on the same schedule and for the same reason: a submodule is
+    // added, or its pointer moved by a branch switch, outside this panel.
+    sendMessage({ command: "submoduleStatus" });
     this.requestLoadBranches(hard, (branchChanges: boolean, isRepo: boolean) => {
       if (isRepo) {
         this.requestLoadCommits(hard, (commitChanges: boolean) => {
@@ -1643,22 +1864,7 @@ class GitGraphView {
               );
             }
           },
-          {
-            title: l10n.pushTag + ELLIPSIS,
-            onClick: () => {
-              showConfirmationDialog(
-                l10n.dialogPushTagConfirm.replace(
-                  "{0}",
-                  "<b><i>" + escapeHtml(refName) + "</i></b>"
-                ),
-                () => {
-                  sendMessage({ command: "pushTag", repo: this.currentRepo!, tagName: refName });
-                  showActionRunningDialog(l10n.pushingTag);
-                },
-                null
-              );
-            }
-          }
+          ...this.pushMenuItems("tag", refName, null)
         ];
         copyType = "Tag Name";
         copyTitle = l10n.copyTagName;
@@ -1693,6 +1899,7 @@ class GitGraphView {
               );
             }
           });
+          menu.push(...this.pushMenuItems("branch", refName, null));
           if (this.gitBranchHead !== refName) {
             menu.push(
               {
@@ -2758,13 +2965,20 @@ window.addEventListener("message", (event) => {
         msg.isRepo,
         {
           upstreams: msg.upstreams ?? {},
-          remotes: msg.remotes ?? {}
+          remotes: msg.remotes ?? {},
+          defaultRemote: msg.defaultRemote ?? null
         },
         msg.tags ?? []
       );
       break;
     case "repoInProgress":
       gitGraph.renderRepoInProgress(msg.state);
+      break;
+    case "submoduleStatus":
+      gitGraph.renderSubmodules(msg.repo, msg.submodules);
+      break;
+    case "submoduleUpdate":
+      gitGraph.afterSubmoduleUpdate(msg.status);
       break;
     case "inProgressAction":
       if (msg.status === null) {
@@ -2810,6 +3024,24 @@ window.addEventListener("message", (event) => {
       break;
     case "pushTag":
       refreshGraphOrDisplayError(msg.status, l10n.unableToPushTag);
+      break;
+    case "pushBranch":
+      refreshGraphOrDisplayError(msg.status, l10n.unableToPushBranch);
+      break;
+    case "addRemote":
+      refreshGraphOrDisplayError(msg.status, l10n.unableToAddRemote);
+      break;
+    case "renameRemote":
+      refreshGraphOrDisplayError(msg.status, l10n.unableToRenameRemote);
+      break;
+    case "removeRemote":
+      refreshGraphOrDisplayError(msg.status, l10n.unableToRemoveRemote);
+      break;
+    case "setRemoteUrl":
+      refreshGraphOrDisplayError(msg.status, l10n.unableToSetRemoteUrl);
+      break;
+    case "setDefaultRemote":
+      refreshGraphOrDisplayError(msg.status, l10n.unableToSetDefaultRemote);
       break;
     case "renameBranch":
       refreshGraphOrDisplayError(msg.status, l10n.unableToRenameBranch);
@@ -2861,6 +3093,27 @@ window.addEventListener("message", (event) => {
       break;
   }
 });
+
+/**
+ * The marker a repo-selector row carries when it is a submodule that is not
+ * checked out at the commit its parent records.
+ *
+ * An up-to-date submodule gets none: the selector's job is to make the ones
+ * needing attention stand out, and marking every row marks nothing.
+ */
+function submoduleBadge(state: GG.SubmoduleState | undefined) {
+  switch (state) {
+    case "uninitialized":
+      return { text: l10n.submodulesUninitialized, kind: "warning" as const };
+    case "outOfDate":
+      return { text: l10n.submodulesOutOfDate, kind: "warning" as const };
+    case "conflicted":
+      return { text: l10n.submodulesConflicted, kind: "error" as const };
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Closes out a Git action the user ran from the graph: its error, or a reread.
  *

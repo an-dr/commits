@@ -233,3 +233,5 @@ Watch registration and cancellation acquire their shared locks in the same order
 Concurrent credential questions are queued, and answering clears the input before showing the next question.
 
 The optional control channel accepts local tool requests, rejects browser-originated requests and non-loopback Host headers, and requires a complete bounded request body. Credential responses are redacted from its history. This channel remains opt-in through `COMMITS_CONTROL_PORT`.
+
+Submodule status preserves uninitialized paths ending in parentheses and supports SHA-256 object IDs. When an update completes during an older status scan, another scan runs before the result is presented.

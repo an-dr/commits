@@ -20,11 +20,13 @@ use base64::Engine;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::thread;
+use std::time::Instant;
 
 use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_ipc::native::{NativeResult, OsRequest};
 
 pub mod discover;
+pub mod github_auth;
 pub mod rendezvous;
 
 /// This module's topics. The generic desktop actions -- clipboard, urls,
@@ -61,6 +63,12 @@ pub trait RepoOsBackend: Send + Sync {
     /// The tool is started and left to run on its own -- the app does not wait
     /// for an editor the user may keep open for hours.
     fn run_tool(&self, request: &str) -> Result<(), String>;
+    /// Starts a GitHub OAuth device-flow login. See [`github_auth::start_device_flow`].
+    fn start_github_device_code(&self) -> Result<Option<String>, String>;
+    /// Polls a device-flow login to completion. See [`github_auth::poll_for_token`].
+    fn poll_github_token(&self, request: &str) -> Result<Option<String>, String>;
+    /// Remembers a GitHub token so a future prompt need not ask again.
+    fn store_github_token(&self, token: &str) -> Result<(), String>;
 }
 
 pub struct SystemOsBackend;
@@ -93,6 +101,15 @@ impl RepoOsBackend for SystemOsBackend {
                 .collect::<Vec<_>>()
                 .join("\n"),
         ))
+    }
+    fn start_github_device_code(&self) -> Result<Option<String>, String> {
+        github_auth::start_device_flow().map(Some)
+    }
+    fn poll_github_token(&self, request: &str) -> Result<Option<String>, String> {
+        github_auth::poll_for_token(request).map(Some)
+    }
+    fn store_github_token(&self, token: &str) -> Result<(), String> {
+        github_auth::store_token(token)
     }
 }
 
@@ -238,6 +255,8 @@ pub struct OsModule {
     /// frame rate: without this the same question was republished sixty
     /// times a second for the two minutes askpass waits.
     announced: HashSet<String>,
+    /// Absent in tests, which construct the module directly.
+    logger: Option<bones_engine::logging::Logger>,
 }
 
 impl OsModule {
@@ -246,6 +265,31 @@ impl OsModule {
             bus: None,
             repo_backend,
             announced: HashSet::new(),
+            logger: None,
+        }
+    }
+
+    /// Records every request this module runs.
+    ///
+    /// A GitHub sign-in, a repository scan, and a run tool all finish on a
+    /// background thread with nothing else observing them; without this, a
+    /// request that never ran and one that failed silently looked identical
+    /// from the outside -- the window simply did nothing (matches
+    /// `commits_git::GitModule::with_logger`'s own reasoning).
+    pub fn with_logger(mut self, logger: bones_engine::logging::Logger) -> Self {
+        self.logger = Some(logger);
+        self
+    }
+
+    fn log(&self, message: &str) {
+        if let Some(logger) = &self.logger {
+            logger.info("repo-os", message);
+        }
+    }
+
+    fn log_error(&self, message: &str) {
+        if let Some(logger) = &self.logger {
+            logger.error("repo-os", message);
         }
     }
 
@@ -257,8 +301,29 @@ impl OsModule {
     fn start(&self, request: OsRequest) {
         let Some(bus) = self.bus.clone() else { return };
         let repo_backend = self.repo_backend.clone();
+        self.log(&format!("#{} run: action {}", request.request_id, request.action));
+        let logger = self.logger.clone();
         thread::spawn(move || {
+            let started = Instant::now();
             let result = execute_repo(repo_backend.as_ref(), &request);
+            let elapsed = started.elapsed().as_millis();
+            if let Some(logger) = &logger {
+                if result.accepted {
+                    logger.info(
+                        "repo-os",
+                        &format!("#{} done in {elapsed}ms ({} bytes out)", request.request_id, result.value.len()),
+                    );
+                } else {
+                    logger.error(
+                        "repo-os",
+                        &format!(
+                            "#{} done in {elapsed}ms: {}",
+                            request.request_id,
+                            if result.error.is_empty() { "refused with no reason given" } else { &result.error }
+                        ),
+                    );
+                }
+            }
             if let Ok(payload) = result.encode() {
                 bus.publish(Envelope {
                     topic: REPO_RESULT_TOPIC.into(),
@@ -280,8 +345,13 @@ impl Default for OsModule {
 impl Handler for OsModule {
     fn handle(&mut self, envelope: &Envelope) {
         if envelope.topic == REPO_REQUEST_TOPIC {
-            if let Ok(request) = OsRequest::decode_repo(&envelope.payload) {
-                self.start(request);
+            // A decode failure here previously vanished with no trace at all
+            // (an out-of-range action tag from a version mismatch looked
+            // identical to a request that was never sent), so it is worth
+            // more than the silent drop every other malformed envelope gets.
+            match OsRequest::decode_repo(&envelope.payload) {
+                Ok(request) => self.start(request),
+                Err(error) => self.log_error(&format!("dropped a malformed request: {error}")),
             }
         } else if envelope.topic == PROMPT_RESPONSE_TOPIC {
             if let Ok(text) = std::str::from_utf8(&envelope.payload) {
@@ -346,6 +416,9 @@ fn execute_repo(backend: &dyn RepoOsBackend, request: &OsRequest) -> NativeResul
         0 => backend.read_file(&request.value),
         1 => backend.find_repositories(&request.value),
         2 => backend.run_tool(&request.value).map(|_| Some(String::new())),
+        3 => backend.start_github_device_code(),
+        4 => backend.poll_github_token(&request.value),
+        5 => backend.store_github_token(&request.value).map(|_| Some(String::new())),
         _ => Err("unknown repo-os action".into()),
     };
     into_result(request.request_id, outcome)

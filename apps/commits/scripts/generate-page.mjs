@@ -9,13 +9,27 @@ const html = template
   .replace("/*__COMMITS_CSS__*/", css)
   .replace("/*__COMMITS_JS__*/", script);
 const previewIpc = `
+let submodulesFixed = false;
 window.ipc = { postMessage(json) {
   const request = JSON.parse(json);
   const send = response => queueMicrotask(() => window.dispatchEvent(
     new CustomEvent("bones-message", { detail: JSON.stringify(response) })
   ));
   if (request.command === "standaloneReady" || request.command === "loadRepos") {
-    send({ command: "loadRepos", repos: { "C:/00_Code/commits": { columnWidths: null } }, lastActiveRepo: "C:/00_Code/commits" });
+    send({ command: "loadRepos", repos: {
+      "C:/00_Code/commits": { columnWidths: null, depth: 0 },
+      "C:/00_Code/commits/vendor/bones": { columnWidths: null, depth: 1, submodule: submodulesFixed ? "upToDate" : "uninitialized" },
+      "C:/00_Code/commits/vendor/pubsub-bus": { columnWidths: null, depth: 1, submodule: submodulesFixed ? "upToDate" : "outOfDate" }
+    }, lastActiveRepo: "C:/00_Code/commits" });
+  } else if (request.command === "submoduleStatus") {
+    send({ command: "submoduleStatus", repo: "C:/00_Code/commits", submodules: submodulesFixed
+      ? [{ path: "vendor/bones", state: "upToDate" }, { path: "vendor/pubsub-bus", state: "upToDate" }]
+      : [{ path: "vendor/bones", state: "uninitialized" }, { path: "vendor/pubsub-bus", state: "outOfDate" }] });
+  } else if (request.command === "submoduleUpdate") {
+    // Slow on purpose: the preview is where the banner's running state is
+    // looked at, and an instant answer never shows it.
+    submodulesFixed = true;
+    setTimeout(() => send({ command: "submoduleUpdate", status: null }), 1500);
   } else if (request.command === "loadBranches") {
     send({ command: "loadBranches", branches: ["codex/phase-2-3", "docs/roadmap", "main", "remotes/origin/codex/phase-2-3", "remotes/origin/main"], head: "codex/phase-2-3", hard: request.hard, isRepo: true });
   } else if (request.command === "loadCommits") {

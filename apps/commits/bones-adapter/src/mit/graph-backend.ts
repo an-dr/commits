@@ -266,6 +266,9 @@ export class MitGraphBackend {
           "refs/heads",
         ],
         remotes: ["remote", "--verbose"],
+        // Unset exits 1 with empty stdout; `succeeded`/`successText` already
+        // treat that as "no value" rather than a batch failure.
+        defaultRemote: ["config", "--get", "remote.pushDefault"],
         // The panel lists tags beside the branches; they are refs the user
         // navigates by, not branches, so they travel in their own field.
         tags: ["for-each-ref", "--format=%(refname:short)", "refs/tags"],
@@ -290,6 +293,7 @@ export class MitGraphBackend {
           isRepo: succeeded(branchesResult),
           upstreams: parseUpstreams(successText(results.upstreams)),
           remotes: parseRemotes(successText(results.remotes)),
+          defaultRemote: successText(results.defaultRemote).trim() || null,
           tags: nonEmptyLines(successText(results.tags)),
         });
       },

@@ -203,7 +203,7 @@ pub struct OsRequest {
 /// Highest action tag the generic `os` endpoint defines.
 pub const MAX_OS_ACTION: u8 = 6;
 /// Highest action tag the git-aware `repo-os` endpoint defines.
-pub const MAX_REPO_OS_ACTION: u8 = 2;
+pub const MAX_REPO_OS_ACTION: u8 = 5;
 
 impl OsRequest {
     pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
@@ -496,6 +496,19 @@ src/a.ts"
                 message: "repo-os action",
                 tag: 6
             })
+        );
+        // The GitHub sign-in actions (3, 4, 5) are the newest of the range: a
+        // decoder capped at the wrong ceiling drops them with no trace at all
+        // (`OsModule::handle` silently ignores a decode failure), which is
+        // exactly the bug this pins.
+        let sign_in = OsRequest {
+            request_id: 11,
+            action: 3,
+            value: String::new(),
+        };
+        assert_eq!(
+            OsRequest::decode_repo(&sign_in.encode().unwrap()).unwrap(),
+            sign_in
         );
 
         let check = UpdaterRequest {

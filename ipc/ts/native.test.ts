@@ -92,6 +92,9 @@ describe("native protocol", () => {
     // separate wire surfaces, so neither leaves gaps for the other.
     expect(encodeRepoOsRequest(1, "read-file")[4]).toBe(0);
     expect(encodeRepoOsRequest(1, "find-repositories")[4]).toBe(1);
+    expect(encodeRepoOsRequest(1, "start-github-device-code")[4]).toBe(3);
+    expect(encodeRepoOsRequest(1, "poll-github-token")[4]).toBe(4);
+    expect(encodeRepoOsRequest(1, "store-github-token")[4]).toBe(5);
     // A file read carries its repository and path as one value, so the host can
     // confine the read without a second field on the wire.
     expect(encodeFileRead("C:/repo", "src/a.ts")).toBe("C:/repo\nsrc/a.ts");

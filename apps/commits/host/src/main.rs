@@ -31,7 +31,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let control = control::ControlModule::new(logger.clone());
     let watcher = commits_watcher::WatcherModule::default().with_logger(logger.clone());
     bones_engine::Engine::new()
-        .logger(logger)
+        .logger(logger.clone())
         // `commits.wasm` is ~12 MB carrying an embedded JavaScript engine, so
         // `instantiate` + `init` needs far more than the engine's one second
         // default. The budget is wall clock: a cold file, a virus scanner
@@ -73,7 +73,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         // Two OS endpoints: the engine's generic desktop one, and ours for
         // the actions that need a repository.
         .os()
-        .module(commits_os::OsModule::default())
+        .module(commits_os::OsModule::default().with_logger(logger.clone()))
         .module(settings::SettingsModule::default())
         .module(commits_repo::CommitsRepoModule::default())
         .module(launch::LaunchModule::default())

@@ -16,3 +16,8 @@ UPGRADER_LAUNCHER_STEM = "commits"
 UPGRADER_APP_STEM = "commits-app"
 UPGRADER_LAUNCHER_VERSION = "1.5.1"
 
+# Registered at github.com/settings/applications, with "Enable Device Flow"
+# turned on. Safe to commit: the device flow needs no client secret, only
+# this id, which GitHub expects a distributed client to embed.
+COMMITS_GITHUB_CLIENT_ID = "Ov23liaFjSn7eKc6gIkl"
+
