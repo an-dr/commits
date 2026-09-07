@@ -17,6 +17,7 @@
 //! repository scan.
 
 use base64::Engine;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::thread;
 
@@ -232,6 +233,11 @@ fn read_repository_file(
 pub struct OsModule {
     bus: Option<Bus>,
     repo_backend: Arc<dyn RepoOsBackend>,
+    /// Prompts already announced. A waiting `commits-askpass` leaves its
+    /// request file in place until it is answered, and this frame runs at
+    /// frame rate: without this the same question was republished sixty
+    /// times a second for the two minutes askpass waits.
+    announced: HashSet<String>,
 }
 
 impl OsModule {
@@ -239,6 +245,7 @@ impl OsModule {
         Self {
             bus: None,
             repo_backend,
+            announced: HashSet::new(),
         }
     }
 
@@ -302,17 +309,31 @@ impl Module for OsModule {
     }
 
     fn render(&mut self) {
-        let Some(bus) = self.bus.as_ref() else { return };
+        let Some(bus) = self.bus.clone() else { return };
         let Ok(entries) = std::fs::read_dir(prompt_directory()) else { return };
+        let mut waiting = HashSet::new();
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().is_some_and(|extension| extension == "request") {
-                if let (Some(id), Ok(body)) = (path.file_stem().and_then(|value| value.to_str()), std::fs::read_to_string(&path)) {
-                    let payload = format!("{id}\n{body}").into_bytes();
-                    bus.publish(Envelope { topic: PROMPT_TOPIC.into(), sender: "os".into(), correlation: None, payload });
-                }
+            if !path.extension().is_some_and(|extension| extension == "request") {
+                continue;
             }
+            let (Some(id), Ok(body)) = (
+                path.file_stem().and_then(|value| value.to_str()),
+                std::fs::read_to_string(&path),
+            ) else {
+                continue;
+            };
+            waiting.insert(id.to_string());
+            if !self.announced.insert(id.to_string()) {
+                continue;
+            }
+            let payload = format!("{id}\n{body}").into_bytes();
+            bus.publish(Envelope { topic: PROMPT_TOPIC.into(), sender: "os".into(), correlation: None, payload });
         }
+        // Answered or abandoned: askpass removes its request either way, and
+        // forgetting it here lets a later prompt with the same id -- a
+        // restarted helper counts from one again -- be announced afresh.
+        self.announced.retain(|id| waiting.contains(id));
     }
 }
 

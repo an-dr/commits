@@ -1,6 +1,7 @@
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -8,6 +9,17 @@ use std::time::{Duration, Instant};
 use commits_ipc::native::{GitResult, GitRun};
 
 use crate::limiter::Limiter;
+
+/// How long output is still collected after the command itself has ended.
+///
+/// The pipes are usually closed by then and the readers finish at once. They
+/// do not when something Git started still holds them: `commits-askpass`
+/// inherits them and keeps them open for as long as it waits for an answer,
+/// which killing Git does not shorten. Reading to end of file therefore held
+/// the runner's slot for the helper's full wait -- four of those and no Git
+/// command ran again. Whatever such a straggler writes is not Git's answer
+/// anyway, so it is not worth a slot.
+const OUTPUT_GRACE: Duration = Duration::from_secs(2);
 
 pub struct ProcessRunner {
     executable: String,
@@ -81,12 +93,15 @@ impl ProcessRunner {
             }
         };
 
+        let deadline = Instant::now() + OUTPUT_GRACE;
+        let (stdout, stderr) = (collect(stdout, deadline), collect(stderr, deadline));
+
         Ok(GitResult {
             request_id: request.request_id,
             status: status_tag,
             exit_code: exit,
-            stdout: stdout.join().map_err(|_| "stdout reader panicked")?,
-            stderr: stderr.join().map_err(|_| "stderr reader panicked")?,
+            stdout,
+            stderr,
         })
     }
 }
@@ -117,12 +132,41 @@ fn helper_environment() -> Vec<(String, String)> {
     ]
 }
 
-fn read_pipe(mut pipe: impl Read + Send + 'static) -> thread::JoinHandle<Vec<u8>> {
+/// Streams chunks so a helper retaining the pipe cannot hide already-read output.
+fn read_pipe(mut pipe: impl Read + Send + 'static) -> Receiver<Vec<u8>> {
+    let (sender, receiver) = channel();
     thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let _ = pipe.read_to_end(&mut bytes);
-        bytes
-    })
+        let mut chunk = [0_u8; 8192];
+        loop {
+            match pipe.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(read) => {
+                    if sender.send(chunk[..read].to_vec()).is_err() {
+                        break;
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            }
+        }
+    });
+    receiver
+}
+
+/// Collects output until EOF or a shared deadline, retaining every received byte.
+fn collect(reader: Receiver<Vec<u8>>, deadline: Instant) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    while let Ok(chunk) = reader.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+        bytes.extend_from_slice(&chunk);
+        if Instant::now() >= deadline {
+            // Include chunks queued while the other pipe was being collected.
+            for chunk in reader.try_iter() {
+                bytes.extend_from_slice(&chunk);
+            }
+            break;
+        }
+    }
+    bytes
 }
 
 impl Default for ProcessRunner {

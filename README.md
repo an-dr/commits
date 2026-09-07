@@ -199,5 +199,31 @@ The repository splits by who can use the code: [`packages/`](packages) holds
 what the VS Code extension consumes, [`apps/`](apps) holds this application, and
 each directory's README states what belongs in it.
 
+## Slow first paint on Linux (fixed)
+
+On Linux the window used to stay solid white for up to a minute after launch
+before the graph appeared, with `commits.log` already showing the panel as
+open the whole time:
+
+```text
+[INFO] commits: commits graph panel opened
+```
+
+The cause was the app's own page server. It answered connections one at a
+time on a single thread, with no read timeout, and WebKit opens a spare
+socket it never sends a request on. That socket was accepted first, the
+reader blocked on it, and the real `GET /page.html` sat unread in the kernel
+receive buffer -- visible as a non-empty `Recv-Q` in `ss -tnp` -- until
+WebKit's own idle timeout closed the spare socket about a minute later. The
+server then served the page and it painted at once.
+
+Each connection now gets its own thread and a read timeout, so a silent
+socket costs nothing. `page.rs` carries a regression test that opens a silent
+connection first and asserts the next request is still answered immediately.
+
+The `cosmic-comp` buffer-import errors visible in `journalctl` during the
+same window were unrelated: they hit other windows in the session too, and
+they did not move the timing in either direction.
+
 Architecture and current verification evidence are indexed in
 [`docs/index.md`](docs/index.md).

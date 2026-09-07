@@ -40,6 +40,32 @@ fn honours_preexisting_cancellation() {
     assert_eq!(result.status, 1);
 }
 
+/// The wedge this avoids: `commits-askpass` inherits the command's pipes and
+/// keeps them open while it waits for an answer, which outlives the command
+/// itself. Reading to end of file held a runner slot for that whole wait --
+/// four such pushes and no Git command ran again.
+#[cfg(unix)]
+#[test]
+fn output_is_not_waited_on_past_the_command_that_produced_it() {
+    // `sh` exits immediately, while the process it backgrounded holds stdout
+    // open for far longer, exactly as askpass does.
+    let started = std::time::Instant::now();
+
+    let result = ProcessRunner::new("sh", 1).run(
+        &request(&["-c", "sleep 6 & echo done; echo problem >&2"]),
+        &AtomicBool::new(false),
+    );
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout, b"done\n");
+    assert_eq!(result.stderr, b"problem\n");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "held the slot for {:?}",
+        started.elapsed()
+    );
+}
+
 #[test]
 fn reports_spawn_failures_without_panicking() {
     let result = ProcessRunner::new("missing-commits-test-executable", 1)

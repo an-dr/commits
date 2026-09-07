@@ -9,6 +9,7 @@
 - [`design/settings.md`](design/settings.md) — extension-compatible and desktop settings boundary
 - [`shared-core.md`](shared-core.md) — MIT core snapshot, its local divergence, Bones integration, and submodule plan
 - [`mit-webview-transition.md`](mit-webview-transition.md) — executable plan for replacing the old page with the shared Git Graph interface
+- [`linux-startup-investigation.md`](linux-startup-investigation.md) — Linux startup faults, their evidence, and the control channel built to find them
 - [`adr/`](adr/) — settled architectural decisions, including the repository
   layout (ADR-007), run-time page delivery (ADR-006), the shared core
   divergence (ADR-008), the MIT relicense (ADR-011) and what belongs

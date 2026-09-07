@@ -7,6 +7,7 @@ import { buildGraphShell } from "@an-dr/commits-webview-shell/shell";
 import { DEFAULT_SETTINGS, type SettingsDocument } from "@commits/adapter/read/settings";
 import { toolbarIcons } from "@an-dr/commits-core/webview/utils/icons";
 import "./standalone-theme.css";
+import { CredentialPrompts } from "./credential-prompts";
 import { createViewState } from "./settings";
 import { SettingsEditor } from "./settings-editor";
 import { createAppearanceController } from "./themes";
@@ -26,6 +27,7 @@ type StandaloneMessage =
         | "standaloneInstall";
     }
   | { command: "standaloneOpenRepository"; path: string }
+  | { command: "credentialResponse"; id: string; value: string }
   | { command: "standaloneSaveSettings"; requestId: number; settings: SettingsDocument };
 
 interface StandaloneResponse {
@@ -36,13 +38,16 @@ interface StandaloneResponse {
     | "standaloneSettingsSaved"
     | "standaloneCommitsRepoStatus"
     | "standaloneUpdateStatus"
-    | "standaloneInstallStatus";
+    | "standaloneInstallStatus"
+    | "standaloneCredentialPrompt";
   recent?: readonly string[];
   lastActive?: string;
   settings?: SettingsDocument;
   error?: string;
   requestId?: number;
   exists?: boolean;
+  id?: string;
+  kind?: string;
   message?: string;
   available?: boolean;
   version?: string;
@@ -56,13 +61,12 @@ declare global {
   }
 }
 
-void boot();
 
 async function boot(): Promise<void> {
   const translate = (message: string) => message;
   globalThis.l10n = createLocalizedStrings(translate);
   document.body.innerHTML =
-    `${buildGraphShell(translate)}${repositoryOverlayHtml()}`;
+    `${buildGraphShell(translate)}${repositoryOverlayHtml()}${credentialPromptHtml()}`;
   document.getElementById("appMenuSlot")!.innerHTML = appMenuHtml();
 
   let settingsSettled = false;
@@ -114,6 +118,8 @@ async function boot(): Promise<void> {
         updateUpdateStatus(data.available === true, data.version ?? "", data.ready === true, data.message ?? "");
       } else if (data.command === "standaloneInstallStatus") {
         updateInstallStatus(data.status ?? "hidden", data.version ?? "", data.message ?? "");
+      } else if (data.command === "standaloneCredentialPrompt") {
+        credentialPrompts.receive(data.id ?? "", data.message ?? "");
       }
       window.dispatchEvent(new MessageEvent("message", { data }));
     } catch {
@@ -123,6 +129,7 @@ async function boot(): Promise<void> {
 
   wireAppMenu();
   wireRepositoryOverlay();
+  wireCredentialPrompt();
   settingsEditor = new SettingsEditor(
     (settings) => {
       post({ command: "standaloneSaveSettings", requestId: nextSettingsRequestId++, settings });
@@ -432,6 +439,71 @@ function wireRepositoryOverlay(): void {
   });
 }
 
+function credentialPromptHtml(): string {
+  return `<div id="standaloneCredentialOverlay" hidden>
+    <form id="standaloneCredentialForm">
+      <h1>Git needs credentials</h1>
+      <p id="standaloneCredentialMessage"></p>
+      <div id="standaloneCredentialControls">
+        <input id="standaloneCredentialValue" autocomplete="off">
+        <button type="submit">Send</button>
+        <button id="standaloneCredentialCancel" type="button">Cancel</button>
+      </div>
+    </form>
+  </div>`;
+}
+
+const credentialPrompts = new CredentialPrompts(
+  showCredentialPrompt,
+  hideCredentialPrompt,
+  (id, value) => post({ command: "credentialResponse", id, value }),
+);
+
+/**
+ * Answers the credential prompt a running Git command is waiting on.
+ *
+ * Without this the command simply hung: `commits-askpass` writes its question
+ * and waits two minutes for an answer that nothing on this side ever asked
+ * for, so a push over HTTPS did nothing at all and then failed with no
+ * explanation of what it had been waiting for.
+ */
+function wireCredentialPrompt(): void {
+  const form = document.getElementById("standaloneCredentialForm") as HTMLFormElement;
+  const input = document.getElementById("standaloneCredentialValue") as HTMLInputElement;
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    credentialPrompts.answer(input.value);
+  });
+  // Cancelling answers with nothing rather than staying silent: Git then
+  // fails on the spot with its own authentication error, where silence
+  // leaves the command hanging until askpass times out.
+  document.getElementById("standaloneCredentialCancel")!.addEventListener("click", () => {
+    credentialPrompts.answer("");
+  });
+}
+
+/**
+ * `message` is Git's own question ("Username for 'https://github.com': "),
+ * inserted as text: it carries a remote URL, which is not this app's to
+ * render as markup.
+ */
+function showCredentialPrompt(id: string, message: string): void {
+  const overlay = document.getElementById("standaloneCredentialOverlay")!;
+  const input = document.getElementById("standaloneCredentialValue") as HTMLInputElement;
+  document.getElementById("standaloneCredentialMessage")!.textContent = message.trim();
+  // Git says which of the two it is asking for, and a password must not be
+  // left readable on screen.
+  input.type = /password|passphrase/i.test(message) ? "password" : "text";
+  input.value = "";
+  overlay.hidden = false;
+  input.focus();
+}
+
+function hideCredentialPrompt(): void {
+  (document.getElementById("standaloneCredentialValue") as HTMLInputElement).value = "";
+  document.getElementById("standaloneCredentialOverlay")!.hidden = true;
+}
+
 /**
  * Lists previously opened repositories as one-click entries.
  *
@@ -556,3 +628,5 @@ function writeState(state: WebViewState): void {
     // The embedded page may be hosted at an origin without persistent storage.
   }
 }
+
+void boot();

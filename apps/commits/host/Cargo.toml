@@ -3,7 +3,7 @@ name = "commits-app"
 # The standalone app's own version: compared against a hosted manifest by
 # the self-updater (bones_upgrader::is_newer) and shown in the About menu.
 # Bump on every integration into main -- see AGENTS.md.
-version = "1.5.0"
+version = "1.5.1"
 edition = "2021"
 license = "MIT"
 
@@ -30,6 +30,7 @@ path = "src/bin/commits-launcher.rs"
 winresource = "0.1"
 
 [dependencies]
+serde_json = "1.0"
 # The engine facade is the whole public surface an embedder gets: bus,
 # logging, and the builder all come through it (bones ADR-030). Default
 # features off because this app draws its interface in a web panel -- it

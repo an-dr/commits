@@ -238,6 +238,16 @@ class GitGraphView {
 
     let repoPaths = Object.keys(repos),
       changedRepo = false;
+    if (repoPaths.length === 0) {
+      // Nothing is open, so there is nothing to select or load. Falling
+      // through would "change" to `repoPaths[0]` -- undefined -- and refresh,
+      // whose branch load answers `isRepo: false`, which asks for the
+      // repository list again: with an empty list that is a loop, and it ran
+      // about twenty times a second behind the chooser for as long as it was
+      // on screen.
+      this.repoDropdown.setOptions([], this.currentRepo);
+      return;
+    }
     if (typeof repos[this.currentRepo] === "undefined") {
       this.changeRepo(
         lastActiveRepo !== null && typeof repos[lastActiveRepo] !== "undefined"

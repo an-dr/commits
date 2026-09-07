@@ -98,6 +98,46 @@ body.repoOverlayOpen #controlsBtns > *:not(#appMenuSlot) {
   visibility: hidden;
 }
 
+/* The credential dialog borrows the chooser's shape: same overlay, same card,
+   because they are the same kind of interruption -- the app cannot go on until
+   the question is answered. It is not the chooser, though: the toolbar rules
+   under `body.repoOverlayOpen` do not apply, since a repository is open. */
+#standaloneCredentialOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--vscode-editor-background) 80%, transparent);
+}
+
+#standaloneCredentialOverlay[hidden] {
+  display: none;
+}
+
+#standaloneCredentialForm {
+  width: min(560px, calc(100vw - 48px));
+  padding: 24px;
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 8px;
+  background: var(--vscode-editorWidget-background);
+  box-shadow: 0 12px 40px var(--vscode-widget-shadow);
+}
+
+#standaloneCredentialMessage {
+  margin: 8px 0 16px;
+  word-break: break-word;
+}
+
+#standaloneCredentialControls {
+  display: flex;
+  gap: 8px;
+}
+
+#standaloneCredentialValue {
+  flex: 1;
+}
+
 #standaloneRepoForm {
   width: min(680px, calc(100vw - 48px));
   padding: 24px;

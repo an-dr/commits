@@ -111,16 +111,53 @@ impl Module for PageModule {
     }
 }
 
+/// How long a connection may stay silent before it is dropped. WebKit opens
+/// spare sockets it never sends a request on and only closes them when its own
+/// idle timeout expires, a minute later; without a deadline of our own such a
+/// socket occupies a reader for that whole minute.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+/// Ceiling on a slow write of the page body, so a stalled client cannot pin a
+/// thread indefinitely either.
+const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
+
 fn serve(listener: TcpListener, page_path: PathBuf, shutdown: Arc<AtomicBool>) {
     while !shutdown.load(Ordering::Relaxed) {
         match listener.accept() {
-            Ok((mut stream, _)) => respond_http(&mut stream, &page_path),
+            // Each connection is answered on its own thread. Answering them in
+            // turn on this one made the first silent socket block every later
+            // request behind it, which is what kept the graph panel white for a
+            // minute after launch: the page request sat unread in the kernel
+            // buffer while this loop waited on a socket that never spoke.
+            Ok((stream, _)) => {
+                let page_path = page_path.clone();
+                // A thread that cannot be spawned drops the connection, which
+                // the webview retries; serving it here instead would reopen
+                // exactly the blocking this split removes.
+                let _ = std::thread::Builder::new()
+                    .name("commits-page-connection".to_string())
+                    .spawn(move || answer(stream, &page_path));
+            }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(10));
             }
             Err(_) => break,
         }
     }
+}
+
+/// Prepares one accepted connection and answers it.
+///
+/// The listener is non-blocking so the accept loop can notice shutdown, but a
+/// socket accepted from it is blocking on Linux and inherits the flag on some
+/// other platforms; setting it explicitly makes the timeouts below the only
+/// thing that ends a read.
+fn answer(mut stream: TcpStream, page_path: &Path) {
+    if stream.set_nonblocking(false).is_err() {
+        return;
+    }
+    let _ = stream.set_read_timeout(Some(REQUEST_TIMEOUT));
+    let _ = stream.set_write_timeout(Some(RESPONSE_TIMEOUT));
+    respond_http(&mut stream, page_path);
 }
 
 fn respond_http(stream: &mut TcpStream, page_path: &Path) {
@@ -165,7 +202,13 @@ fn respond_http(stream: &mut TcpStream, page_path: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use super::{Module, PageModule, LOADING_REQUEST};
+    use super::{serve, Module, PageModule, LOADING_REQUEST};
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
 
     fn served() -> PageModule {
         PageModule {
@@ -194,6 +237,44 @@ mod tests {
         assert_eq!(
             String::from_utf8(answer).unwrap(),
             "http://127.0.0.1:1/loading.html"
+        );
+    }
+
+    /// The launch bug this split fixes: WebKit opens a socket it does not
+    /// send a request on, and the page request arrives on a second one. While
+    /// connections were answered in turn, the silent socket held the reader
+    /// until WebKit's own minute-long idle timeout closed it, and the graph
+    /// panel stayed white for that whole minute.
+    #[test]
+    fn a_silent_connection_does_not_delay_the_next_request() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let stop = Arc::clone(&shutdown);
+        let server = std::thread::spawn(move || serve(listener, PathBuf::new(), stop));
+
+        // Opened first and never written to, exactly as the spare socket is.
+        let silent = TcpStream::connect(address).unwrap();
+
+        let started = Instant::now();
+        let mut client = TcpStream::connect(address).unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        client
+            .write_all(b"GET /loading.html HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .unwrap();
+        let mut answer = String::new();
+        client.read_to_string(&mut answer).unwrap();
+        let waited = started.elapsed();
+
+        shutdown.store(true, Ordering::Relaxed);
+        drop(silent);
+        server.join().unwrap();
+
+        assert!(answer.starts_with("HTTP/1.1 200 OK"), "answer: {answer}");
+        assert!(
+            waited < Duration::from_secs(2),
+            "the silent connection held the request for {waited:?}"
         );
     }
 

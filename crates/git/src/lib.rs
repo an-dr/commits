@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_engine::logging::Logger;
 use commits_ipc::native::{GitRequest, GitRun};
 
 mod limiter;
@@ -18,6 +19,8 @@ pub struct GitModule {
     bus: Option<Bus>,
     runner: Arc<ProcessRunner>,
     cancellations: Arc<Mutex<HashMap<u32, Arc<AtomicBool>>>>,
+    /// Absent in tests, which construct the module directly.
+    logger: Option<Logger>,
 }
 
 impl GitModule {
@@ -26,11 +29,35 @@ impl GitModule {
             bus: None,
             runner: Arc::new(ProcessRunner::git(concurrency)),
             cancellations: Arc::new(Mutex::new(HashMap::new())),
+            logger: None,
+        }
+    }
+
+    /// Records every command this module runs.
+    ///
+    /// Git is where the app spends its time and where it fails, and until
+    /// this existed a command that never ran and a command that failed
+    /// looked identical from the outside: the window simply did nothing.
+    pub fn with_logger(mut self, logger: Logger) -> Self {
+        self.logger = Some(logger);
+        self
+    }
+
+    fn log(&self, message: &str) {
+        if let Some(logger) = &self.logger {
+            logger.info("git", message);
         }
     }
 
     fn start(&self, request: GitRun) {
+        self.log(&format!(
+            "#{} run: git {} (in {})",
+            request.request_id,
+            request.args.join(" "),
+            request.cwd
+        ));
         let Some(bus) = self.bus.clone() else {
+            self.log(&format!("#{}: no bus, dropped", request.request_id));
             return;
         };
         let cancellation = Arc::new(AtomicBool::new(false));
@@ -44,9 +71,34 @@ impl GitModule {
         }
         let cancellations = self.cancellations.clone();
         let runner = self.runner.clone();
+        let logger = self.logger.clone();
         thread::spawn(move || {
             let request_id = request.request_id;
+            let started = std::time::Instant::now();
             let result = runner.run(&request, &cancellation);
+            if let Some(logger) = &logger {
+                let elapsed = started.elapsed().as_millis();
+                let summary = format!(
+                    "#{request_id} done: exit {} in {elapsed}ms ({} bytes out)",
+                    result.exit_code,
+                    result.stdout.len()
+                );
+                match result.exit_code == 0 && result.status == 0 {
+                    true => logger.info("git", &summary),
+                    // A command that fails is the thing worth finding in the
+                    // log, so it carries the reason git gave for it.
+                    false => logger.error(
+                        "git",
+                        &format!(
+                            "{summary}: {}",
+                            String::from_utf8_lossy(&result.stderr)
+                                .lines()
+                                .next()
+                                .unwrap_or("no stderr")
+                        ),
+                    ),
+                }
+            }
             let mut active = cancellations.lock().unwrap();
             if active
                 .get(&request_id)
@@ -67,6 +119,7 @@ impl GitModule {
     }
 
     fn cancel(&self, request_id: u32) {
+        self.log(&format!("#{request_id}: cancel requested"));
         if let Some(cancellation) = self.cancellations.lock().unwrap().get(&request_id) {
             cancellation.store(true, std::sync::atomic::Ordering::Release);
         }

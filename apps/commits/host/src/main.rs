@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commits_repo;
+mod control;
 mod diagnostics;
 mod launch;
 mod page;
@@ -26,6 +27,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     refresh_launcher(&logger);
     let page = page::PageModule::new(logger.clone());
     let splash = splash::SplashModule::new(logger.clone());
+    let git = commits_git::GitModule::default().with_logger(logger.clone());
+    let control = control::ControlModule::new(logger.clone());
+    let watcher = commits_watcher::WatcherModule::default().with_logger(logger.clone());
     bones_engine::Engine::new()
         .logger(logger)
         // `commits.wasm` is ~12 MB carrying an embedded JavaScript engine, so
@@ -64,8 +68,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         // and the component's own load run.
         .module(page)
         .module(splash)
-        .module(commits_git::GitModule::default())
-        .module(commits_watcher::WatcherModule::default())
+        .module(git)
+        .module(watcher)
         // Two OS endpoints: the engine's generic desktop one, and ours for
         // the actions that need a repository.
         .os()
@@ -73,6 +77,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(settings::SettingsModule::default())
         .module(commits_repo::CommitsRepoModule::default())
         .module(launch::LaunchModule::default())
+        // Inert unless COMMITS_CONTROL_PORT is set; see `control`.
+        .module(control)
         .module(updater::UpdaterModule::default())
         .run()?;
     Ok(())

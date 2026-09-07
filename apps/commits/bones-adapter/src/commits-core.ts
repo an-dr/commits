@@ -220,6 +220,14 @@ export class CommitsCore {
         return;
       case "saveRepoState":
         return;
+      case "credentialResponse":
+        // The answer to an askpass question. The native side matches it to
+        // the waiting Git process by id; an empty value is a refusal, which
+        // fails the command rather than leaving it waiting.
+        if (typeof value.id === "string" && typeof value.value === "string") {
+          this.host.respondPrompt(value.id, value.value);
+        }
+        return;
       case "loadBranches":
         // Answered even with nothing open. The view holds one in-flight
         // branch load at a time and drops later requests until this one

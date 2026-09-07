@@ -10,8 +10,8 @@ use notify::EventKind;
 use tempfile::tempdir;
 
 use crate::{
-    is_interesting, is_refresh_worthy, resolve_metadata_paths, WatcherModule, FULL_TOPIC,
-    LIGHTWEIGHT_TOPIC, REQUEST_TOPIC,
+    is_interesting, is_metadata_lock, is_refresh_worthy, resolve_metadata_paths, WatcherModule,
+    FULL_TOPIC, LIGHTWEIGHT_TOPIC, REQUEST_TOPIC,
 };
 
 #[test]
@@ -158,6 +158,14 @@ fn start_watching(
         .encode()
         .unwrap(),
     });
+    // Registration runs off the caller's thread now, so the tree is not
+    // watched the moment `handle` returns: waiting here is what keeps a write
+    // made straight afterwards from being missed.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !module.is_watching(request_id) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(module.is_watching(request_id), "the watch never started");
     (bus, topics, module)
 }
 
@@ -183,4 +191,112 @@ fn collect_until(
         }
     }
     topics.lock().unwrap().clone()
+}
+
+#[test]
+fn a_git_lock_is_a_command_running_not_a_repository_change() {
+    assert!(is_metadata_lock(Path::new("C:/repo/.git/index.lock")));
+    assert!(is_metadata_lock(Path::new(
+        "C:/repo/.git/modules/vendor/bones/index.lock"
+    )));
+    assert!(is_metadata_lock(Path::new(
+        "C:/repo/.git/refs/heads/main.lock"
+    )));
+    // The file the lock guards is the change worth reporting.
+    assert!(!is_metadata_lock(Path::new("C:/repo/.git/index")));
+    assert!(!is_metadata_lock(Path::new("C:/repo/.git/HEAD")));
+}
+
+/// The loop this closes: `git status` in a repository with submodules locks
+/// each submodule index, so a refresh caused the event that caused the next
+/// refresh. The lock has to be dropped inside the metadata roots and nowhere
+/// else -- a working tree's `Cargo.lock` is an edit like any other.
+#[test]
+fn a_lock_in_the_working_tree_is_still_an_edit() {
+    let temp = tempdir().unwrap();
+    let repository = temp.path();
+    fs::create_dir(repository.join(".git")).unwrap();
+    let roots = resolve_metadata_paths(repository).unwrap();
+
+    let cargo_lock = repository.join("Cargo.lock");
+    let index_lock = roots[0].join("index.lock");
+
+    assert!(!roots.iter().any(|root| cargo_lock.starts_with(root)));
+    assert!(roots.iter().any(|root| index_lock.starts_with(root)));
+    assert!(is_metadata_lock(&cargo_lock) && is_metadata_lock(&index_lock));
+}
+
+/// The freeze this removes: `notify` adds one inotify watch per directory, so
+/// registering a recursive watch walks the whole tree -- seconds on a real
+/// repository. Doing it inside `handle` stopped the engine for that long, and
+/// opening a repository looked like a hang.
+#[test]
+fn a_watch_request_returns_before_the_tree_is_registered() {
+    let temp = tempdir().unwrap();
+    fs::create_dir(temp.path().join(".git")).unwrap();
+    // Deep enough that registration is measurably slower than the handler.
+    for index in 0..300 {
+        fs::create_dir_all(temp.path().join(format!("tree/{index}/nested"))).unwrap();
+    }
+    let bus = Bus::new();
+    let mut services = ServiceRegistry::new();
+    services.provide(bus.clone()).unwrap();
+    let mut module = WatcherModule::new();
+    module.init(&mut ModuleContext::new(&mut services)).unwrap();
+    let request = Envelope {
+        topic: REQUEST_TOPIC.into(),
+        sender: "test".into(),
+        correlation: Some(11),
+        payload: WatchRequest {
+            request_id: 11,
+            action: 0,
+            repository: temp.path().to_string_lossy().into_owned(),
+        }
+        .encode()
+        .unwrap(),
+    };
+
+    let started = Instant::now();
+    module.handle(&request);
+    let handled = started.elapsed();
+
+    assert!(
+        handled < Duration::from_millis(100),
+        "handle blocked for {handled:?}"
+    );
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !module.is_watching(11) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(module.is_watching(11), "the watch never became live");
+}
+
+/// A stop that overtakes its own registration must not leave a tree watched.
+#[test]
+fn stopping_a_watch_that_is_still_registering_installs_nothing() {
+    let temp = tempdir().unwrap();
+    fs::create_dir(temp.path().join(".git")).unwrap();
+    let bus = Bus::new();
+    let mut services = ServiceRegistry::new();
+    services.provide(bus.clone()).unwrap();
+    let mut module = WatcherModule::new();
+    module.init(&mut ModuleContext::new(&mut services)).unwrap();
+    let envelope = |action: u8| Envelope {
+        topic: REQUEST_TOPIC.into(),
+        sender: "test".into(),
+        correlation: Some(12),
+        payload: WatchRequest {
+            request_id: 12,
+            action,
+            repository: temp.path().to_string_lossy().into_owned(),
+        }
+        .encode()
+        .unwrap(),
+    };
+
+    module.handle(&envelope(0));
+    module.handle(&envelope(1));
+
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(!module.is_watching(12), "a stopped watch was installed anyway");
 }

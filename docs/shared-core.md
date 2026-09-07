@@ -81,6 +81,16 @@ it when none is configured. The protocol gained `runTool`, and the view state
 an optional `tools` list, which a host that configures none simply omits --
 that is what keeps the extension flavor's toolbar unchanged.
 
+`main.ts` also returns early from `loadRepos` when the host sends an empty
+repository set. Upstream falls through to selecting `repoPaths[0]` --
+`undefined` when there are none -- and refreshes; the refresh's branch load
+answers `isRepo: false`, whose documented response is to ask for the
+repository list again, which with an empty list is a loop that ran about
+twenty times a second. The extension never meets it, because VS Code opens the
+view with a workspace folder already in hand; the standalone host reaches it
+every time its chooser is on screen. See
+[`linux-startup-investigation.md`](linux-startup-investigation.md).
+
 Every other file remains as imported, and the MIT grant and notice are
 unchanged; MIT permits modification. What is lost is reproducibility: the
 snapshot can no longer be verified by hashing against
