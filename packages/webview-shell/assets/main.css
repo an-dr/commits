@@ -1359,6 +1359,50 @@ body.vscode-light .gitRef {
   flex: 0 0 auto;
   margin-top: 0;
 }
+/* Ready/busy light, beside the repo it reports on. Sized like an icon button
+   so the row keeps its rhythm, but it is not one: nothing here is clickable,
+   and only the tooltip carries the detail. */
+.activityStatus {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  /* Grey and quiet while nothing runs: the check is a reassurance, not a
+     control competing with the buttons around it. */
+  opacity: 0.55;
+  color: var(--vscode-foreground);
+}
+.activityStatus svg {
+  width: 15px;
+  height: 15px;
+}
+/* Working: the theme's accent, at full strength, so the change is visible in
+   peripheral vision without the control moving or resizing. */
+.activityStatus.busy {
+  opacity: 1;
+  color: var(--vscode-focusBorder, var(--vscode-foreground));
+}
+.activityStatus.busy .activityStatusRing {
+  opacity: 0.25;
+}
+/* Both properties matter: the arc is a path, so without transform-box the
+   origin would be the middle of the arc's own bounding box and it would wobble
+   instead of turning about the circle it belongs to. */
+.activityStatus.busy .activityStatusArc {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: loadingIconAnimation 1s linear infinite;
+}
+/* A machine that asks for no animation still gets a visible difference: the
+   arc simply sits there against the dimmed ring. */
+@media (prefers-reduced-motion: reduce) {
+  .activityStatus.busy .activityStatusArc {
+    animation: none;
+  }
+}
+
 /* Grows and shrinks equally on both sides of the filter/find pair, centering
    it in the space left over by the fixed-width items around it -- unlike
    those items, a spacer has nothing to protect from shrinking to zero. */

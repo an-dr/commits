@@ -9,7 +9,7 @@ describe("shared MIT webview shell", () => {
       "refreshBtn", "resetBtn", "pullBtn", "pushBtn", "moreBtn", "findWidget",
       "branchPanel", "repoInProgressBanner", "submoduleBanner", "commitGraph", "commitTable", "footer",
       "filesPanel", "fullDiffPanel", "contextMenu", "dialogBacking", "dialog",
-      "scrollShadow", "openInBtn", "filesPanelToggleBtn",
+      "scrollShadow", "openInBtn", "filesPanelToggleBtn", "activityStatus",
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
@@ -19,7 +19,8 @@ describe("shared MIT webview shell", () => {
     const html = buildGraphShell((message) => message);
 
     expect(html.indexOf('id="sidebarToggleBtn"')).toBeLessThan(html.indexOf('id="repoSelect"'));
-    expect(html.indexOf('id="repoSelect"')).toBeLessThan(html.indexOf('id="openInBtn"'));
+    expect(html.indexOf('id="repoSelect"')).toBeLessThan(html.indexOf('id="activityStatus"'));
+    expect(html.indexOf('id="activityStatus"')).toBeLessThan(html.indexOf('id="openInBtn"'));
     expect(html.indexOf('id="openInBtn"')).toBeLessThan(html.indexOf('id="commitFilter"'));
   });
 

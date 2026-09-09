@@ -14,7 +14,7 @@ UPGRADER_INSTALL_DIR_NAME = ".commits"
 UPGRADER_INSTALL_ENV_VAR = "COMMITS_INSTALL_DIR"
 UPGRADER_LAUNCHER_STEM = "commits"
 UPGRADER_APP_STEM = "commits-app"
-UPGRADER_LAUNCHER_VERSION = "1.5.1"
+UPGRADER_LAUNCHER_VERSION = "1.6.0"
 
 # Registered at github.com/settings/applications, with "Enable Device Flow"
 # turned on. Safe to commit: the device flow needs no client secret, only

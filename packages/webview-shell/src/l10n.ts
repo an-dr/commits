@@ -230,6 +230,34 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     pushingBranch: t("Pushing Branch"),
     noRemotesConfigured: t("No remotes are configured for this repository."),
 
+    // Activity indicator ({0} is the last operation that finished)
+    activityReady: t("Ready"),
+    activityReadyAfter: t("Ready · last: {0}"),
+    activityLoadingRepos: t("Loading repositories ..."),
+    activityLoadingBranches: t("Loading branches ..."),
+    activityLoadingCommits: t("Loading commits ..."),
+    activityLoadingChanges: t("Reading the working tree ..."),
+    activityLoadingCommitDetails: t("Loading commit details ..."),
+    activityLoadingDiff: t("Loading the diff ..."),
+    activityUpdatingSubmodules: t("Updating submodules ..."),
+    activityRepoOperation: t("Updating the repository operation ..."),
+    activityFetching: t("Fetching from the remote ..."),
+    activityPulling: t("Pulling ..."),
+    activityPushing: t("Pushing ..."),
+    activityStaging: t("Staging files ..."),
+    activityUnstaging: t("Unstaging files ..."),
+    activityDiscarding: t("Discarding changes ..."),
+    activityCommitting: t("Committing ..."),
+    activityCheckingOut: t("Checking out ..."),
+    activityCherryPicking: t("Cherry picking ..."),
+    activityMerging: t("Merging ..."),
+    activityRebasing: t("Rebasing ..."),
+    activityResetting: t("Resetting ..."),
+    activityReverting: t("Reverting ..."),
+    activityUpdatingRefs: t("Updating branches and tags ..."),
+    activityUpdatingRemotes: t("Updating remotes ..."),
+    activityRunningTool: t("Running an external tool ..."),
+
     // Relative commit dates are formatted by Intl.RelativeTimeFormat in the
     // webview (see utils/date.ts), so no time units are declared here.
 

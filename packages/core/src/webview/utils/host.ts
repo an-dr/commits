@@ -34,7 +34,21 @@ export const vscode = {
   setState: (state: WebViewState) => host().setState(state)
 };
 
+type SentMessageListener = (message: RequestMessage) => void;
+
+let sentListener: SentMessageListener | null = null;
+
+/**
+ * Watches every request the view sends, wherever it is sent from. One listener
+ * only: the single caller is the toolbar's activity light, and a list would
+ * invite work here that belongs on the receiving end.
+ */
+export function observeMessagesSent(listener: SentMessageListener) {
+  sentListener = listener;
+}
+
 export function sendMessage(msg: RequestMessage) {
+  sentListener?.(msg);
   host().postMessage(msg);
 }
 

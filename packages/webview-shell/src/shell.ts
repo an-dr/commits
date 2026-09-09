@@ -11,6 +11,7 @@ export function buildGraphShell(t: (message: string) => string): string {
         <div id="controlsLeft">
           <div id="sidebarToggleBtn" class="iconBtn" title="${text("Toggle Branch Panel")}"></div>
           <div id="repoSelect" class="dropdown"></div>
+          <div id="activityStatus" class="activityStatus" role="status" aria-live="polite" title="${text("Ready")}"></div>
           <div id="openInBtn" class="iconBtn"></div>
           <div class="controlsSpacer"></div>
           <span id="commitFilterControl"><input id="commitFilter" type="search" spellcheck="false" placeholder="${text("Filter commits...")}" title="${text("Filter by message, author, email, or hash")}"></span>

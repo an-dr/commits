@@ -207,6 +207,34 @@ export interface LocalizedStrings {
   readonly pushingTag: string;
   readonly pushingBranch: string;
   readonly noRemotesConfigured: string;
+
+  // Activity indicator: what the toolbar light says it is doing
+  readonly activityReady: string;
+  readonly activityReadyAfter: string;
+  readonly activityLoadingRepos: string;
+  readonly activityLoadingBranches: string;
+  readonly activityLoadingCommits: string;
+  readonly activityLoadingChanges: string;
+  readonly activityLoadingCommitDetails: string;
+  readonly activityLoadingDiff: string;
+  readonly activityUpdatingSubmodules: string;
+  readonly activityRepoOperation: string;
+  readonly activityFetching: string;
+  readonly activityPulling: string;
+  readonly activityPushing: string;
+  readonly activityStaging: string;
+  readonly activityUnstaging: string;
+  readonly activityDiscarding: string;
+  readonly activityCommitting: string;
+  readonly activityCheckingOut: string;
+  readonly activityCherryPicking: string;
+  readonly activityMerging: string;
+  readonly activityRebasing: string;
+  readonly activityResetting: string;
+  readonly activityReverting: string;
+  readonly activityUpdatingRefs: string;
+  readonly activityUpdatingRemotes: string;
+  readonly activityRunningTool: string;
   readonly detailCommit: string;
   readonly detailParents: string;
   readonly detailAuthor: string;

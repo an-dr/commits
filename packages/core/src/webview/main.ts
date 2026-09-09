@@ -9,6 +9,7 @@ import type {
 } from "@an-dr/commits-core/backend/types";
 
 import type { GitWorkingTreeChange } from "@an-dr/commits-core/data-source/models";
+import { initActivityIndicator, noteActivityResponse } from "./activityIndicator";
 import {
   BranchPanel,
   NO_REMOTE_INFO,
@@ -2878,6 +2879,9 @@ let gitGraph!: GitGraphView;
 
 /** Builds the view. The host installs its transport before calling this. */
 export function startCommitsView() {
+  // Before the view is built, so the loads its constructor starts are the
+  // first thing the activity light reports rather than the first it misses.
+  initActivityIndicator();
   gitGraph = new GitGraphView(
     viewState.repos,
     viewState.lastActiveRepo,
@@ -2906,6 +2910,7 @@ export function applyLiveSettings(): void {
 /* Command Processing */
 window.addEventListener("message", (event) => {
   const msg: GG.ResponseMessage = event.data;
+  noteActivityResponse(msg);
   switch (msg.command) {
     case "addTag":
       refreshGraphOrDisplayError(msg.status, l10n.unableToAddTag);
