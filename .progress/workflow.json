@@ -11,8 +11,8 @@
     "done": "On Windows, Install and register in a portable run creates shortcuts and the folder/background \"Open in Commits\" verbs that open that folder in Commits; Unregister in an installed run removes all of them and leaves ~/.commits/app intact. On Linux, the same actions create/remove a .desktop entry visible in the app menu and in the folder \"Open With\" list in Nautilus/COSMIC Files. The menu shows the correct action for the detected state. Crate unit tests cover generated registry/desktop content and register/unregister idempotence against a scratch location; docs (updating.md, a new integration doc, index) describe it; install.ps1 no longer creates shortcuts.",
     "outOfScope": "Windows 11 top-level context menu (sparse MSIX + IExplorerCommand); drive context menu; Nautilus scripts/extensions or direct right-click items on Linux; macOS; deleting files on unregister (no uninstaller); registering portable copies; a settings entry; the bones upstream move itself (follow-up)."
   },
-  "currentIncrementId": "9aa5f982d9334b0ca95c24e9456bc4a1",
-  "commitBaseline": "d186f5d0ebd5bc5f7de8c98936b606c8e1b4467d",
+  "currentIncrementId": "0ae3fbd7ff3d49debf5912722a682c7e",
+  "commitBaseline": "443229f6b5d04636c4199cf62ba74b6bae1391a2",
   "increments": [
     {
       "id": "71f71b46fdfb47a08d7d06d49ed631b8",
@@ -38,14 +38,14 @@
     {
       "id": "9aa5f982d9334b0ca95c24e9456bc4a1",
       "number": 4,
-      "status": "verified",
+      "status": "completed",
       "scope": "core + menu",
       "description": "commits-core state and web menu: Install and register / Register with system / Unregister from system with feedback messages; vitest coverage (~200 lines)"
     },
     {
       "id": "0ae3fbd7ff3d49debf5912722a682c7e",
       "number": 5,
-      "status": "planned",
+      "status": "verified",
       "scope": "install.ps1 + docs",
       "description": "install.ps1 copies files only; docs/updating.md, new docs/desktop-integration.md, docs/index.md (~120 lines)"
     }
@@ -268,6 +268,13 @@
       "incrementId": "9aa5f982d9334b0ca95c24e9456bc4a1",
       "note": "User pre-approved all increments. vitest 263/263, tsc clean; review approve.",
       "approvedAt": "2026-09-28T16:42:08.3727889Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "0ae3fbd7ff3d49debf5912722a682c7e",
+      "note": "User pre-approved all increments. install.ps1 fresh + push run against scratch dir; no OS entries created; review approve.",
+      "approvedAt": "2026-09-28T16:42:47.2353579Z"
     }
   ],
   "history": [
@@ -742,11 +749,31 @@
       "detail": "Approved verify during VERIFY."
     },
     {
-      "at": "2026-09-28T16:42:08.9169640Z",
+      "at": "2026-09-28T16:42:08.916964Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-09-28T16:42:09.8413428Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-09-28T16:42:44.7222392Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:42:47.2466614Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:42:47.7755346Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-09-28T15:47:05.6389241Z",
-  "updatedAt": "2026-09-28T16:42:08.9256455Z"
+  "updatedAt": "2026-09-28T16:42:47.7842027Z"
 }
