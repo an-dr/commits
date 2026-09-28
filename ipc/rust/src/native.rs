@@ -284,11 +284,12 @@ impl NativeResult {
     }
 }
 
-/// A request to check for, stage, or install an application update. `Check`
-/// and `Stage` need only a manifest URL: `Stage` re-fetches the manifest
-/// itself rather than requiring the caller to have kept `Check`'s result
-/// around. `Install` (stages the running build itself, for a not-yet-
-/// installed run) ignores `manifest_url`.
+/// A request to check for, stage, or install an application update, or to
+/// register the installed app with the desktop. `Check` and `Stage` need only
+/// a manifest URL: `Stage` re-fetches the manifest itself rather than
+/// requiring the caller to have kept `Check`'s result around. `Install`
+/// (stages the running build itself, for a not-yet-installed run, then
+/// registers it), `Register` and `Unregister` ignore `manifest_url`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdaterRequest {
     pub request_id: u32,
@@ -312,7 +313,7 @@ impl UpdaterRequest {
             action: reader.read_u8()?,
             manifest_url: reader.read_str()?.to_string(),
         };
-        if request.action > 2 {
+        if request.action > 4 {
             return Err(DecodeError::InvalidTag {
                 message: "updater action",
                 tag: request.action,
@@ -531,6 +532,16 @@ src/a.ts"
             install
         );
 
+        let unregister = UpdaterRequest {
+            request_id: 5,
+            action: 4,
+            manifest_url: String::new(),
+        };
+        assert_eq!(
+            UpdaterRequest::decode(&unregister.encode().unwrap()).unwrap(),
+            unregister
+        );
+
         let staged = UpdaterResult {
             request_id: 3,
             ok: true,
@@ -563,7 +574,7 @@ src/a.ts"
         assert!(GitRequest::decode(&[9]).is_err());
         assert!(WatchRequest::decode(&[1, 0, 0, 0, 2, 0, 0]).is_err());
         assert!(OsRequest::decode(&[1, 0, 0, 0, 10, 0, 0]).is_err());
-        assert!(UpdaterRequest::decode(&[1, 0, 0, 0, 3, 0, 0]).is_err());
+        assert!(UpdaterRequest::decode(&[1, 0, 0, 0, 5, 0, 0]).is_err());
         assert!(UpdaterResult::decode(&[1, 0, 0, 0, 2]).is_err());
 
         let mut cancel = vec![1, 7, 0, 0, 0];

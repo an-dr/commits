@@ -648,6 +648,7 @@ dependencies = [
  "bones-messages",
  "bones-module-os",
  "bones-upgrader",
+ "commits-desktop-integration",
  "commits-git",
  "commits-ipc",
  "commits-os",

@@ -141,6 +141,8 @@ describe("native protocol", () => {
       .toEqual(new Writer().u32(3).u8(0).string("https://example.com/manifest.json").finish());
     expect(encodeUpdaterRequest(3, "stage", "https://example.com/manifest.json")[4]).toBe(1);
     expect(encodeUpdaterRequest(3, "install", "")[4]).toBe(2);
+    expect(encodeUpdaterRequest(3, "register", "")[4]).toBe(3);
+    expect(encodeUpdaterRequest(3, "unregister", "")[4]).toBe(4);
 
     const result = new Writer().u32(3).u8(1).u8(1).u8(0).string("1.2.0").string("").finish();
     expect(decodeUpdaterResult(result)).toEqual({

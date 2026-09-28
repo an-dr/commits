@@ -26,6 +26,8 @@ pub const COMPLETED_TOPIC: &str = "updater/completed";
 const CHECK: u8 = 0;
 const STAGE: u8 = 1;
 const INSTALL: u8 = 2;
+const REGISTER: u8 = 3;
+const UNREGISTER: u8 = 4;
 
 const OWNER: &str = "commits";
 const SUCCESS: u8 = 0;
@@ -44,9 +46,11 @@ const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Checks a hosted manifest for a newer version, stages a verified download
 /// for the launcher to apply on next start, or -- for a build not running
-/// from the canonical install location -- stages a copy of itself instead.
-/// Also answers a synchronous "is this run installed?" query used to decide
-/// whether the Install menu entry should show at all.
+/// from the canonical install location -- stages a copy of itself instead
+/// and registers the installed app with the desktop. Also registers and
+/// unregisters an installed app on request, and answers a synchronous "is
+/// this run installed, and registered?" query that decides which menu entry
+/// shows.
 ///
 /// The async actions mirror `commits-git`'s request/completed pattern: each
 /// request runs on its own thread and reports back over the bus rather than
@@ -75,6 +79,8 @@ impl UpdaterModule {
                 CHECK => check(backend.as_ref(), request.request_id, &request.manifest_url),
                 STAGE => stage(backend.as_ref(), request.request_id, &request.manifest_url),
                 INSTALL => install(request.request_id),
+                REGISTER => registration(request.request_id, crate::desktop::register()),
+                UNREGISTER => registration(request.request_id, crate::desktop::unregister()),
                 _ => return,
             };
             if let Ok(payload) = result.encode() {
@@ -170,9 +176,33 @@ fn stage_inner(backend: &dyn OsBackend, manifest_url: &str) -> Result<String, St
 /// all yet, in which case there is no launcher present to ever pick up a
 /// pushed version folder, so the files go directly to the install location
 /// instead (see [`install_inner`]).
+///
+/// The installed app is then registered with the desktop. A registration
+/// failure does not undo the install: the result stays `ok` and carries the
+/// failure in `error`, and the installed app's own Register retries it.
 fn install(request_id: u32) -> UpdaterResult {
-    match running_directory() {
+    let mut result = match running_directory() {
         Ok(source_dir) => install_from(&source_dir, request_id),
+        Err(error) => failed(request_id, error),
+    };
+    if result.ok {
+        if let Err(error) = crate::desktop::register() {
+            result.error = format!("installed, but could not register with the system: {error}");
+        }
+    }
+    result
+}
+
+fn registration(request_id: u32, outcome: Result<(), String>) -> UpdaterResult {
+    match outcome {
+        Ok(()) => UpdaterResult {
+            request_id,
+            ok: true,
+            available: false,
+            fresh: false,
+            version: String::new(),
+            error: String::new(),
+        },
         Err(error) => failed(request_id, error),
     }
 }
@@ -238,7 +268,7 @@ fn is_install_dir(current: &Path) -> bool {
     bones_upgrader::is_installed_version_dir(&bones_upgrader::host_identity(), current)
 }
 
-/// `[SUCCESS, installed_byte, just_updated_byte, ...version_utf8]` -- the
+/// `[SUCCESS, installed_byte, just_updated_byte, registered_byte, ...version_utf8]` -- the
 /// version trails unprefixed, as the last field, matching `commits-repo`'s
 /// own rest-is-the-final-string convention.
 ///
@@ -250,7 +280,8 @@ fn is_install_dir(current: &Path) -> bool {
 fn encode_install_status(module: &UpdaterModule) -> Vec<u8> {
     let installed = is_installed();
     let just_updated = if installed { module.record_version_and_check_update(CURRENT_VERSION) } else { false };
-    let mut response = vec![SUCCESS, u8::from(installed), u8::from(just_updated)];
+    let registered = installed && crate::desktop::is_registered();
+    let mut response = vec![SUCCESS, u8::from(installed), u8::from(just_updated), u8::from(registered)];
     response.extend(CURRENT_VERSION.as_bytes());
     response
 }
@@ -568,7 +599,8 @@ mod tests {
         assert_eq!(response[0], SUCCESS);
         assert!(response[1] == 0 || response[1] == 1);
         assert!(response[2] == 0 || response[2] == 1);
-        assert_eq!(std::str::from_utf8(&response[3..]).unwrap(), CURRENT_VERSION);
+        assert!(response[3] == 0 || response[3] == 1);
+        assert_eq!(std::str::from_utf8(&response[4..]).unwrap(), CURRENT_VERSION);
     }
 
     /// Wires a real `Persistence` module (see `bones_kernel::wasm_extensions::persistence`)
@@ -640,6 +672,7 @@ mod tests {
         unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
         assert_eq!(response[1], 0, "not installed");
         assert_eq!(response[2], 0, "never just-updated when not installed");
+        assert_eq!(response[3], 0, "never registered when not installed");
         assert!(
             !state_dir.path().join("updater.bin").exists(),
             "a non-installed run must not save a version marker at all"

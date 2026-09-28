@@ -38,6 +38,7 @@ serde_json = "1.0"
 # never the audio or game-core native modules.
 bones-engine = { path = "../../../vendor/bones/crates/bones-engine", default-features = false, features = ["web", "os"] }
 bones-messages = { path = "../../../vendor/bones/crates/bones-messages" }
+commits-desktop-integration = { path = "../../../crates/desktop-integration" }
 commits-git = { path = "../../../crates/git" }
 commits-ipc = { path = "../../../ipc/rust" }
 bones-module-os = { path = "../../../vendor/bones/crates/bones-engine/bones-module-os" }

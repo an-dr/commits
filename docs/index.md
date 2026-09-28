@@ -6,6 +6,7 @@
 - [`phase-4.md`](phase-4.md) — standalone graphical read surface and exclusions
 - [`settings.md`](settings.md) — standalone persisted settings schema
 - [`updating.md`](updating.md) — self-update: manifest format, install layout, apply/rollback
+- [`desktop-integration.md`](desktop-integration.md) — registering the installed app with Windows and Linux desktops
 - [`design/settings.md`](design/settings.md) — extension-compatible and desktop settings boundary
 - [`shared-core.md`](shared-core.md) — MIT core snapshot, its local divergence, Bones integration, and submodule plan
 - [`mit-webview-transition.md`](mit-webview-transition.md) — executable plan for replacing the old page with the shared Git Graph interface

@@ -128,7 +128,7 @@ version brought a different launcher with it.
 
 ## Install: pushing a running build without a manifest
 
-"Install" appears in the app menu instead, whenever this run's own directory
+"Install and register" appears in the app menu instead, whenever this run's own directory
 is *not* a version folder under `~/.commits/app` — a dev build, or a build
 launched ad hoc rather than through the installed `commits.exe`. It needs no
 manifest URL or network access at all, and does one of two things depending
@@ -147,6 +147,10 @@ on whether `~/.commits/app` already has a launcher in it:
   a restart. Run `~/.commits/app/commits.exe` (or use
   [`scripts/install.ps1`](../scripts/install.ps1), which also sets up
   shortcuts) to actually start it.
+
+Either way, the install then registers `~/.commits/app/commits.exe` with the
+operating system — shortcuts, the application list, and "Open in Commits" for
+folders — as described in [`desktop-integration.md`](desktop-integration.md).
 
 ## Launch
 
