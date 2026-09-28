@@ -17,8 +17,8 @@
 
 ## Iterations
 
-- [ ] **crate core + Linux** (verified) — crates/desktop-integration: generic Integration spec, register/unregister/is_registered, Linux .desktop + icon + cache refresh, injectable roots, unit tests; committed assets/icon.png; crate docs + techdebt/crates README note (~280 lines)
-- [ ] **Windows backend** (planned) — HKCU folder/background verbs and Start Menu/Desktop .lnk via windows 0.61; pure value-generation tests cross-platform, write/remove tests cfg(windows) under a scratch key (~220 lines)
+- [x] **crate core + Linux** (completed) — crates/desktop-integration: generic Integration spec, register/unregister/is_registered, Linux .desktop + icon + cache refresh, injectable roots, unit tests; committed assets/icon.png; crate docs + techdebt/crates README note (~280 lines)
+- [ ] **Windows backend** (verified) — HKCU folder/background verbs and Start Menu/Desktop .lnk via windows 0.61; pure value-generation tests cross-platform, write/remove tests cfg(windows) under a scratch key (~220 lines)
 - [ ] **host + wire** (planned) — updater register/unregister actions, install also registers, registered byte in install status; Rust + TS codec and fixtures (~180 lines)
 - [ ] **core + menu** (planned) — commits-core state and web menu: Install and register / Register with system / Unregister from system with feedback messages; vitest coverage (~200 lines)
 - [ ] **install.ps1 + docs** (planned) — install.ps1 copies files only; docs/updating.md, new docs/desktop-integration.md, docs/index.md (~120 lines)
@@ -47,4 +47,4 @@
 - [x] D3 Linux implementation: ~/.local/share/applications/commits.desktop (Exec="<launcher>" %f, MimeType=inode/directory;, Categories=Development;RevisionControl;), icon written to ~/.local/share/icons/hicolor/256x256/apps/commits.png from PNG bytes embedded in the binary (include_bytes, so no dist/payload change), then best-effort update-desktop-database + gtk-update-icon-cache. No desktop-folder shortcut on Linux. OK? — Recommendation accepted (user: "go ahead").
 - [x] D4 Wire protocol: extend the existing updater bus actions with register=3 and unregister=4 (Rust + TS codec + fixtures together), make install (2) also register after a successful install, and add a `registered` byte to the install-status response. Menu: not installed -> "Install and register"; installed + not fully registered -> "Register with system"; installed + registered -> "Unregister from system". A partial registration counts as unregistered, so Register repairs it. OK? — Recommendation accepted (user: "go ahead").
 
-_Last updated: 2026-09-28T16:31:20.0002737Z_
+_Last updated: 2026-09-28T16:34:31.6359205Z_

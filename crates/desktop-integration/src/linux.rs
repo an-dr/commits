@@ -22,7 +22,6 @@ fn icon_theme_dir(locations: &Locations) -> PathBuf {
     locations.data_home.join("icons/hicolor")
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) fn register(integration: &Integration, locations: &Locations) -> Result<(), String> {
     write_file(&icon_path(integration, locations), integration.icon_png)?;
     write_file(&desktop_entry_path(integration, locations), desktop_entry(integration).as_bytes())?;
@@ -30,7 +29,6 @@ pub(crate) fn register(integration: &Integration, locations: &Locations) -> Resu
     Ok(())
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) fn unregister(integration: &Integration, locations: &Locations) -> Result<(), String> {
     remove_file(&desktop_entry_path(integration, locations))?;
     remove_file(&icon_path(integration, locations))?;
@@ -38,7 +36,6 @@ pub(crate) fn unregister(integration: &Integration, locations: &Locations) -> Re
     Ok(())
 }
 
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) fn is_registered(integration: &Integration, locations: &Locations) -> bool {
     let entry = std::fs::read_to_string(desktop_entry_path(integration, locations));
     let icon = std::fs::read(icon_path(integration, locations));

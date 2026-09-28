@@ -12,7 +12,11 @@
 
 use std::path::PathBuf;
 
+#[cfg(target_os = "linux")]
 mod linux;
+#[cfg(windows)]
+mod windows;
+mod windows_verbs;
 
 /// The application being registered.
 pub struct Integration<'a> {
@@ -33,20 +37,42 @@ pub struct Integration<'a> {
 /// Where a registration is written.
 ///
 /// Callers normally take [`Locations::for_current_user`]; tests point every
-/// field at a scratch directory so nothing reaches the real desktop.
+/// field at a scratch directory or registry key so nothing reaches the real
+/// desktop.
 pub struct Locations {
-    /// The freedesktop.org data directory (`$XDG_DATA_HOME`) on Linux.
+    /// The freedesktop.org data directory (`$XDG_DATA_HOME`).
+    #[cfg(target_os = "linux")]
     pub data_home: PathBuf,
     /// Whether to refresh the desktop's caches after a change. Off in tests,
     /// where the caches being refreshed would be the real ones.
+    #[cfg(target_os = "linux")]
     pub refresh_caches: bool,
+    /// Registry key under `HKEY_CURRENT_USER` that holds file classes.
+    #[cfg(windows)]
+    pub classes_key: String,
+    /// The Start Menu's `Programs` folder.
+    #[cfg(windows)]
+    pub start_menu: PathBuf,
+    /// The desktop folder.
+    #[cfg(windows)]
+    pub desktop: PathBuf,
 }
 
 impl Locations {
-    /// The current user's own locations, or `None` when the home directory
-    /// cannot be resolved.
+    /// The current user's own locations, or `None` when they cannot be
+    /// resolved (no home directory, or an operating system this crate does
+    /// not support).
     pub fn for_current_user() -> Option<Self> {
-        Some(Self { data_home: dirs::data_dir()?, refresh_caches: true })
+        #[cfg(target_os = "linux")]
+        return Some(Self { data_home: dirs::data_dir()?, refresh_caches: true });
+        #[cfg(windows)]
+        return Some(Self {
+            classes_key: String::from(r"Software\Classes"),
+            start_menu: dirs::data_dir()?.join(r"Microsoft\Windows\Start Menu\Programs"),
+            desktop: dirs::desktop_dir()?,
+        });
+        #[cfg(not(any(target_os = "linux", windows)))]
+        return None;
     }
 }
 
@@ -55,7 +81,9 @@ impl Locations {
 pub fn register(integration: &Integration, locations: &Locations) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     return linux::register(integration, locations);
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
+    return windows::register(integration, locations);
+    #[cfg(not(any(target_os = "linux", windows)))]
     return Err(unsupported(integration, locations));
 }
 
@@ -64,7 +92,9 @@ pub fn register(integration: &Integration, locations: &Locations) -> Result<(), 
 pub fn unregister(integration: &Integration, locations: &Locations) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     return linux::unregister(integration, locations);
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
+    return windows::unregister(integration, locations);
+    #[cfg(not(any(target_os = "linux", windows)))]
     return Err(unsupported(integration, locations));
 }
 
@@ -73,11 +103,16 @@ pub fn unregister(integration: &Integration, locations: &Locations) -> Result<()
 pub fn is_registered(integration: &Integration, locations: &Locations) -> bool {
     #[cfg(target_os = "linux")]
     return linux::is_registered(integration, locations);
-    #[cfg(not(target_os = "linux"))]
-    return { let _ = (integration, locations); false };
+    #[cfg(windows)]
+    return windows::is_registered(integration, locations);
+    #[cfg(not(any(target_os = "linux", windows)))]
+    return {
+        let _ = (integration, locations);
+        false
+    };
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", windows)))]
 fn unsupported(_integration: &Integration, _locations: &Locations) -> String {
     String::from("desktop registration is not supported on this operating system")
 }

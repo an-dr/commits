@@ -11,20 +11,20 @@
     "done": "On Windows, Install and register in a portable run creates shortcuts and the folder/background \"Open in Commits\" verbs that open that folder in Commits; Unregister in an installed run removes all of them and leaves ~/.commits/app intact. On Linux, the same actions create/remove a .desktop entry visible in the app menu and in the folder \"Open With\" list in Nautilus/COSMIC Files. The menu shows the correct action for the detected state. Crate unit tests cover generated registry/desktop content and register/unregister idempotence against a scratch location; docs (updating.md, a new integration doc, index) describe it; install.ps1 no longer creates shortcuts.",
     "outOfScope": "Windows 11 top-level context menu (sparse MSIX + IExplorerCommand); drive context menu; Nautilus scripts/extensions or direct right-click items on Linux; macOS; deleting files on unregister (no uninstaller); registering portable copies; a settings entry; the bones upstream move itself (follow-up)."
   },
-  "currentIncrementId": "71f71b46fdfb47a08d7d06d49ed631b8",
-  "commitBaseline": "f59417c4d224d28ed5bd4cf325fff50c963e369a",
+  "currentIncrementId": "15ad1609316f44119b7b65f894ea0f3b",
+  "commitBaseline": "4c73a5e7af21be56ba65ff91ed49201cae7567f7",
   "increments": [
     {
       "id": "71f71b46fdfb47a08d7d06d49ed631b8",
       "number": 1,
-      "status": "verified",
+      "status": "completed",
       "scope": "crate core + Linux",
       "description": "crates/desktop-integration: generic Integration spec, register/unregister/is_registered, Linux .desktop + icon + cache refresh, injectable roots, unit tests; committed assets/icon.png; crate docs + techdebt/crates README note (~280 lines)"
     },
     {
       "id": "15ad1609316f44119b7b65f894ea0f3b",
       "number": 2,
-      "status": "planned",
+      "status": "verified",
       "scope": "Windows backend",
       "description": "HKCU folder/background verbs and Start Menu/Desktop .lnk via windows 0.61; pure value-generation tests cross-platform, write/remove tests cfg(windows) under a scratch key (~220 lines)"
     },
@@ -247,6 +247,13 @@
       "incrementId": "71f71b46fdfb47a08d7d06d49ed631b8",
       "note": "User pre-approved all increments: \"go ahead, I pre-approve all increments\". Review findings IM.1, IM.2 fixed; clippy clean; 8/8 tests pass.",
       "approvedAt": "2026-09-28T16:31:19.4477155Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "15ad1609316f44119b7b65f894ea0f3b",
+      "note": "User pre-approved all increments. IM.1 fixed; clippy clean on linux and windows-msvc; 10/10 tests pass on Linux; Windows OS tests (HI.1) not runnable here, flagged for user.",
+      "approvedAt": "2026-09-28T16:34:31.0629204Z"
     }
   ],
   "history": [
@@ -624,8 +631,38 @@
       "at": "2026-09-28T16:31:19.9850179Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-09-28T16:31:40.5119619Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-09-28T16:31:58.693272Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:34:29.7757572Z",
+      "action": "return-to-build",
+      "detail": "Returned from VERIFY to BUILD."
+    },
+    {
+      "at": "2026-09-28T16:34:30.5419646Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:34:31.0668611Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:34:31.6197671Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-09-28T15:47:05.6389241Z",
-  "updatedAt": "2026-09-28T16:31:20.0002737Z"
+  "updatedAt": "2026-09-28T16:34:31.6359205Z"
 }
