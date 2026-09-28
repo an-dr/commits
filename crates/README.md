@@ -6,6 +6,8 @@ The rule that decides what belongs here is the opposite of what it used to be. A
 
 Anything genuinely generic is upstream. Clipboard, browser, file pickers and HTTPS fetch are the engine's `os` module; self-update is `bones-upgrader`; the wire codec is `bones-messages`. When something here turns out to be reusable, the move is a contribution to bones and a submodule bump, never a copy (ADR-003).
 
+One crate here breaks that rule on purpose. [`desktop-integration`](desktop-integration) registers an installed application with the desktop and needs no repository, so it belongs in bones; it is written here first, as a self-contained crate with no Commits-specific API, and moves upstream as a contribution and a submodule bump (BUG-006 in [`docs/techdebt.md`](../docs/techdebt.md)).
+
 Code that only makes sense for the standalone client -- its window, layout or lifecycle -- belongs in `apps/commits/host` instead.
 
 Processes spawned here run without a console, because the host is a windowed application with none to inherit and Windows would otherwise give every child its own window.

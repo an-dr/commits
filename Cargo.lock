@@ -661,6 +661,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "commits-desktop-integration"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "tempfile",
+]
+
+[[package]]
 name = "commits-git"
 version = "0.1.0"
 dependencies = [

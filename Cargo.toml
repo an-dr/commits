@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "apps/commits/host",
+    "crates/desktop-integration",
     "crates/git",
     "crates/os",
     "crates/watcher",

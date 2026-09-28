@@ -1,0 +1,631 @@
+{
+  "schemaVersion": 1,
+  "flow": "Detailed",
+  "phase": "COMMIT",
+  "baseBranch": "main",
+  "baseCommit": "f59417c4d224d28ed5bd4cf325fff50c963e369a",
+  "featureBranch": "feat/desktop-integration",
+  "requirements": {
+    "goal": "Let the installed Commits app integrate with the OS on explicit user action: Windows Explorer \"Open in Commits\" on folders and folder backgrounds plus Start Menu/desktop shortcuts; Linux (Ubuntu, Pop!_OS) app-launcher entry that is also the \"Open With\" target for folders. Registration and removal are explicit UI actions, and an unregistered app is effectively portable.",
+    "constraints": "No settings entry; menu actions only. Register/Unregister appear only in an installed run and always target ~/.commits/app/commits(.exe). Install from a non-installed run registers too, labelled explicitly. Unregister removes only OS registration and never deletes files. Windows uses per-user HKCU classic verbs (no admin). Linux uses ~/.local/share/applications .desktop with MimeType=inode/directory and a committed 256px PNG icon. Logic lives in a self-contained crate with no repository dependency so it can move to bones later (ADR-012). install.ps1 only copies files. vendor/bones stays untouched (ADR-003). Bump app and launcher version at integration.",
+    "done": "On Windows, Install and register in a portable run creates shortcuts and the folder/background \"Open in Commits\" verbs that open that folder in Commits; Unregister in an installed run removes all of them and leaves ~/.commits/app intact. On Linux, the same actions create/remove a .desktop entry visible in the app menu and in the folder \"Open With\" list in Nautilus/COSMIC Files. The menu shows the correct action for the detected state. Crate unit tests cover generated registry/desktop content and register/unregister idempotence against a scratch location; docs (updating.md, a new integration doc, index) describe it; install.ps1 no longer creates shortcuts.",
+    "outOfScope": "Windows 11 top-level context menu (sparse MSIX + IExplorerCommand); drive context menu; Nautilus scripts/extensions or direct right-click items on Linux; macOS; deleting files on unregister (no uninstaller); registering portable copies; a settings entry; the bones upstream move itself (follow-up)."
+  },
+  "currentIncrementId": "71f71b46fdfb47a08d7d06d49ed631b8",
+  "commitBaseline": "f59417c4d224d28ed5bd4cf325fff50c963e369a",
+  "increments": [
+    {
+      "id": "71f71b46fdfb47a08d7d06d49ed631b8",
+      "number": 1,
+      "status": "verified",
+      "scope": "crate core + Linux",
+      "description": "crates/desktop-integration: generic Integration spec, register/unregister/is_registered, Linux .desktop + icon + cache refresh, injectable roots, unit tests; committed assets/icon.png; crate docs + techdebt/crates README note (~280 lines)"
+    },
+    {
+      "id": "15ad1609316f44119b7b65f894ea0f3b",
+      "number": 2,
+      "status": "planned",
+      "scope": "Windows backend",
+      "description": "HKCU folder/background verbs and Start Menu/Desktop .lnk via windows 0.61; pure value-generation tests cross-platform, write/remove tests cfg(windows) under a scratch key (~220 lines)"
+    },
+    {
+      "id": "6d146f90659e4ea5824e31619b444dfa",
+      "number": 3,
+      "status": "planned",
+      "scope": "host + wire",
+      "description": "updater register/unregister actions, install also registers, registered byte in install status; Rust + TS codec and fixtures (~180 lines)"
+    },
+    {
+      "id": "9aa5f982d9334b0ca95c24e9456bc4a1",
+      "number": 4,
+      "status": "planned",
+      "scope": "core + menu",
+      "description": "commits-core state and web menu: Install and register / Register with system / Unregister from system with feedback messages; vitest coverage (~200 lines)"
+    },
+    {
+      "id": "0ae3fbd7ff3d49debf5912722a682c7e",
+      "number": 5,
+      "status": "planned",
+      "scope": "install.ps1 + docs",
+      "description": "install.ps1 copies files only; docs/updating.md, new docs/desktop-integration.md, docs/index.md (~120 lines)"
+    }
+  ],
+  "requests": [
+    {
+      "id": "e33c875b02164bb890fadc80ed4347a4",
+      "number": 1,
+      "text": "Windows: add an Explorer context-menu entry on folders (and folder background) that opens the folder in Commits"
+    },
+    {
+      "id": "9eff62d787d6479e9dba41c54cb32528",
+      "number": 2,
+      "text": "Ubuntu / Pop!_OS: make Commits appear in \"Open With\" for folders (file manager integration)"
+    },
+    {
+      "id": "6e6f476932984d80bbbfabccf805f64a",
+      "number": 3,
+      "text": "UI buttons (not a setting) to Register / Unregister the app with the OS: register = shortcuts + launcher entry + folder integration; unregister removes all of it and leaves the executables where they are, so the app is effectively portable"
+    },
+    {
+      "id": "254d14a10c3a4bc5a0460a3663384a66",
+      "number": 4,
+      "text": "Linux: a launcher (app menu) entry, which is also the Open With target for folders"
+    },
+    {
+      "id": "ca672ff5c8af42a1a568d387d7d94d5d",
+      "number": 5,
+      "text": "System integration logic lives where it can be reused (candidate for bones upstream, per ADR-012)"
+    }
+  ],
+  "questions": [
+    {
+      "id": "17a5d58610ba4c95be52e30acb7170e9",
+      "number": 1,
+      "status": "answered",
+      "text": "Windows 11 context menu: classic HKCU registry verbs (no admin, simple) only show under \"Show more options\"; a top-level Win11 entry needs a signed sparse MSIX package + IExplorerCommand COM handler. Accept classic registry verbs?",
+      "answer": "Yes, classic HKCU registry verbs."
+    },
+    {
+      "id": "cda86797b1b44676b8421b7ac006f415",
+      "number": 2,
+      "status": "answered",
+      "text": "Windows targets: folder right-click only, or also folder background (right-click empty space inside a folder) and drives? Label text: \"Open in Commits\"?",
+      "answer": "Yes: folder and folder background, label \"Open in Commits\"; no drives."
+    },
+    {
+      "id": "9d70fd7af320434cb730455d9729d96e",
+      "number": 3,
+      "status": "answered",
+      "text": "Where does registration happen: only in scripts/install.ps1 (fresh install + re-run), or also by the app/launcher itself (e.g. a `commits --register` / `--unregister` flag, or on every start) so in-app Install and updates keep it correct?",
+      "answer": "Done from the UI (Register/Unregister buttons), not a script or startup side effect."
+    },
+    {
+      "id": "ac2c826752a948768f192c3a29dd2f08",
+      "number": 4,
+      "status": "answered",
+      "text": "Linux: a ~/.local/share/applications/commits.desktop with MimeType=inode/directory gives \"Open With\" in Nautilus (Ubuntu, Pop!_OS 22.04). Pop!_OS 24.04 COSMIC Files also reads .desktop MIME associations. Should the entry also appear in the app launcher menu (a normal app entry), or be Open-With only (NoDisplay)?",
+      "answer": "A normal launcher entry (visible in app menu) that also declares inode/directory."
+    },
+    {
+      "id": "7ac751b3ed2545939c97bea16d49ca4d",
+      "number": 5,
+      "status": "answered",
+      "text": "Linux: also add a direct right-click \"Open in Commits\" item (Nautilus script or nautilus-python extension), or is \"Open With\" enough?",
+      "answer": "Open With is enough; no Nautilus script/extension."
+    },
+    {
+      "id": "3e36a69a34cd45ea91ce62319a1801d6",
+      "number": 6,
+      "status": "answered",
+      "text": "Linux icon: generate a PNG from assets/icon.ico and commit it (e.g. assets/icon.png, 256px), OK?",
+      "answer": "Yes, commit a 256px PNG generated from icon.ico."
+    },
+    {
+      "id": "ab8e68b488fc44cb896a03913cdafcef",
+      "number": 7,
+      "status": "answered",
+      "text": "Include an uninstall/unregister path (removing registry keys / .desktop), which does not exist today?",
+      "answer": "From the UI; executables stay where they are installed."
+    },
+    {
+      "id": "1f6da59758bc40d8ae08554a8ae65ee7",
+      "number": 8,
+      "status": "answered",
+      "text": "Uninstall runs from which copy? (a) only from a portable build when an install exists (it deletes ~/.commits/app while running elsewhere, simple and safe); (b) also from the installed copy itself (must delete its own running files: needs a detached helper that waits for exit, then removes the folder). Recommend (a) plus (b) only if you need it.",
+      "answer": "Keep executables; only remove the app registration in the OS."
+    },
+    {
+      "id": "026e3a263a964be19fd859ff1cf31cf3",
+      "number": 9,
+      "status": "answered",
+      "text": "Does \"completely\" include user data: ~/.commits/settings.json, ~/.commits/app/state (saved state), ~/.commits/repo? The portable version shares settings.json, so recommend keeping settings.json and removing app/ (incl. state) + shortcuts + OS integration.",
+      "answer": "UI allows register/unregister; unregistered means effectively portable. Nothing is deleted from disk."
+    },
+    {
+      "id": "f90f59221ce544d7817d638b0d7be930",
+      "number": 10,
+      "status": "answered",
+      "text": "Setting shape: one key like app[\"os.integration\"] = true (means Windows context menu on Windows, Open With on Linux), or separate per-OS keys (app[\"os.windows.folderContextMenu\"], app[\"os.linux.openWith\"])? And should toggling it in Settings on an already-installed app apply/remove registration immediately, or only at the next Install?",
+      "answer": "No settings entry: Register/Unregister buttons; this is not an app setting."
+    },
+    {
+      "id": "9ae3386594514a7badf5ffa670aacbe9",
+      "number": 11,
+      "status": "answered",
+      "text": "Should the in-app Install also create the shortcuts (Start Menu/desktop on Windows, the .desktop launcher on Linux) that today only scripts/install.ps1 creates, so both install paths give the same result? And should install.ps1 delegate to the app for this rather than duplicating it?",
+      "answer": "The app knows how to integrate into the system itself; candidate for bones upstream."
+    },
+    {
+      "id": "bd627ca949ff40c2926d9b2521d087a8",
+      "number": 12,
+      "status": "answered",
+      "text": "Where do the Register/Unregister buttons live? Recommend the app menu next to Install/Update, showing \"Register with system\" or \"Unregister from system\" depending on the detected current state.",
+      "answer": "App menu next to Install/Update. Register/Unregister appear only in an installed run; a non-installed run offers install-and-register instead."
+    },
+    {
+      "id": "207fde56e0d24ea58712b2aa56d591eb",
+      "number": 13,
+      "status": "answered",
+      "text": "What does Register point at? Recommend: the running copys stable entry point, i.e. ~/.commits/app/commits(.exe) for an installed run, and the portable builds own launcher (or commits-app if no launcher sits beside it) for a portable run. Registering a portable copy is allowed.",
+      "answer": "Only the installed copy is registered: always ~/.commits/app/commits(.exe), never a portable copy."
+    },
+    {
+      "id": "25c5dc2e0e48437386aca7cd64e42141",
+      "number": 14,
+      "status": "answered",
+      "text": "Should Install also register automatically, or stay file-only with Register as a separate click? Recommend: file-only, then the menu offers Register.",
+      "answer": "Install also registers, and the menu label says so explicitly."
+    },
+    {
+      "id": "1826882834084aab8958f59790aabc04",
+      "number": 15,
+      "status": "answered",
+      "text": "scripts/install.ps1 creates Windows shortcuts today. With registration in the UI: drop that from the script (install = files only), or keep it? Recommend drop it, so there is one registration path.",
+      "answer": "install.ps1 only copies files; no OS interaction (shortcut creation removed)."
+    },
+    {
+      "id": "2e5c0b14e09d4c1086b753d5d98ce2f8",
+      "number": 16,
+      "status": "answered",
+      "text": "Bones upstream: under ADR-012 (capability that needs no repository goes to bones, contributed then pinned, never copied) this belongs in bones, e.g. bones-upgrader or a bones-module-os \"shell integration\" action. vendor/bones is not initialized in this checkout and there is no sibling bones clone. Options: (a) contribute to bones first (separate repo and flow), then pin bump here; (b) build it here now as a self-contained crate (crates/system-integration) and move it upstream later as a follow-up. (b) contradicts ADR-012 only temporarily. Which, and where is your bones clone?",
+      "answer": "(b): build it here as a self-contained crate now; move to bones upstream later as a follow-up."
+    },
+    {
+      "id": "61103687d8b143c9ad16ccd3c643d95d",
+      "number": 17,
+      "status": "answered",
+      "text": "In a non-installed run, the menu shows \"Install and register\" in place of todays \"Install\", or both \"Install\" (files only) and \"Install and register\"? Recommend replacing it with the single explicit \"Install and register\"; files-only install stays available via install.ps1.",
+      "answer": "Replace: a non-installed run shows the single \"Install and register\" entry; files-only install stays in install.ps1."
+    },
+    {
+      "id": "6abc0e53d466415ba38a7cdde6e0fa94",
+      "number": 18,
+      "status": "answered",
+      "text": "D1 crate: new workspace crate crates/desktop-integration (package commits-desktop-integration), with no repository and no commits-specific names in its API (app id, display name, verb label, entry exe, icon bytes are inputs), so it moves to bones unchanged. Recorded as a techdebt entry plus a note in crates/README.md as the known ADR-012 exception. OK?",
+      "answer": "Recommendation accepted (user: \"go ahead\")."
+    },
+    {
+      "id": "6a312e310cdd4edb9ac9f1e7c3cdc006",
+      "number": 19,
+      "status": "answered",
+      "text": "D2 Windows implementation: HKCU\\Software\\Classes\\Directory\\shell\\Commits and Directory\\Background\\shell\\Commits (label \"Open in Commits\", icon = launcher exe, command \"<launcher>\" \"%1\" / \"%V\"); Start Menu + Desktop \"Commits.lnk\" via IShellLinkW. Uses the `windows` 0.61 crate already in Cargo.lock (no new third-party crates). OK?",
+      "answer": "Recommendation accepted (user: \"go ahead\")."
+    },
+    {
+      "id": "736f7db4735e40089886740d87efe032",
+      "number": 20,
+      "status": "answered",
+      "text": "D3 Linux implementation: ~/.local/share/applications/commits.desktop (Exec=\"<launcher>\" %f, MimeType=inode/directory;, Categories=Development;RevisionControl;), icon written to ~/.local/share/icons/hicolor/256x256/apps/commits.png from PNG bytes embedded in the binary (include_bytes, so no dist/payload change), then best-effort update-desktop-database + gtk-update-icon-cache. No desktop-folder shortcut on Linux. OK?",
+      "answer": "Recommendation accepted (user: \"go ahead\")."
+    },
+    {
+      "id": "13ffd074d8c548c7bf9f92ed3c279919",
+      "number": 21,
+      "status": "answered",
+      "text": "D4 Wire protocol: extend the existing updater bus actions with register=3 and unregister=4 (Rust + TS codec + fixtures together), make install (2) also register after a successful install, and add a `registered` byte to the install-status response. Menu: not installed -> \"Install and register\"; installed + not fully registered -> \"Register with system\"; installed + registered -> \"Unregister from system\". A partial registration counts as unregistered, so Register repairs it. OK?",
+      "answer": "Recommendation accepted (user: \"go ahead\")."
+    }
+  ],
+  "approvals": [
+    {
+      "gate": "intake",
+      "phase": "INTAKE",
+      "incrementId": null,
+      "note": "User: \"next\" (after all questions answered and requirements presented)",
+      "approvedAt": "2026-09-28T16:22:46.5519252Z"
+    },
+    {
+      "gate": "implement",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User: \"go ahead, I pre-approve all increments\"",
+      "approvedAt": "2026-09-28T16:26:44.6870832Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "71f71b46fdfb47a08d7d06d49ed631b8",
+      "note": "User pre-approved all increments: \"go ahead, I pre-approve all increments\". Review findings IM.1, IM.2 fixed; clippy clean; 8/8 tests pass.",
+      "approvedAt": "2026-09-28T16:31:19.4477155Z"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-28T15:47:05.6520624Z",
+      "action": "start",
+      "detail": "Started Detailed workflow."
+    },
+    {
+      "at": "2026-09-28T15:47:06.3073398Z",
+      "action": "add-request",
+      "detail": "Recorded request 1: Windows: add an Explorer context-menu entry on folders (and folder background) that opens the folder in Commits"
+    },
+    {
+      "at": "2026-09-28T15:47:06.9287743Z",
+      "action": "add-request",
+      "detail": "Recorded request 2: Ubuntu / Pop!_OS: make Commits appear in \"Open With\" for folders (file manager integration)"
+    },
+    {
+      "at": "2026-09-28T15:47:37.7597124Z",
+      "action": "add-question",
+      "detail": "Recorded question 1: Windows 11 context menu: classic HKCU registry verbs (no admin, simple) only show under \"Show more options\"; a top-level Win11 entry needs a signed sparse MSIX package + IExplorerCommand COM handler. Accept classic registry verbs?"
+    },
+    {
+      "at": "2026-09-28T15:47:38.2449304Z",
+      "action": "add-question",
+      "detail": "Recorded question 2: Windows targets: folder right-click only, or also folder background (right-click empty space inside a folder) and drives? Label text: \"Open in Commits\"?"
+    },
+    {
+      "at": "2026-09-28T15:47:38.7278608Z",
+      "action": "add-question",
+      "detail": "Recorded question 3: Where does registration happen: only in scripts/install.ps1 (fresh install + re-run), or also by the app/launcher itself (e.g. a `commits --register` / `--unregister` flag, or on every start) so in-app Install and updates keep it correct?"
+    },
+    {
+      "at": "2026-09-28T15:47:39.2034677Z",
+      "action": "add-question",
+      "detail": "Recorded question 4: Linux: a ~/.local/share/applications/commits.desktop with MimeType=inode/directory gives \"Open With\" in Nautilus (Ubuntu, Pop!_OS 22.04). Pop!_OS 24.04 COSMIC Files also reads .desktop MIME associations. Should the entry also appear in the app launcher menu (a normal app entry), or be Open-With only (NoDisplay)?"
+    },
+    {
+      "at": "2026-09-28T15:47:39.6739254Z",
+      "action": "add-question",
+      "detail": "Recorded question 5: Linux: also add a direct right-click \"Open in Commits\" item (Nautilus script or nautilus-python extension), or is \"Open With\" enough?"
+    },
+    {
+      "at": "2026-09-28T15:47:40.1566405Z",
+      "action": "add-question",
+      "detail": "Recorded question 6: Linux icon: generate a PNG from assets/icon.ico and commit it (e.g. assets/icon.png, 256px), OK?"
+    },
+    {
+      "at": "2026-09-28T15:47:40.6329951Z",
+      "action": "add-question",
+      "detail": "Recorded question 7: Include an uninstall/unregister path (removing registry keys / .desktop), which does not exist today?"
+    },
+    {
+      "at": "2026-09-28T15:51:01.5657983Z",
+      "action": "add-request",
+      "detail": "Recorded request 3: Make the OS integration (Windows folder context menu / Linux Open With) an OS-dependent setting, applied by the Install command"
+    },
+    {
+      "at": "2026-09-28T15:51:02.0443539Z",
+      "action": "add-request",
+      "detail": "Recorded request 4: When the app is installed, offer an Uninstall command that removes the app presence from the system completely (install dir, shortcuts, OS integration), keeping only the portable version"
+    },
+    {
+      "at": "2026-09-28T15:51:02.5405366Z",
+      "action": "answer-question",
+      "detail": "Answered question 3."
+    },
+    {
+      "at": "2026-09-28T15:51:03.0194054Z",
+      "action": "answer-question",
+      "detail": "Answered question 7."
+    },
+    {
+      "at": "2026-09-28T15:51:03.4918299Z",
+      "action": "add-question",
+      "detail": "Recorded question 8: Uninstall runs from which copy? (a) only from a portable build when an install exists (it deletes ~/.commits/app while running elsewhere, simple and safe); (b) also from the installed copy itself (must delete its own running files: needs a detached helper that waits for exit, then removes the folder). Recommend (a) plus (b) only if you need it."
+    },
+    {
+      "at": "2026-09-28T15:51:03.9689778Z",
+      "action": "add-question",
+      "detail": "Recorded question 9: Does \"completely\" include user data: ~/.commits/settings.json, ~/.commits/app/state (saved state), ~/.commits/repo? The portable version shares settings.json, so recommend keeping settings.json and removing app/ (incl. state) + shortcuts + OS integration."
+    },
+    {
+      "at": "2026-09-28T15:51:04.4607155Z",
+      "action": "add-question",
+      "detail": "Recorded question 10: Setting shape: one key like app[\"os.integration\"] = true (means Windows context menu on Windows, Open With on Linux), or separate per-OS keys (app[\"os.windows.folderContextMenu\"], app[\"os.linux.openWith\"])? And should toggling it in Settings on an already-installed app apply/remove registration immediately, or only at the next Install?"
+    },
+    {
+      "at": "2026-09-28T15:51:04.9420368Z",
+      "action": "add-question",
+      "detail": "Recorded question 11: Should the in-app Install also create the shortcuts (Start Menu/desktop on Windows, the .desktop launcher on Linux) that today only scripts/install.ps1 creates, so both install paths give the same result? And should install.ps1 delegate to the app for this rather than duplicating it?"
+    },
+    {
+      "at": "2026-09-28T15:58:01.5725767Z",
+      "action": "remove-request",
+      "detail": "Removed request 4: When the app is installed, offer an Uninstall command that removes the app presence from the system completely (install dir, shortcuts, OS integration), keeping only the portable version"
+    },
+    {
+      "at": "2026-09-28T15:58:02.0762977Z",
+      "action": "remove-request",
+      "detail": "Removed request 3: Make the OS integration (Windows folder context menu / Linux Open With) an OS-dependent setting, applied by the Install command"
+    },
+    {
+      "at": "2026-09-28T15:58:02.5947033Z",
+      "action": "add-request",
+      "detail": "Recorded request 3: UI buttons (not a setting) to Register / Unregister the app with the OS: register = shortcuts + launcher entry + folder integration; unregister removes all of it and leaves the executables where they are, so the app is effectively portable"
+    },
+    {
+      "at": "2026-09-28T15:58:03.1189509Z",
+      "action": "add-request",
+      "detail": "Recorded request 4: Linux: a launcher (app menu) entry, which is also the Open With target for folders"
+    },
+    {
+      "at": "2026-09-28T15:58:03.6473387Z",
+      "action": "add-request",
+      "detail": "Recorded request 5: System integration logic lives where it can be reused (candidate for bones upstream, per ADR-012)"
+    },
+    {
+      "at": "2026-09-28T15:58:04.1633461Z",
+      "action": "answer-question",
+      "detail": "Answered question 1."
+    },
+    {
+      "at": "2026-09-28T15:58:04.6539303Z",
+      "action": "answer-question",
+      "detail": "Answered question 2."
+    },
+    {
+      "at": "2026-09-28T15:58:05.1675647Z",
+      "action": "answer-question",
+      "detail": "Answered question 3."
+    },
+    {
+      "at": "2026-09-28T15:58:05.682776Z",
+      "action": "answer-question",
+      "detail": "Answered question 4."
+    },
+    {
+      "at": "2026-09-28T15:58:06.3413799Z",
+      "action": "answer-question",
+      "detail": "Answered question 5."
+    },
+    {
+      "at": "2026-09-28T15:58:06.9646307Z",
+      "action": "answer-question",
+      "detail": "Answered question 6."
+    },
+    {
+      "at": "2026-09-28T15:58:07.5579732Z",
+      "action": "answer-question",
+      "detail": "Answered question 7."
+    },
+    {
+      "at": "2026-09-28T15:58:08.1666649Z",
+      "action": "answer-question",
+      "detail": "Answered question 8."
+    },
+    {
+      "at": "2026-09-28T15:58:08.7998091Z",
+      "action": "answer-question",
+      "detail": "Answered question 9."
+    },
+    {
+      "at": "2026-09-28T15:58:09.4396453Z",
+      "action": "answer-question",
+      "detail": "Answered question 10."
+    },
+    {
+      "at": "2026-09-28T15:58:10.0562535Z",
+      "action": "answer-question",
+      "detail": "Answered question 11."
+    },
+    {
+      "at": "2026-09-28T15:58:10.6874339Z",
+      "action": "add-question",
+      "detail": "Recorded question 12: Where do the Register/Unregister buttons live? Recommend the app menu next to Install/Update, showing \"Register with system\" or \"Unregister from system\" depending on the detected current state."
+    },
+    {
+      "at": "2026-09-28T15:58:11.3001757Z",
+      "action": "add-question",
+      "detail": "Recorded question 13: What does Register point at? Recommend: the running copys stable entry point, i.e. ~/.commits/app/commits(.exe) for an installed run, and the portable builds own launcher (or commits-app if no launcher sits beside it) for a portable run. Registering a portable copy is allowed."
+    },
+    {
+      "at": "2026-09-28T15:58:11.9041592Z",
+      "action": "add-question",
+      "detail": "Recorded question 14: Should Install also register automatically, or stay file-only with Register as a separate click? Recommend: file-only, then the menu offers Register."
+    },
+    {
+      "at": "2026-09-28T15:58:12.4992623Z",
+      "action": "add-question",
+      "detail": "Recorded question 15: scripts/install.ps1 creates Windows shortcuts today. With registration in the UI: drop that from the script (install = files only), or keep it? Recommend drop it, so there is one registration path."
+    },
+    {
+      "at": "2026-09-28T15:58:13.0416038Z",
+      "action": "add-question",
+      "detail": "Recorded question 16: Bones upstream: under ADR-012 (capability that needs no repository goes to bones, contributed then pinned, never copied) this belongs in bones, e.g. bones-upgrader or a bones-module-os \"shell integration\" action. vendor/bones is not initialized in this checkout and there is no sibling bones clone. Options: (a) contribute to bones first (separate repo and flow), then pin bump here; (b) build it here now as a self-contained crate (crates/system-integration) and move it upstream later as a follow-up. (b) contradicts ADR-012 only temporarily. Which, and where is your bones clone?"
+    },
+    {
+      "at": "2026-09-28T16:17:44.0480252Z",
+      "action": "answer-question",
+      "detail": "Answered question 12."
+    },
+    {
+      "at": "2026-09-28T16:17:44.5368584Z",
+      "action": "answer-question",
+      "detail": "Answered question 13."
+    },
+    {
+      "at": "2026-09-28T16:17:45.0136728Z",
+      "action": "answer-question",
+      "detail": "Answered question 14."
+    },
+    {
+      "at": "2026-09-28T16:17:45.4932865Z",
+      "action": "answer-question",
+      "detail": "Answered question 15."
+    },
+    {
+      "at": "2026-09-28T16:17:45.9835855Z",
+      "action": "answer-question",
+      "detail": "Answered question 16."
+    },
+    {
+      "at": "2026-09-28T16:17:46.4673391Z",
+      "action": "add-question",
+      "detail": "Recorded question 17: In a non-installed run, the menu shows \"Install and register\" in place of todays \"Install\", or both \"Install\" (files only) and \"Install and register\"? Recommend replacing it with the single explicit \"Install and register\"; files-only install stays available via install.ps1."
+    },
+    {
+      "at": "2026-09-28T16:17:46.9463101Z",
+      "action": "set-requirement",
+      "detail": "Set goal."
+    },
+    {
+      "at": "2026-09-28T16:17:47.4268074Z",
+      "action": "set-requirement",
+      "detail": "Set constraints."
+    },
+    {
+      "at": "2026-09-28T16:17:47.9264664Z",
+      "action": "set-requirement",
+      "detail": "Set done."
+    },
+    {
+      "at": "2026-09-28T16:17:48.427665Z",
+      "action": "set-requirement",
+      "detail": "Set outOfScope."
+    },
+    {
+      "at": "2026-09-28T16:20:22.1445289Z",
+      "action": "answer-question",
+      "detail": "Answered question 17."
+    },
+    {
+      "at": "2026-09-28T16:22:46.5561861Z",
+      "action": "approve",
+      "detail": "Approved intake during INTAKE."
+    },
+    {
+      "at": "2026-09-28T16:22:47.0418523Z",
+      "action": "advance",
+      "detail": "Advanced from INTAKE to DESIGN."
+    },
+    {
+      "at": "2026-09-28T16:23:43.0234344Z",
+      "action": "add-question",
+      "detail": "Recorded question 18: D1 crate: new workspace crate crates/desktop-integration (package commits-desktop-integration), with no repository and no commits-specific names in its API (app id, display name, verb label, entry exe, icon bytes are inputs), so it moves to bones unchanged. Recorded as a techdebt entry plus a note in crates/README.md as the known ADR-012 exception. OK?"
+    },
+    {
+      "at": "2026-09-28T16:23:43.5274994Z",
+      "action": "add-question",
+      "detail": "Recorded question 19: D2 Windows implementation: HKCU\\Software\\Classes\\Directory\\shell\\Commits and Directory\\Background\\shell\\Commits (label \"Open in Commits\", icon = launcher exe, command \"<launcher>\" \"%1\" / \"%V\"); Start Menu + Desktop \"Commits.lnk\" via IShellLinkW. Uses the `windows` 0.61 crate already in Cargo.lock (no new third-party crates). OK?"
+    },
+    {
+      "at": "2026-09-28T16:23:44.0404102Z",
+      "action": "add-question",
+      "detail": "Recorded question 20: D3 Linux implementation: ~/.local/share/applications/commits.desktop (Exec=\"<launcher>\" %f, MimeType=inode/directory;, Categories=Development;RevisionControl;), icon written to ~/.local/share/icons/hicolor/256x256/apps/commits.png from PNG bytes embedded in the binary (include_bytes, so no dist/payload change), then best-effort update-desktop-database + gtk-update-icon-cache. No desktop-folder shortcut on Linux. OK?"
+    },
+    {
+      "at": "2026-09-28T16:23:44.5581784Z",
+      "action": "add-question",
+      "detail": "Recorded question 21: D4 Wire protocol: extend the existing updater bus actions with register=3 and unregister=4 (Rust + TS codec + fixtures together), make install (2) also register after a successful install, and add a `registered` byte to the install-status response. Menu: not installed -> \"Install and register\"; installed + not fully registered -> \"Register with system\"; installed + registered -> \"Unregister from system\". A partial registration counts as unregistered, so Register repairs it. OK?"
+    },
+    {
+      "at": "2026-09-28T16:23:45.0468694Z",
+      "action": "advance",
+      "detail": "Advanced from DESIGN to SPLIT."
+    },
+    {
+      "at": "2026-09-28T16:23:52.1247848Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 1: crate core + Linux"
+    },
+    {
+      "at": "2026-09-28T16:23:52.6510432Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 2: Windows backend"
+    },
+    {
+      "at": "2026-09-28T16:23:53.1615453Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 3: host + wire"
+    },
+    {
+      "at": "2026-09-28T16:23:53.6773377Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 4: core + menu"
+    },
+    {
+      "at": "2026-09-28T16:23:54.1998267Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 5: install.ps1 + docs"
+    },
+    {
+      "at": "2026-09-28T16:26:42.5792625Z",
+      "action": "answer-question",
+      "detail": "Answered question 18."
+    },
+    {
+      "at": "2026-09-28T16:26:43.0850725Z",
+      "action": "answer-question",
+      "detail": "Answered question 19."
+    },
+    {
+      "at": "2026-09-28T16:26:43.6428532Z",
+      "action": "answer-question",
+      "detail": "Answered question 20."
+    },
+    {
+      "at": "2026-09-28T16:26:44.1651229Z",
+      "action": "answer-question",
+      "detail": "Answered question 21."
+    },
+    {
+      "at": "2026-09-28T16:26:44.6911677Z",
+      "action": "approve",
+      "detail": "Approved implement during SPLIT."
+    },
+    {
+      "at": "2026-09-28T16:26:45.2045145Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-09-28T16:26:47.8831861Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to DOCS."
+    },
+    {
+      "at": "2026-09-28T16:27:16.9016063Z",
+      "action": "advance",
+      "detail": "Advanced from DOCS to BUILD."
+    },
+    {
+      "at": "2026-09-28T16:30:45.4923996Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:31:12.5325208Z",
+      "action": "return-to-build",
+      "detail": "Returned from VERIFY to BUILD."
+    },
+    {
+      "at": "2026-09-28T16:31:18.9202539Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:31:19.4517323Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:31:19.9850179Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    }
+  ],
+  "createdAt": "2026-09-28T15:47:05.6389241Z",
+  "updatedAt": "2026-09-28T16:31:20.0002737Z"
+}
