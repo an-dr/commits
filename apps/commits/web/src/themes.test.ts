@@ -21,4 +21,26 @@ describe("standalone appearance", () => {
     expect(resolveAppearance({ ...DEFAULT_SETTINGS, app: { ...DEFAULT_SETTINGS.app, mode: "dark", darkTheme: "future" } }, false).id)
       .toBe("graphite");
   });
+
+  it("gives every preset a full syntax palette readable against its canvas", () => {
+    for (const theme of [...LIGHT_THEMES, ...DARK_THEMES]) {
+      expect(Object.keys(theme.syntax)).toHaveLength(10);
+      for (const [token, colour] of Object.entries(theme.syntax)) {
+        expect(contrast(colour, theme.colours.canvas), `${theme.id} ${token}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
 });
+
+/** WCAG contrast ratio between two #rrggbb colours. */
+function contrast(a: string, b: string): number {
+  const luminance = (hex: string): number => {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}

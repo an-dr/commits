@@ -44,6 +44,7 @@ export class FullDiffPanel {
   private compact: boolean;
   private hidden = true;
   private data: FullDiffData | null = null;
+  private path = "";
   private changes: HTMLElement[] = [];
   private changeIndex = 0;
   private scrollListenerElem: HTMLElement | null = null;
@@ -97,6 +98,7 @@ export class FullDiffPanel {
   public open(filePath: string) {
     this.hidden = false;
     this.data = null;
+    this.path = filePath;
     this.filenameElem.textContent = filePath;
     this.contentElem.innerHTML = `<div class="fullDiffMessage">${escapeHtml(l10n.loading)}</div>`;
     this.collectChanges();
@@ -122,7 +124,11 @@ export class FullDiffPanel {
       return;
     }
     this.data = data;
-    this.contentElem.innerHTML = renderFullDiff(data, { mode: this.mode, compact: this.compact });
+    this.contentElem.innerHTML = renderFullDiff(data, {
+      mode: this.mode,
+      compact: this.compact,
+      path: this.path
+    });
     this.contentElem.scrollTop = 0;
     this.syncSideBySideScrolling();
     this.collectChanges();

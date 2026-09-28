@@ -580,6 +580,107 @@ body.fullDiffPanelHidden #fullDiffPanel {
   content: " ";
 }
 
+/* Syntax colours. A host sets --syntax-*; these fallbacks live on body under
+   other names, because a --syntax-* defined here would shadow the host's
+   values set on the document root. */
+body {
+  --syntax-fallback-keyword: #0000ff;
+  --syntax-fallback-string: #a31515;
+  --syntax-fallback-comment: #008000;
+  --syntax-fallback-number: #098658;
+  --syntax-fallback-function: #795e26;
+  --syntax-fallback-type: #267f99;
+  --syntax-fallback-variable: #001080;
+  --syntax-fallback-constant: #0070c1;
+  --syntax-fallback-meta: #af00db;
+  --syntax-fallback-tag: #800000;
+}
+body.vscode-dark,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  --syntax-fallback-keyword: #569cd6;
+  --syntax-fallback-string: #ce9178;
+  --syntax-fallback-comment: #6a9955;
+  --syntax-fallback-number: #b5cea8;
+  --syntax-fallback-function: #dcdcaa;
+  --syntax-fallback-type: #4ec9b0;
+  --syntax-fallback-variable: #9cdcfe;
+  --syntax-fallback-constant: #4fc1ff;
+  --syntax-fallback-meta: #c586c0;
+  --syntax-fallback-tag: #569cd6;
+}
+.hljs-keyword,
+.hljs-doctag {
+  color: var(--syntax-keyword, var(--syntax-fallback-keyword));
+}
+.hljs-string,
+.hljs-char,
+.hljs-template-tag {
+  color: var(--syntax-string, var(--syntax-fallback-string));
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--syntax-comment, var(--syntax-fallback-comment));
+  font-style: italic;
+}
+.hljs-number {
+  color: var(--syntax-number, var(--syntax-fallback-number));
+}
+.hljs-title {
+  color: var(--syntax-function, var(--syntax-fallback-function));
+}
+.hljs-type,
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-title.class_.inherited__ {
+  color: var(--syntax-type, var(--syntax-fallback-type));
+}
+.hljs-variable,
+.hljs-params,
+.hljs-property,
+.hljs-attr,
+.hljs-attribute,
+.hljs-template-variable,
+.hljs-selector-attr {
+  color: var(--syntax-variable, var(--syntax-fallback-variable));
+}
+.hljs-literal,
+.hljs-symbol,
+.hljs-regexp,
+.hljs-link,
+.hljs-bullet,
+.hljs-variable.language_ {
+  color: var(--syntax-constant, var(--syntax-fallback-constant));
+}
+.hljs-meta,
+.hljs-meta .hljs-keyword {
+  color: var(--syntax-meta, var(--syntax-fallback-meta));
+}
+.hljs-meta .hljs-string {
+  color: var(--syntax-string, var(--syntax-fallback-string));
+}
+.hljs-tag,
+.hljs-name,
+.hljs-section,
+.hljs-selector-tag,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-selector-pseudo {
+  color: var(--syntax-tag, var(--syntax-fallback-tag));
+}
+.hljs-addition {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+.hljs-deletion {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+.hljs-section,
+.hljs-strong {
+  font-weight: bold;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+
 /* Changed-files panel: begins below the toolbar, like the branch sidebar,
    rather than reaching up alongside it. It has no header bar of its own --
    content starts flush with the panel's top edge. */

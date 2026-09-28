@@ -1,3 +1,9 @@
+import {
+  highlightLine,
+  highlightLines,
+  languageForPath,
+  type SyntaxLanguage
+} from "./syntaxHighlight";
 import { escapeHtml } from "./utils/html";
 
 export interface FullDiffData {
@@ -229,6 +235,35 @@ export function pairSideBySideRows(rows: readonly DiffRow[]): SideBySideRow[] {
   return paired;
 }
 
+/**
+ * Highlighted markup for each whole side of the file, indexed by line number
+ * minus one, or null for a side shown as plain text.
+ */
+export interface HighlightedSides {
+  old: readonly string[] | null;
+  new: readonly string[] | null;
+}
+
+const PLAIN: HighlightedSides = { old: null, new: null };
+
+/**
+ * The markup for one numbered line of a side, falling back to the escaped text
+ * where the side is plain or the row's text came from the diff rather than the
+ * file, so has no highlighted counterpart.
+ */
+function lineHtml(side: readonly string[] | null, num: string, content: string): string {
+  return (num === "" ? undefined : side?.[parseInt(num) - 1]) ?? escapeHtml(content);
+}
+
+/** Removed rows read the old side; added and context rows prefer the new one. */
+function unifiedRowHtml(row: DiffRow, sides: HighlightedSides): string {
+  if (row.kind === "removed") {
+    return lineHtml(sides.old, row.oldNum, row.content);
+  }
+  const fromNew = row.newNum === "" ? undefined : sides.new?.[parseInt(row.newNum) - 1];
+  return fromNew ?? lineHtml(sides.old, row.oldNum, row.content);
+}
+
 /** Marks the first row of each changed run so navigation steps by block. */
 function navClass(rows: readonly unknown[], index: number, changed: boolean): string {
   const previous = rows[index - 1] as { changed?: boolean } | undefined;
@@ -245,7 +280,10 @@ function spacerHtml(count: number, columns: number): string {
 }
 
 /** Renders the unified rows as the panel's line grid. */
-export function renderUnifiedView(rows: readonly (DiffRow | SpacerRow)[]): string {
+export function renderUnifiedView(
+  rows: readonly (DiffRow | SpacerRow)[],
+  sides: HighlightedSides = PLAIN
+): string {
   let html = '<div class="diffFullView">';
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -259,7 +297,7 @@ export function renderUnifiedView(rows: readonly (DiffRow | SpacerRow)[]): strin
     html +=
       `<div class="${classes}"><span class="diffLnOld">${row.oldNum}</span>` +
       `<span class="diffLnNew">${row.newNum}</span><span class="diffLnSep">│</span>` +
-      `<span class="diffRowContent">${escapeHtml(row.content)}</span></div>`;
+      `<span class="diffRowContent">${unifiedRowHtml(row, sides)}</span></div>`;
   }
   return html + "</div>";
 }
@@ -267,6 +305,7 @@ export function renderUnifiedView(rows: readonly (DiffRow | SpacerRow)[]): strin
 /** One cell of a side-by-side row, or a placeholder where the side is empty. */
 function sideHtml(
   cell: SideBySideCell | null,
+  side: readonly string[] | null,
   changed: boolean,
   changedClass: string,
   nav: string
@@ -277,12 +316,15 @@ function sideHtml(
   const classes = changed ? `diffChanged ${changedClass}${nav}` : "diffContext";
   return (
     `<div class="diffSbsRow ${classes}"><span class="diffLnOld">${cell.num}</span>` +
-    `<span class="diffRowContent">${escapeHtml(cell.content)}</span></div>`
+    `<span class="diffRowContent">${lineHtml(side, cell.num, cell.content)}</span></div>`
   );
 }
 
 /** Renders the paired rows as two columns that scroll together. */
-export function renderSideBySideView(rows: readonly (SideBySideRow | SpacerRow)[]): string {
+export function renderSideBySideView(
+  rows: readonly (SideBySideRow | SpacerRow)[],
+  sides: HighlightedSides = PLAIN
+): string {
   let left = "";
   let right = "";
   for (let i = 0; i < rows.length; i++) {
@@ -294,8 +336,8 @@ export function renderSideBySideView(rows: readonly (SideBySideRow | SpacerRow)[
       continue;
     }
     const nav = navClass(rows, i, row.changed);
-    left += sideHtml(row.left, row.changed, "diffRemoved", nav);
-    right += sideHtml(row.right, row.changed, "diffAdded", "");
+    left += sideHtml(row.left, sides.old, row.changed, "diffRemoved", nav);
+    right += sideHtml(row.right, sides.new, row.changed, "diffAdded", "");
   }
   return (
     `<div class="diffSbsContainer"><div class="diffSbsPane diffSbsPaneOld">${left}</div>` +
@@ -303,22 +345,29 @@ export function renderSideBySideView(rows: readonly (SideBySideRow | SpacerRow)[
   );
 }
 
-/** Renders Git's own diff output, classified line by line. */
-export function renderRawView(diff: string): string {
+/**
+ * Renders Git's own diff output, classified line by line. It holds only
+ * fragments of the file, so each code line is highlighted on its own, after
+ * the marker that says which side it belongs to.
+ */
+export function renderRawView(diff: string, language: SyntaxLanguage | null = null): string {
   const lines = toDisplayLines(diff);
   let html = '<div class="diffRawView">';
   for (const line of lines) {
     const classes = ["diffRow", "diffRawLine"];
+    let content: string | null = null;
     if (line.startsWith("@@")) {
       classes.push("diffHunkHeader", "diffChangedBlock");
     } else if (RAW_FILE_HEADER.some((prefix) => line.startsWith(prefix))) {
       classes.push("diffFileHeader");
-    } else if (line.startsWith("+")) {
-      classes.push("diffAdded");
-    } else if (line.startsWith("-")) {
-      classes.push("diffRemoved");
+    } else if (line.startsWith("+") || line.startsWith("-") || line.startsWith(" ")) {
+      if (line[0] !== " ") {
+        classes.push(line[0] === "+" ? "diffAdded" : "diffRemoved");
+      }
+      const code = highlightLine(line.slice(1), language);
+      content = code === null ? null : escapeHtml(line[0]) + code;
     }
-    html += `<div class="${classes.join(" ")}"><span class="diffRowContent">${escapeHtml(line)}</span></div>`;
+    html += `<div class="${classes.join(" ")}"><span class="diffRowContent">${content ?? escapeHtml(line)}</span></div>`;
   }
   return html + "</div>";
 }
@@ -340,6 +389,8 @@ export type FullDiffViewMode = "unified" | "sideBySide" | "raw";
 export interface FullDiffRenderOptions {
   mode: FullDiffViewMode;
   compact: boolean;
+  /** The file's path, which alone decides the language it is highlighted as. */
+  path: string;
 }
 
 /** Builds the panel body for one file, or a message when there is nothing to show. */
@@ -347,20 +398,23 @@ export function renderFullDiff(data: FullDiffData | null, options: FullDiffRende
   if (data === null || data.diff === null) {
     return `<div class="fullDiffMessage">${escapeHtml(l10n.fullDiffUnableToLoad)}</div>`;
   }
+  const language = languageForPath(options.path);
   if (options.mode === "raw") {
     return data.diff === ""
       ? `<div class="fullDiffMessage">${escapeHtml(l10n.fullDiffNoChanges)}</div>`
-      : renderRawView(data.diff);
+      : renderRawView(data.diff, language);
   }
-  const rows = buildUnifiedRows(
-    toDisplayLines(data.oldExists ? data.oldContent : null),
-    toDisplayLines(data.newExists ? data.newContent : null),
-    parseUnifiedDiffHunks(data.diff)
-  );
+  const oldLines = toDisplayLines(data.oldExists ? data.oldContent : null);
+  const newLines = toDisplayLines(data.newExists ? data.newContent : null);
+  const rows = buildUnifiedRows(oldLines, newLines, parseUnifiedDiffHunks(data.diff));
   if (rows.length === 0) {
     return `<div class="fullDiffMessage">${escapeHtml(l10n.fullDiffNoChanges)}</div>`;
   }
+  const sides: HighlightedSides = {
+    old: highlightLines(oldLines, language),
+    new: highlightLines(newLines, language)
+  };
   return options.mode === "sideBySide"
-    ? renderSideBySideView(compactRows(pairSideBySideRows(rows), options.compact))
-    : renderUnifiedView(compactRows(rows, options.compact));
+    ? renderSideBySideView(compactRows(pairSideBySideRows(rows), options.compact), sides)
+    : renderUnifiedView(compactRows(rows, options.compact), sides);
 }

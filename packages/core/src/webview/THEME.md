@@ -52,3 +52,30 @@ palette, and is not a host responsibility.
 | `--vscode-toolbar-hoverBackground`                  |
 | `--vscode-widget-border`                            |
 | `--vscode-widget-shadow`                            |
+
+## Syntax colours
+
+The full-diff panel colours code with highlight.js classes (`hljs-*`), which
+the stylesheet maps to these properties. A host may define any of them; each
+one it leaves out falls back to a built-in light palette, or a dark one when
+`body` carries `vscode-dark` or a dark `vscode-high-contrast`. VS Code does not expose its token colours to a
+webview, so a VS Code host relies on the fallbacks.
+[`docs/syntax-highlighting.md`](../../../../docs/syntax-highlighting.md)
+describes the rest of the feature.
+
+| Property | Covers |
+| --- | --- |
+| `--syntax-keyword` | keywords |
+| `--syntax-string` | strings |
+| `--syntax-comment` | comments and doc comments |
+| `--syntax-number` | numbers |
+| `--syntax-function` | function names at their definitions |
+| `--syntax-type` | types, class names and built-ins |
+| `--syntax-variable` | variables, parameters, properties and attributes |
+| `--syntax-constant` | literals, symbols, regular expressions and links |
+| `--syntax-meta` | preprocessor directives, annotations and decorators |
+| `--syntax-tag` | markup tags, CSS selectors and Markdown headings |
+
+Diff and Markdown additions and deletions reuse
+`--vscode-gitDecoration-addedResourceForeground` and
+`--vscode-gitDecoration-deletedResourceForeground`.

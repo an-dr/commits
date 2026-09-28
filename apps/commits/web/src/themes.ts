@@ -19,23 +19,44 @@ interface ThemeColours {
   readonly shadow: string;
 }
 
+/** Code colours for the full-diff panel, one per `--syntax-*` property in THEME.md. */
+interface SyntaxColours {
+  readonly keyword: string;
+  readonly string: string;
+  readonly comment: string;
+  readonly number: string;
+  readonly function: string;
+  readonly type: string;
+  readonly variable: string;
+  readonly constant: string;
+  readonly meta: string;
+  readonly tag: string;
+}
+
 export interface ThemePreset {
   readonly id: string;
   readonly name: string;
   readonly mode: ThemeMode;
   readonly colours: ThemeColours;
+  readonly syntax: SyntaxColours;
 }
 
 export const LIGHT_THEMES: readonly ThemePreset[] = [
-  preset("paper", "Paper", "light", ["#f3f3f3", "#eeeeee", "#ffffff", "#24292f", "#c8c8c8", "#ffffff", "#e8e8e8", "#d7e7ff", "#111111", "#007fd4", "#1a7f37", "#cf222e", "#9a6700", "rgba(0,0,0,.25)"]),
-  preset("solarized-light", "Solarized Light", "light", ["#fdf6e3", "#eee8d5", "#fffaf0", "#586e75", "#d4cbb7", "#fffaf0", "#e8dfca", "#d5e5e8", "#073642", "#268bd2", "#859900", "#dc322f", "#b58900", "rgba(7,54,66,.22)"]),
-  preset("high-contrast-light", "High Contrast Light", "light", ["#ffffff", "#ffffff", "#ffffff", "#000000", "#000000", "#ffffff", "#e5e5e5", "#000000", "#ffffff", "#005fb8", "#006b1b", "#b00020", "#725c00", "rgba(0,0,0,.35)"]),
+  preset("paper", "Paper", "light", ["#f3f3f3", "#eeeeee", "#ffffff", "#24292f", "#c8c8c8", "#ffffff", "#e8e8e8", "#d7e7ff", "#111111", "#007fd4", "#1a7f37", "#cf222e", "#9a6700", "rgba(0,0,0,.25)"],
+    ["#0000ff", "#a31515", "#008000", "#098658", "#795e26", "#267f99", "#001080", "#0070c1", "#af00db", "#800000"]),
+  preset("solarized-light", "Solarized Light", "light", ["#fdf6e3", "#eee8d5", "#fffaf0", "#586e75", "#d4cbb7", "#fffaf0", "#e8dfca", "#d5e5e8", "#073642", "#268bd2", "#859900", "#dc322f", "#b58900", "rgba(7,54,66,.22)"],
+    ["#738a00", "#1f8a82", "#7c8b8b", "#d33682", "#268bd2", "#9c7600", "#6c71c4", "#cb4b16", "#dc322f", "#268bd2"]),
+  preset("high-contrast-light", "High Contrast Light", "light", ["#ffffff", "#ffffff", "#ffffff", "#000000", "#000000", "#ffffff", "#e5e5e5", "#000000", "#ffffff", "#005fb8", "#006b1b", "#b00020", "#725c00", "rgba(0,0,0,.35)"],
+    ["#0000c0", "#a31515", "#515151", "#096d48", "#5e2cbc", "#185e73", "#001080", "#7a3e00", "#9a0070", "#800000"]),
 ];
 
 export const DARK_THEMES: readonly ThemePreset[] = [
-  preset("graphite", "Graphite", "dark", ["#1e1e1e", "#181818", "#252526", "#d4d4d4", "#454545", "#313131", "#2a2d2e", "#04395e", "#ffffff", "#007fd4", "#89d185", "#f14c4c", "#cca700", "rgba(0,0,0,.55)"]),
-  preset("midnight", "Midnight", "dark", ["#0d1117", "#010409", "#161b22", "#c9d1d9", "#30363d", "#0d1117", "#21262d", "#1f6feb", "#ffffff", "#58a6ff", "#3fb950", "#f85149", "#d29922", "rgba(0,0,0,.7)"]),
-  preset("high-contrast-dark", "High Contrast Dark", "dark", ["#000000", "#000000", "#000000", "#ffffff", "#ffffff", "#000000", "#333333", "#ffffff", "#000000", "#00aaff", "#7fff7f", "#ff6b6b", "#ffff00", "rgba(255,255,255,.28)"]),
+  preset("graphite", "Graphite", "dark", ["#1e1e1e", "#181818", "#252526", "#d4d4d4", "#454545", "#313131", "#2a2d2e", "#04395e", "#ffffff", "#007fd4", "#89d185", "#f14c4c", "#cca700", "rgba(0,0,0,.55)"],
+    ["#569cd6", "#ce9178", "#6a9955", "#b5cea8", "#dcdcaa", "#4ec9b0", "#9cdcfe", "#4fc1ff", "#c586c0", "#569cd6"]),
+  preset("midnight", "Midnight", "dark", ["#0d1117", "#010409", "#161b22", "#c9d1d9", "#30363d", "#0d1117", "#21262d", "#1f6feb", "#ffffff", "#58a6ff", "#3fb950", "#f85149", "#d29922", "rgba(0,0,0,.7)"],
+    ["#ff7b72", "#a5d6ff", "#8b949e", "#79c0ff", "#d2a8ff", "#ffa657", "#e3b341", "#79c0ff", "#ff7b72", "#7ee787"]),
+  preset("high-contrast-dark", "High Contrast Dark", "dark", ["#000000", "#000000", "#000000", "#ffffff", "#ffffff", "#000000", "#333333", "#ffffff", "#000000", "#00aaff", "#7fff7f", "#ff6b6b", "#ffff00", "rgba(255,255,255,.28)"],
+    ["#6fc3ff", "#ffa07a", "#8fd18f", "#d7f5b0", "#ffff9e", "#5ff5d5", "#b3e6ff", "#7fd8ff", "#ff9eff", "#6fc3ff"]),
 ];
 
 /** Resolves system mode and independently stored light/dark selections. */
@@ -97,10 +118,16 @@ function applyTheme(theme: ThemePreset): void {
     "--vscode-gitDecoration-untrackedResourceForeground": colours.positive,
     "--vscode-widget-shadow": colours.shadow,
   };
+  for (const [token, value] of Object.entries(theme.syntax)) variables[`--syntax-${token}`] = value;
   for (const [name, value] of Object.entries(variables)) document.documentElement.style.setProperty(name, value);
 }
 
-function preset(id: string, name: string, mode: ThemeMode, values: readonly string[]): ThemePreset {
+function preset(id: string, name: string, mode: ThemeMode, values: readonly string[], syntaxValues: readonly string[]): ThemePreset {
   const [canvas, surface, elevated, text, border, input, hover, selection, selectionText, accent, positive, negative, warning, shadow] = values;
-  return { id, name, mode, colours: { canvas, surface, elevated, text, border, input, hover, selection, selectionText, accent, positive, negative, warning, shadow } };
+  const [keyword, string, comment, number, fn, type, variable, constant, meta, tag] = syntaxValues;
+  return {
+    id, name, mode,
+    colours: { canvas, surface, elevated, text, border, input, hover, selection, selectionText, accent, positive, negative, warning, shadow },
+    syntax: { keyword, string, comment, number, function: fn, type, variable, constant, meta, tag },
+  };
 }
