@@ -187,7 +187,7 @@ fn install(request_id: u32) -> UpdaterResult {
     };
     if result.ok {
         if let Err(error) = crate::desktop::register() {
-            result.error = format!("installed, but could not register with the system: {error}");
+            result.error = format!("could not register with the system: {error}");
         }
     }
     result

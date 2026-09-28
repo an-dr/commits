@@ -24,7 +24,9 @@ type StandaloneMessage =
         | "standaloneOpenCommitsRepo"
         | "standaloneOpenCommitsRepoFolder"
         | "standaloneStartUpdate"
-        | "standaloneInstall";
+        | "standaloneInstall"
+        | "standaloneRegister"
+        | "standaloneUnregister";
     }
   | { command: "standaloneOpenRepository"; path: string }
   | { command: "credentialResponse"; id: string; value: string }
@@ -55,6 +57,7 @@ interface StandaloneResponse {
   version?: string;
   ready?: boolean;
   status?: "hidden" | "ready" | "staged" | "done";
+  registration?: "none" | "registered" | "unregistered";
   /** `githubSignIn` only: the askpass prompt this sign-in is answering. */
   promptId?: string;
   signInStatus?: "code" | "done" | "error";
@@ -124,7 +127,7 @@ async function boot(): Promise<void> {
       } else if (data.command === "standaloneUpdateStatus") {
         updateUpdateStatus(data.available === true, data.version ?? "", data.ready === true, data.message ?? "");
       } else if (data.command === "standaloneInstallStatus") {
-        updateInstallStatus(data.status ?? "hidden", data.version ?? "", data.message ?? "");
+        updateInstallStatus(data.status ?? "hidden", data.registration ?? "none", data.version ?? "", data.message ?? "");
       } else if (data.command === "standaloneCredentialPrompt") {
         credentialPrompts.receive(data.id ?? "", data.message ?? "");
       } else if (data.command === "githubSignIn") {
@@ -213,7 +216,8 @@ function appMenuHtml(): string {
             <li><button type="button" id="standaloneMenuOpenCommitsRepo" disabled>Open Commits Repo</button></li>
             <li><button type="button" id="standaloneMenuOpenCommitsRepoFolder" disabled>Open Commits Repo Folder</button></li>
             <li class="standaloneMenuSeparator" role="separator"></li>
-            <li><button type="button" id="standaloneMenuInstall" hidden>Install</button></li>
+            <li><button type="button" id="standaloneMenuInstall" hidden>Install and register</button></li>
+            <li><button type="button" id="standaloneMenuRegister" hidden></button></li>
             <li><button type="button" id="standaloneMenuUpdate" hidden></button></li>
           </ul>
         </li>
@@ -353,6 +357,11 @@ function wireAppMenu(): void {
     setMenuOpen(false);
     post({ command: "standaloneInstall" });
   });
+  document.getElementById("standaloneMenuRegister")!.addEventListener("click", (event) => {
+    setMenuOpen(false);
+    const registered = (event.currentTarget as HTMLElement).dataset.registered === "true";
+    post({ command: registered ? "standaloneUnregister" : "standaloneRegister" });
+  });
   document.addEventListener("click", () => setMenuOpen(false));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") setMenuOpen(false);
@@ -395,12 +404,26 @@ function updateUpdateStatus(available: boolean, version: string, ready: boolean,
  * Update entry once its download is staged. `done` (placed directly at the
  * install location -- nothing was installed there before, so nothing is
  * pending) hides the entry again: there is nothing further this run can do.
+ *
+ * The Register entry shows only in the installed run, offering whichever of
+ * register and unregister the current registration calls for.
  */
-function updateInstallStatus(status: "hidden" | "ready" | "staged" | "done", version: string, message: string): void {
+function updateInstallStatus(
+  status: "hidden" | "ready" | "staged" | "done",
+  registration: "none" | "registered" | "unregistered",
+  version: string,
+  message: string,
+): void {
   const button = document.getElementById("standaloneMenuInstall") as HTMLButtonElement | null;
   if (button) {
     button.hidden = status === "hidden" || status === "done";
-    button.textContent = status === "staged" ? "Restart to install" : "Install";
+    button.textContent = status === "staged" ? "Restart to install" : "Install and register";
+  }
+  const registerButton = document.getElementById("standaloneMenuRegister") as HTMLButtonElement | null;
+  if (registerButton) {
+    registerButton.hidden = registration === "none";
+    registerButton.dataset.registered = String(registration === "registered");
+    registerButton.textContent = registration === "registered" ? "Unregister from system" : "Register with system";
   }
   const versionLabel = document.getElementById("standaloneMenuVersion");
   if (versionLabel && version) versionLabel.textContent = `Version ${version}`;

@@ -11,8 +11,8 @@
     "done": "On Windows, Install and register in a portable run creates shortcuts and the folder/background \"Open in Commits\" verbs that open that folder in Commits; Unregister in an installed run removes all of them and leaves ~/.commits/app intact. On Linux, the same actions create/remove a .desktop entry visible in the app menu and in the folder \"Open With\" list in Nautilus/COSMIC Files. The menu shows the correct action for the detected state. Crate unit tests cover generated registry/desktop content and register/unregister idempotence against a scratch location; docs (updating.md, a new integration doc, index) describe it; install.ps1 no longer creates shortcuts.",
     "outOfScope": "Windows 11 top-level context menu (sparse MSIX + IExplorerCommand); drive context menu; Nautilus scripts/extensions or direct right-click items on Linux; macOS; deleting files on unregister (no uninstaller); registering portable copies; a settings entry; the bones upstream move itself (follow-up)."
   },
-  "currentIncrementId": "6d146f90659e4ea5824e31619b444dfa",
-  "commitBaseline": "0e7ac17d234231145c6fb0eb9dd65e0b80d9812d",
+  "currentIncrementId": "9aa5f982d9334b0ca95c24e9456bc4a1",
+  "commitBaseline": "d186f5d0ebd5bc5f7de8c98936b606c8e1b4467d",
   "increments": [
     {
       "id": "71f71b46fdfb47a08d7d06d49ed631b8",
@@ -31,14 +31,14 @@
     {
       "id": "6d146f90659e4ea5824e31619b444dfa",
       "number": 3,
-      "status": "verified",
+      "status": "completed",
       "scope": "host + wire",
       "description": "updater register/unregister actions, install also registers, registered byte in install status; Rust + TS codec and fixtures (~180 lines)"
     },
     {
       "id": "9aa5f982d9334b0ca95c24e9456bc4a1",
       "number": 4,
-      "status": "planned",
+      "status": "verified",
       "scope": "core + menu",
       "description": "commits-core state and web menu: Install and register / Register with system / Unregister from system with feedback messages; vitest coverage (~200 lines)"
     },
@@ -261,6 +261,13 @@
       "incrementId": "6d146f90659e4ea5824e31619b444dfa",
       "note": "User pre-approved all increments. HI.1/IM.1 fixed; clippy clean; ipc 6/6, host unit 58/58, vitest 257/257, tsc clean. component_load needs dist/ (pre-existing, unrelated).",
       "approvedAt": "2026-09-28T16:40:29.6936114Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "9aa5f982d9334b0ca95c24e9456bc4a1",
+      "note": "User pre-approved all increments. vitest 263/263, tsc clean; review approve.",
+      "approvedAt": "2026-09-28T16:42:08.3727889Z"
     }
   ],
   "history": [
@@ -708,8 +715,38 @@
       "at": "2026-09-28T16:40:30.2340636Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-09-28T16:40:32.0067681Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-09-28T16:40:37.1582211Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:40:47.5715736Z",
+      "action": "return-to-build",
+      "detail": "Returned from VERIFY to BUILD."
+    },
+    {
+      "at": "2026-09-28T16:42:05.4135643Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:42:08.3768548Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-09-28T16:42:08.9169640Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-09-28T15:47:05.6389241Z",
-  "updatedAt": "2026-09-28T16:40:30.2430975Z"
+  "updatedAt": "2026-09-28T16:42:08.9256455Z"
 }
