@@ -640,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "commits-app"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "base64",
  "bones-engine",
@@ -648,6 +648,7 @@ dependencies = [
  "bones-messages",
  "bones-module-os",
  "bones-upgrader",
+ "commits-desktop-integration",
  "commits-git",
  "commits-ipc",
  "commits-os",
@@ -658,6 +659,15 @@ dependencies = [
  "tempfile",
  "wasmtime",
  "winresource",
+]
+
+[[package]]
+name = "commits-desktop-integration"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "tempfile",
+ "windows",
 ]
 
 [[package]]

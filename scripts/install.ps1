@@ -7,10 +7,10 @@ folder there if it is already installed.
 dist.ps1 already assembles -Source in the shape an install uses: commits.exe
 at its root and a single version folder holding everything else, including
 its own components/ (see dist.ps1's own doc comment). A fresh install copies
-that shape as-is into ~/.commits/app and points Start Menu and desktop shortcuts at
-commits.exe -- it applies whichever version folder is current before
-commits-app.exe (the real app logic) starts, so shortcuts must never target
-commits-app.exe directly. Running this script again once installed does not
+that shape as-is into ~/.commits/app. It only copies files and never touches
+the operating system: shortcuts, the application list, and "Open in Commits"
+are the installed app's own "Register with system" menu entry (see
+docs/desktop-integration.md). Running this script again once installed does not
 touch the live install: it pushes -Source's version folder into its own new
 version folder, exactly as if Update had been clicked in the app, so a
 second run is how a from-source build gets "pushed" without waiting on a
@@ -28,16 +28,11 @@ Fail instead of building when -Source (or the default dist/app) is missing.
 Where a fresh install goes and where an existing install is detected.
 Defaults to ~/.commits/app; overriding it is mainly for testing this script
 itself without touching a real install.
-
-.PARAMETER NoShortcuts
-Skips creating Start Menu / desktop shortcuts on a fresh install. Mainly for
-testing this script itself.
 #>
 param(
     [string]$Source = (Join-Path (Split-Path -Parent $PSScriptRoot) "dist/app"),
     [switch]$SkipBuild,
-    [string]$InstallDir = (Join-Path $HOME ".commits/app"),
-    [switch]$NoShortcuts
+    [string]$InstallDir = (Join-Path $HOME ".commits/app")
 )
 
 $ErrorActionPreference = "Stop"
@@ -140,18 +135,4 @@ New-Item -ItemType Directory -Path $installDir -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $Source $launcherName) -Destination (Join-Path $installDir $launcherName) -Force
 Install-VersionFolder -Source $Source -InstallDir $installDir | Out-Null
 Write-Host "Installed to $installDir"
-
-if ($isWindowsPlatform -and -not $NoShortcuts) {
-    $launcherPath = Join-Path $installDir $launcherName
-    $shell = New-Object -ComObject WScript.Shell
-    foreach ($folder in @("Programs", "Desktop")) {
-        $shortcutPath = Join-Path ([Environment]::GetFolderPath($folder)) "Commits.lnk"
-        $shortcut = $shell.CreateShortcut($shortcutPath)
-        $shortcut.TargetPath = $launcherPath
-        $shortcut.WorkingDirectory = $installDir
-        $shortcut.Save()
-    }
-    Write-Host "Created Start Menu and desktop shortcuts pointing at $launcherPath"
-} else {
-    Write-Host "Launch $(Join-Path $installDir $launcherName) to start Commits."
-}
+Write-Host "Launch $(Join-Path $installDir $launcherName) to start Commits, then use Register with system in its menu for shortcuts and folder integration."

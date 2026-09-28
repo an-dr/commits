@@ -32,7 +32,9 @@ type StandaloneRequest =
   | { readonly command: "standaloneOpenCommitsRepo" }
   | { readonly command: "standaloneOpenCommitsRepoFolder" }
   | { readonly command: "standaloneStartUpdate" }
-  | { readonly command: "standaloneInstall" };
+  | { readonly command: "standaloneInstall" }
+  | { readonly command: "standaloneRegister" }
+  | { readonly command: "standaloneUnregister" };
 
 type PendingOs =
   | { readonly kind: "chooseRepository" }
@@ -88,6 +90,7 @@ export class CommitsCore {
   private pendingUpdateCheckRequestId: number | null = null;
   private pendingUpdateStageRequestId: number | null = null;
   private pendingInstallRequestId: number | null = null;
+  private pendingRegistrationRequestId: number | null = null;
   /** Set once `check` finds a version newer than this build's own. */
   private updateAvailableVersion: string | null = null;
   /**
@@ -99,6 +102,12 @@ export class CommitsCore {
    * location -- already fully installed, nothing left to apply).
    */
   private installStatusKind: "hidden" | "ready" | "staged" | "done" = "hidden";
+  /**
+   * Drives the Register/Unregister menu entry: `none` until `bootstrap`
+   * proves this run is the installed one, since only the installed entry
+   * point is ever registered.
+   */
+  private registration: "none" | "registered" | "unregistered" = "none";
   /** This build's own version, shown in the About menu. */
   private appVersion = "";
   private bootstrapped = false;
@@ -220,6 +229,12 @@ export class CommitsCore {
         return;
       case "standaloneInstall":
         this.startInstall();
+        return;
+      case "standaloneRegister":
+        this.startRegistration("register");
+        return;
+      case "standaloneUnregister":
+        this.startRegistration("unregister");
         return;
       case "loadRepos":
         this.sendRepos();
@@ -738,15 +753,29 @@ export class CommitsCore {
     }
     if (result.requestId === this.pendingInstallRequestId) {
       this.pendingInstallRequestId = null;
+      // An ok result with an error installed the files but could not
+      // register them; the installed app's own Register retries that.
+      const registered = result.error ? `, but ${result.error}` : " and registered";
       if (result.ok && result.fresh) {
         this.installStatusKind = "done";
-        this.sendInstallStatus("Installed to ~/.commits/app — launch commits.exe to use it.");
+        this.sendInstallStatus(`Installed to ~/.commits/app${registered} — launch commits.exe to use it.`);
       } else if (result.ok) {
         this.installStatusKind = "staged";
-        this.sendInstallStatus("Installed — restart commits.exe to apply.");
+        this.sendInstallStatus(`Installed${registered} — restart commits.exe to apply.`);
       } else {
         this.installStatusKind = "ready";
         this.sendInstallStatus(`Install failed: ${result.error || "unknown error"}`);
+      }
+      return;
+    }
+    if (result.requestId === this.pendingRegistrationRequestId) {
+      this.pendingRegistrationRequestId = null;
+      const registering = this.registration === "unregistered";
+      if (result.ok) {
+        this.registration = registering ? "registered" : "unregistered";
+        this.sendInstallStatus(registering ? "Registered with the system." : "Unregistered from the system — files kept in ~/.commits/app.");
+      } else {
+        this.sendInstallStatus(`${registering ? "Register" : "Unregister"} failed: ${result.error || "unknown error"}`);
       }
     }
   }
@@ -1006,6 +1035,7 @@ export class CommitsCore {
     const installStatus = this.host.installStatus();
     if (installStatus.ok) {
       this.installStatusKind = installStatus.installed ? "hidden" : "ready";
+      if (installStatus.installed) this.registration = installStatus.registered ? "registered" : "unregistered";
       this.appVersion = installStatus.version;
     } else {
       this.host.log("warn", `could not resolve install status: ${installStatus.error}`);
@@ -1057,10 +1087,22 @@ export class CommitsCore {
     this.host.requestUpdate(requestId, "install", "");
   }
 
+  /** Registers or unregisters the installed app; only an installed run
+   * offers either, and only the one its current state calls for. */
+  private startRegistration(action: "register" | "unregister"): void {
+    const expected = action === "register" ? "unregistered" : "registered";
+    if (this.registration !== expected || this.pendingRegistrationRequestId !== null) return;
+    const requestId = this.nextUpdateRequestId++;
+    this.pendingRegistrationRequestId = requestId;
+    this.sendInstallStatus(action === "register" ? "Registering…" : "Unregistering…");
+    this.host.requestUpdate(requestId, action, "");
+  }
+
   private sendInstallStatus(message = ""): void {
     this.send({
       command: "standaloneInstallStatus",
       status: this.installStatusKind,
+      registration: this.registration,
       version: this.appVersion,
       message,
     });

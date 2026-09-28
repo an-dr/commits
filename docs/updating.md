@@ -28,8 +28,9 @@ An installation the launcher can update looks like this:
   repo/                     # the commits project's own clone (Clone Commits Repo)
 ```
 
-`commits.exe`, not `commits-app.exe`, is the permanent entry point: Start
-Menu and desktop shortcuts point at it, and it is the name users type. On
+`commits.exe`, not `commits-app.exe`, is the permanent entry point: the
+desktop registration (see [`desktop-integration.md`](desktop-integration.md))
+points at it, and it is the name users type. On
 every start it picks the current version folder -- the highest by name under
 `app/` -- and launches that version's `commits-app.exe`. There is nothing to
 apply first: installing a version means its folder already exists, so the
@@ -128,7 +129,7 @@ version brought a different launcher with it.
 
 ## Install: pushing a running build without a manifest
 
-"Install" appears in the app menu instead, whenever this run's own directory
+"Install and register" appears in the app menu instead, whenever this run's own directory
 is *not* a version folder under `~/.commits/app` — a dev build, or a build
 launched ad hoc rather than through the installed `commits.exe`. It needs no
 manifest URL or network access at all, and does one of two things depending
@@ -144,9 +145,14 @@ on whether `~/.commits/app` already has a launcher in it:
   pushed version folder, so this places the launcher at `~/.commits/app`
   itself and the rest of the build into its own first version folder. This
   already completes the install; the entry disappears rather than prompting
-  a restart. Run `~/.commits/app/commits.exe` (or use
-  [`scripts/install.ps1`](../scripts/install.ps1), which also sets up
-  shortcuts) to actually start it.
+  a restart. Run `~/.commits/app/commits.exe` to actually start it.
+
+Either way, the install then registers `~/.commits/app/commits.exe` with the
+operating system — shortcuts, the application list, and "Open in Commits" for
+folders — as described in [`desktop-integration.md`](desktop-integration.md).
+[`scripts/install.ps1`](../scripts/install.ps1) performs the same file copy
+from a shell and never registers anything; the installed app's "Register with
+system" does that afterwards.
 
 ## Launch
 

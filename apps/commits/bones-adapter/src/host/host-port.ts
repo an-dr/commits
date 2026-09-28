@@ -40,6 +40,8 @@ export interface InstallStatus {
   readonly ok: boolean;
   /** Whether this run's own directory is the canonical install location. */
   readonly installed: boolean;
+  /** Whether the installed app is registered with the desktop; never set for a run that is not installed. */
+  readonly registered: boolean;
   /** Whether this is the first start since the running version last changed. */
   readonly justUpdated: boolean;
   /** This build's own version, shown in the About menu. */

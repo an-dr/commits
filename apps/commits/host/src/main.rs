@@ -10,6 +10,7 @@ mod page;
 mod settings;
 mod splash;
 mod updater;
+mod desktop;
 
 use std::sync::mpsc::Receiver;
 

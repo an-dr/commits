@@ -231,12 +231,16 @@ export function decodeNativeResult(bytes: Uint8Array): NativeResult {
   return result;
 }
 
-/** `install` stages the running build itself and ignores `manifestUrl`. */
-export type UpdaterAction = "check" | "stage" | "install";
+/** `install` stages the running build itself and then registers it with the
+ * desktop; `register` and `unregister` act on the installed app. All three
+ * ignore `manifestUrl`. */
+export type UpdaterAction = "check" | "stage" | "install" | "register" | "unregister";
 
 /** `fresh` matters only for the `install` action: whether the files landed
  * directly at the install location (nothing was installed yet) rather than
- * staged for an existing launcher to apply on its next start. */
+ * staged for an existing launcher to apply on its next start. An `install`
+ * result with `ok` set and a non-empty `error` installed the files but
+ * could not register them. */
 export interface UpdaterResult {
   requestId: number;
   ok: boolean;
@@ -252,7 +256,7 @@ export function encodeUpdaterRequest(
   action: UpdaterAction,
   manifestUrl: string,
 ): Uint8Array {
-  const tag: Record<UpdaterAction, number> = { check: 0, stage: 1, install: 2 };
+  const tag: Record<UpdaterAction, number> = { check: 0, stage: 1, install: 2, register: 3, unregister: 4 };
   return new Writer()
     .u32(requestId)
     .u8(tag[action])
