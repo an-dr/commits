@@ -76,6 +76,20 @@ function isRepositoryRequired(message: unknown): boolean {
     && (message as { command?: string }).command === "standaloneRepositoryRequired";
 }
 
+
+/**
+ * Starts the core and answers its boot-time update check with "nothing
+ * newer", so a test about another updater action sees only its own requests.
+ */
+function bootPastUpdateCheck(core: CommitsCore, host: StubHost): void {
+  core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+  const check = host.updateRequests.find((request) => request.action === "check");
+  if (check !== undefined) {
+    core.receiveUpdaterResult({ requestId: check.requestId, ok: true, available: false, fresh: false, version: "", error: "" });
+  }
+  host.updateRequests.length = 0;
+}
+
 describe("CommitsCore MIT webview host", () => {
   it("opens the shared graph page and subscribes to native results", () => {
     const host = new StubHost();
@@ -598,13 +612,13 @@ describe("CommitsCore MIT webview host", () => {
     ]);
   });
 
-  it("does not check for updates when no manifest URL is configured", () => {
+  it("leaves the source to the host's release default when no manifest URL is configured", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
-    expect(host.updateRequests).toHaveLength(0);
+    expect(host.updateRequests).toEqual([{ requestId: 70_000, action: "check", manifestUrl: "" }]);
   });
 
   it("announces an available update once the check finds a newer version", () => {
@@ -674,7 +688,7 @@ describe("CommitsCore MIT webview host", () => {
   it("ignores standaloneStartUpdate when no update is available", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneStartUpdate" }));
 
@@ -686,7 +700,7 @@ describe("CommitsCore MIT webview host", () => {
     host.installStatusValue = { ok: true, installed: false, registered: false, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
 
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "ready", registration: "none", version: "0.2.0", message: "",
@@ -698,7 +712,7 @@ describe("CommitsCore MIT webview host", () => {
     host.installStatusValue = { ok: true, installed: true, registered: false, justUpdated: true, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
 
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "hidden", registration: "unregistered", version: "0.2.0", message: "Updated to version 0.2.0",
@@ -709,16 +723,16 @@ describe("CommitsCore MIT webview host", () => {
     const host = new StubHost();
     host.installStatusValue = { ok: true, installed: false, registered: false, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
-    expect(host.updateRequests).toEqual([{ requestId: 70_000, action: "install", manifestUrl: "" }]);
+    expect(host.updateRequests).toEqual([{ requestId: 70_001, action: "install", manifestUrl: "" }]);
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "ready", registration: "none", version: "0.2.0", message: "Installing…",
     }]);
 
-    core.receiveUpdaterResult({ requestId: 70_000, ok: true, available: true, fresh: false, version: "", error: "" });
+    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: true, fresh: false, version: "", error: "" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus",
@@ -733,10 +747,10 @@ describe("CommitsCore MIT webview host", () => {
     const host = new StubHost();
     host.installStatusValue = { ok: true, installed: false, registered: false, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
-    core.receiveUpdaterResult({ requestId: 70_000, ok: true, available: true, fresh: true, version: "", error: "" });
+    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: true, fresh: true, version: "", error: "" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus",
@@ -751,11 +765,11 @@ describe("CommitsCore MIT webview host", () => {
     const host = new StubHost();
     host.installStatusValue = { ok: true, installed: false, registered: false, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
     core.receiveUpdaterResult({
-      requestId: 70_000, ok: true, available: true, fresh: true, version: "", error: "could not register with the system: denied",
+      requestId: 70_001, ok: true, available: true, fresh: true, version: "", error: "could not register with the system: denied",
     });
 
     expect(host.sent).toContainEqual(["main", {
@@ -771,7 +785,7 @@ describe("CommitsCore MIT webview host", () => {
     const host = new StubHost();
     host.installStatusValue = { ok: true, installed: false, registered: false, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneRegister" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneUnregister" }));
@@ -782,16 +796,16 @@ describe("CommitsCore MIT webview host", () => {
   it("registers an unregistered install and then offers to unregister it", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneUnregister" }));
     expect(host.updateRequests).toHaveLength(0);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneRegister" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneRegister" }));
-    expect(host.updateRequests).toEqual([{ requestId: 70_000, action: "register", manifestUrl: "" }]);
+    expect(host.updateRequests).toEqual([{ requestId: 70_001, action: "register", manifestUrl: "" }]);
 
-    core.receiveUpdaterResult({ requestId: 70_000, ok: true, available: false, fresh: false, version: "", error: "" });
+    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: false, fresh: false, version: "", error: "" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "hidden", registration: "registered", version: "0.2.0", message: "Registered with the system.",
@@ -802,17 +816,17 @@ describe("CommitsCore MIT webview host", () => {
     const host = new StubHost();
     host.installStatusValue = { ok: true, installed: true, registered: true, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneUnregister" }));
-    core.receiveUpdaterResult({ requestId: 70_000, ok: false, available: false, fresh: false, version: "", error: "access denied" });
+    core.receiveUpdaterResult({ requestId: 70_001, ok: false, available: false, fresh: false, version: "", error: "access denied" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "hidden", registration: "registered", version: "0.2.0", message: "Unregister failed: access denied",
     }]);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneUnregister" }));
-    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: false, fresh: false, version: "", error: "" });
+    core.receiveUpdaterResult({ requestId: 70_002, ok: true, available: false, fresh: false, version: "", error: "" });
 
     expect(host.updateRequests.map((request) => request.action)).toEqual(["unregister", "unregister"]);
     expect(host.sent).toContainEqual(["main", {
@@ -827,7 +841,7 @@ describe("CommitsCore MIT webview host", () => {
   it("ignores standaloneInstall once already installed", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
@@ -838,10 +852,10 @@ describe("CommitsCore MIT webview host", () => {
     const host = new StubHost();
     host.installStatusValue = { ok: true, installed: false, registered: false, justUpdated: false, version: "0.2.0", error: "" };
     const core = new CommitsCore(host);
-    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    bootPastUpdateCheck(core, host);
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
-    core.receiveUpdaterResult({ requestId: 70_000, ok: false, available: false, fresh: false, version: "", error: "disk full" });
+    core.receiveUpdaterResult({ requestId: 70_001, ok: false, available: false, fresh: false, version: "", error: "disk full" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "ready", registration: "none", version: "0.2.0", message: "Install failed: disk full",

@@ -45,6 +45,7 @@ export class SettingsEditor {
     this.dialog.id = "standaloneSettingsDialog";
     this.dialog.setAttribute("aria-labelledby", "standaloneSettingsTitle");
     this.updateManifestUrl.type = "text";
+    this.updateManifestUrl.placeholder = "Latest GitHub release";
     this.updateManifestUrl.placeholder = "https://example.com/latest.json (leave blank to disable)";
     this.toolList.className = "standaloneToolList";
     this.addToolButton.type = "button";

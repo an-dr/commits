@@ -78,10 +78,53 @@ parses as a version and its parent has a launcher beside it, so a `dist/app`
 build assembled the same way (see [`phase-0-1.md`](phase-0-1.md)) behaves
 identically without any extra configuration.
 
+## Where updates come from
+
+Every build checks the latest
+[GitHub release](https://github.com/an-dr/commits/releases) for a manifest
+matching its own build type, fixed at compile time:
+
+| Build | Manifest asset |
+| --- | --- |
+| Windows x64 | `commits-windows-x64.json` |
+| Windows arm64 | `commits-windows-arm64.json` |
+| Linux x64 | `commits-linux-x64.json` |
+
+The app reads it from
+`https://github.com/an-dr/commits/releases/latest/download/<asset>`, which
+GitHub redirects to that asset on the newest release that is not marked as
+a pre-release. A build for any other platform has no default source and does
+not check.
+
+`app.updateManifestUrl` (see [`settings.md`](settings.md)) overrides the
+default when it is set, for testing a manifest served from anywhere else.
+
+## Publishing a release
+
+Pushing a tag named `v<version>`, where the version matches
+`apps/commits/host/Cargo.toml`, publishes a release:
+
+```sh
+git tag v1.8.0
+git push origin main v1.8.0
+```
+
+The [`build`](../.github/workflows/build.yml) workflow builds all three
+platforms. Each one runs
+[`scripts/package-release.ps1`](../scripts/package-release.ps1), which zips
+its version folder as `commits-<version>-<platform>.zip` and writes the
+platform's manifest next to it, pointing at that zip on the tag's release
+with its SHA-256. The `release` job then creates the GitHub release with all
+six files. The packaging script refuses a tag that does not match the
+version, because a release whose manifest names an older version would never
+be offered to anyone.
+
+Every other push and pull request builds and packages the same files and keeps
+them as workflow artifacts for 30 days, without publishing a release.
+
 ## The manifest
 
-`app.updateManifestUrl` (see [`settings.md`](settings.md)) points at a small
-hosted JSON document:
+The manifest is a small JSON document:
 
 ```json
 {
@@ -105,6 +148,12 @@ hosted JSON document:
   payload without one simply leaves whatever entry point is already there.
   Never name it `commits.exe` inside the ZIP — that is the entry point's
   name, not the payload's.
+- The ZIP is downloaded by the app itself rather than through the shared
+  `os` fetch, whose 5 MB cap suits small documents and is far smaller than a
+  release. The app allows up to 256 MB, with a 60-second limit on each read
+  rather than on the whole download. ZIP extraction does not carry file
+  permissions, so on Linux the app marks the extracted executables (files
+  with no extension at the top of the version folder) executable again.
 - `sha256` is optional but recommended: when present, a downloaded asset
   that does not match is refused outright rather than installed. Omitting
   it is a deliberate choice for a publisher who cannot commit to a checksum
@@ -239,7 +288,9 @@ nothing to compare yet.
 
 ## Checking behavior locally
 
-Point `updateManifestUrl` at a manifest whose `version` is higher than the
+`scripts/package-release.ps1 -Platform linux-x64` (or the platform you are on)
+produces a real zip and manifest from `dist/app`. To test an update, point
+`updateManifestUrl` at a manifest whose `version` is higher than the
 running build's, served from anywhere reachable over HTTPS (a local static
 file server works for testing). `COMMITS_INSTALL_DIR` can redirect the
 install location to a scratch directory instead of the real `~/.commits/app`

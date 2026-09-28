@@ -18,3 +18,10 @@ to the same value in the same commit. That is the version the launcher
 reports for itself, and `commits --version` prints both so a launcher left
 behind by an install is visible at a glance — which only works while a
 matched pair really does report matching numbers.
+
+## Release by tag
+
+A release is published by pushing a `v<version>` tag that matches
+`apps/commits/host/Cargo.toml`, after the bumped commit is on `main`; see
+[`docs/updating.md`](docs/updating.md#publishing-a-release). Installed apps
+only ever see what a tag published, so a bump without a tag ships nothing.

@@ -1,20 +1,21 @@
 name: build
 
-# Windows x64 is the repo's only verified-working platform (see README) and
-# is a required check. Linux is wired up but allowed to fail
-# (continue-on-error) until someone confirms a green run and this comment can
-# be updated to drop that.
+# Builds, tests and packages all three release platforms on every push. A
+# v<version> tag also publishes them as a GitHub release, which is where the
+# installed app looks for updates (docs/updating.md). Every platform is
+# required: a release missing one would leave that platform's installs
+# without updates, so a red platform must stop the release.
 #
-# Windows arm64 is experimental and non-required. Earlier runs died inside
-# componentize-js shortly after spawning the locally bootstrapped wizer, while
-# the same path worked on an arm64 developer machine. The instrumentation in
+# Windows arm64 once died inside componentize-js shortly after spawning the
+# locally bootstrapped wizer, while the same path worked on an arm64
+# developer machine. The instrumentation in
 # apps/commits/scripts/build-components.mjs and the cache steps below preserve
-# enough evidence to diagnose another runner-only failure without blocking the
-# verified Windows x64 build.
+# enough evidence to diagnose another runner-only failure.
 
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -22,20 +23,16 @@ jobs:
   build:
     name: build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ !matrix.required }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: windows-x64
             os: windows-latest
-            required: true
           - name: windows-arm64
             os: windows-11-arm
-            required: false
           - name: linux-x64
             os: ubuntu-latest
-            required: false
 
     steps:
       - uses: actions/checkout@v4
@@ -85,16 +82,19 @@ jobs:
           path: .tools/wizer
           key: wizer-10.0.0-${{ matrix.name }}
 
-      # Run as three steps rather than one `npm run build`, so a failure names
-      # the stage it happened in. This is not cosmetic: windows-arm64 has been
-      # failing here with exit code 1 and no output at all, and a step named
-      # "build wasm components" is the difference between knowing that much
-      # and knowing nothing.
+      # Run as three steps rather than one build, so a failure names the
+      # stage it happened in. This is not cosmetic: windows-arm64 has failed
+      # here with exit code 1 and no output at all, and a step named "build
+      # wasm components" is the difference between knowing that much and
+      # knowing nothing. Each dist.ps1 part builds and then places its output
+      # in dist/app, so nothing is built twice.
       - name: Build the page
-        run: npm run build:web
+        shell: pwsh
+        run: ./scripts/dist.ps1 -Part web
 
       - name: Build the wasm components
-        run: npm run build:wasm
+        shell: pwsh
+        run: ./scripts/dist.ps1 -Part wasm
 
       - name: Save the bootstrapped wizer
         if: always() && matrix.name == 'windows-arm64' && steps.wizer-cache.outputs.cache-hit != 'true'
@@ -104,7 +104,8 @@ jobs:
           key: wizer-10.0.0-${{ matrix.name }}
 
       - name: Build the host executables
-        run: npm run build:host
+        shell: pwsh
+        run: ./scripts/dist.ps1 -Part host
 
       - run: npm run check
 
@@ -112,43 +113,44 @@ jobs:
 
       - run: cargo test --workspace
 
-      # Both Windows architectures use the install/launcher layout documented
-      # in docs/updating.md; Linux stops at "compiles and tests pass" for now.
-      - name: Assemble dist
-        if: startsWith(matrix.name, 'windows-')
-        run: npm run dist
+      # Only a tag names the release; any other run packages against
+      # v<version>, which checks the same files without publishing them.
+      - name: Package the release
+        shell: pwsh
+        run: ./scripts/package-release.ps1 -Platform ${{ matrix.name }} -Repository ${{ github.repository }} -Tag "${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}"
 
-      # What `npm run dist` assembles is already the runnable layout -- unzip
-      # and run commits.exe -- so this uploads it as-is rather than packaging
-      # it again. Not a release: no tag, no signing, no version negotiation,
-      # just the build this commit produced.
-      #
-      # The SHA is in the name because the download is a bare zip once saved,
-      # with nothing inside it saying which commit it came from.
-      - name: Upload the runnable build
-        if: startsWith(matrix.name, 'windows-')
+      # The zip is also the runnable build: unzip it and run commits-app, or
+      # its Install menu entry, to try this commit.
+      - name: Upload the release files
         uses: actions/upload-artifact@v4
         with:
           name: commits-${{ matrix.name }}-${{ github.sha }}
-          path: dist/app
+          path: release/*
           if-no-files-found: error
           retention-days: 30
 
-      # Linux has no install layout to assemble (dist.ps1 is Windows-only), so
-      # this is the build's output rather than something to double-click: the
-      # executables, the components they load, and the page they serve. Named
-      # so nobody downloads it expecting the Windows experience.
-      - name: Upload the linux build output
-        if: matrix.name == 'linux-x64'
-        uses: actions/upload-artifact@v4
+  release:
+    name: publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          name: commits-linux-x64-build-output-${{ github.sha }}
-          path: |
-            target/release/commits-app
-            target/release/commits
-            target/release/commits-askpass
-            target/release/commits-editor
-            dist/extensions
-            dist/ui
-          if-no-files-found: error
-          retention-days: 30
+          path: release
+          merge-multiple: true
+
+      # Three zips and three manifests. The manifests are what installed apps
+      # read from releases/latest, so this must not be a pre-release.
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l release
+          test "$(ls release | wc -l)" -eq 6
+          gh release create "${{ github.ref_name }}" release/* \
+            --repo "${{ github.repository }}" \
+            --title "Commits ${{ github.ref_name }}" \
+            --generate-notes

@@ -75,12 +75,17 @@ impl UpdaterModule {
         };
         let backend = self.backend.clone();
         std::thread::spawn(move || {
-            let result = match request.action {
-                CHECK => check(backend.as_ref(), request.request_id, &request.manifest_url),
-                STAGE => stage(backend.as_ref(), request.request_id, &request.manifest_url),
-                INSTALL => install(request.request_id),
-                REGISTER => registration(request.request_id, crate::desktop::register()),
-                UNREGISTER => registration(request.request_id, crate::desktop::unregister()),
+            let manifest_url = crate::release::manifest_url(&request.manifest_url);
+            let result = match (request.action, manifest_url) {
+                (CHECK, Some(url)) => check(backend.as_ref(), request.request_id, &url),
+                // No release channel for this platform and no override: there
+                // is simply nothing to be newer than.
+                (CHECK, None) => no_update(request.request_id),
+                (STAGE, Some(url)) => stage(backend.as_ref(), &crate::release::ReleaseDownload, request.request_id, &url),
+                (STAGE, None) => failed(request.request_id, String::from("this platform has no release channel")),
+                (INSTALL, _) => install(request.request_id),
+                (REGISTER, _) => registration(request.request_id, crate::desktop::register()),
+                (UNREGISTER, _) => registration(request.request_id, crate::desktop::unregister()),
                 _ => return,
             };
             if let Ok(payload) = result.encode() {
@@ -142,12 +147,32 @@ fn check(backend: &dyn OsBackend, request_id: u32, manifest_url: &str) -> Update
     }
 }
 
+fn no_update(request_id: u32) -> UpdaterResult {
+    UpdaterResult {
+        request_id,
+        ok: true,
+        available: false,
+        fresh: false,
+        version: String::new(),
+        error: String::new(),
+    }
+}
+
 /// Downloads and checksum-verifies the manifest's asset, then extracts it
 /// into its own new version folder under the install dir -- the launcher
 /// picks it up as current the next time it starts, simply because it is now
 /// the newest version folder on disk.
-fn stage(backend: &dyn OsBackend, request_id: u32, manifest_url: &str) -> UpdaterResult {
-    match stage_inner(backend, manifest_url) {
+///
+/// The manifest comes through `backend` and the asset through `downloads`,
+/// which is `release::ReleaseDownload` outside tests: the manifest is tiny,
+/// the asset is not.
+fn stage(
+    backend: &dyn OsBackend,
+    downloads: &dyn bones_upgrader::Fetch,
+    request_id: u32,
+    manifest_url: &str,
+) -> UpdaterResult {
+    match stage_inner(backend, downloads, manifest_url) {
         Ok(version) => UpdaterResult {
             request_id,
             ok: true,
@@ -160,12 +185,17 @@ fn stage(backend: &dyn OsBackend, request_id: u32, manifest_url: &str) -> Update
     }
 }
 
-fn stage_inner(backend: &dyn OsBackend, manifest_url: &str) -> Result<String, String> {
+fn stage_inner(
+    backend: &dyn OsBackend,
+    downloads: &dyn bones_upgrader::Fetch,
+    manifest_url: &str,
+) -> Result<String, String> {
     let manifest = bones_upgrader::fetch_manifest(&FetchBackend(backend), manifest_url)?;
-    let asset = bones_upgrader::download_asset_verified(&FetchBackend(backend), &manifest)?;
+    let asset = bones_upgrader::download_asset_verified(downloads, &manifest)?;
     let install_dir = bones_upgrader::default_install_dir(&bones_upgrader::host_identity())
         .ok_or_else(|| String::from("could not resolve the install directory"))?;
-    bones_upgrader::extract_version(&asset, &install_dir, &manifest.version)?;
+    let version_dir = bones_upgrader::extract_version(&asset, &install_dir, &manifest.version)?;
+    crate::release::mark_executables(&version_dir)?;
     Ok(manifest.version)
 }
 
@@ -479,7 +509,7 @@ mod tests {
         let _guard = ENV_LOCK.lock().unwrap();
         unsafe { std::env::set_var("COMMITS_INSTALL_DIR", install_dir.path()) };
 
-        let result = stage(&backend, 2, "https://example.com/manifest.json");
+        let result = stage(&backend, &FetchBackend(&backend), 2, "https://example.com/manifest.json");
 
         unsafe { std::env::remove_var("COMMITS_INSTALL_DIR") };
         assert!(result.ok, "{}", result.error);

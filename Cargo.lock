@@ -654,9 +654,11 @@ dependencies = [
  "commits-os",
  "commits-watcher",
  "dirs",
+ "native-tls",
  "rfd",
  "serde_json",
  "tempfile",
+ "ureq",
  "wasmtime",
  "winresource",
 ]

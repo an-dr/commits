@@ -70,9 +70,10 @@ Appearance changes apply immediately after a successful save. Shared graph
 configuration is read when the window opens and therefore applies after the
 window is reopened.
 
-`app.updateManifestUrl` is empty by default, which keeps self-update off. See
-[`updating.md`](updating.md) for the manifest format and what setting it
-enables.
+`app.updateManifestUrl` is empty by default, which checks the latest GitHub
+release for this build's platform. Setting it points the check at another
+manifest instead. See [`updating.md`](updating.md) for the manifest format and
+the release channel.
 
 ## External tools
 

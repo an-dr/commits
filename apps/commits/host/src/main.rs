@@ -9,6 +9,7 @@ mod launch;
 mod page;
 mod settings;
 mod splash;
+mod release;
 mod updater;
 mod desktop;
 

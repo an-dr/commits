@@ -46,11 +46,15 @@ commits-os = { path = "../../../crates/os" }
 bones-upgrader = { path = "../../../vendor/bones/crates/bones-upgrader" }
 commits-watcher = { path = "../../../crates/watcher" }
 dirs = "6.0.0"
+# Release zips are downloaded here rather than through the `os` fetch, whose
+# 5 MB cap is far below a release; see src/release.rs.
+base64 = "0.22"
+native-tls = "0.2"
+ureq = { version = "2.12", default-features = false, features = ["native-tls", "gzip"] }
 rfd = "0.15"
 tempfile = "3.27.0"
 
 [dev-dependencies]
-base64 = "0.22"
 # Loading a component by hand, and the persistence service, are below the
 # facade: `bones-engine` exposes composition, not the extension host it
 # composes. Only the tests and `measure_component` need that, so the reach

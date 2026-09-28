@@ -1029,9 +1029,9 @@ export class CommitsCore {
     // the workspace. Standalone supplies none, which is what leaves the
     // chooser in front of them.
     if (this.repositories.all().length > 0) this.currentRepository ??= this.repositories.all()[0].path;
-    // An unconfigured URL means self-update is intentionally off, not a
-    // transient failure worth reporting.
-    if (this.settings.app.updateManifestUrl) this.checkForUpdate();
+    // An empty URL is not "off": the host then reads the latest GitHub
+    // release for its own platform (docs/updating.md).
+    this.checkForUpdate();
     const installStatus = this.host.installStatus();
     if (installStatus.ok) {
       this.installStatusKind = installStatus.installed ? "hidden" : "ready";
@@ -1048,9 +1048,9 @@ export class CommitsCore {
     );
   }
 
-  /** Runs once at boot when a manifest URL is configured; see `bootstrap`. */
+  /** Runs once at boot; see `bootstrap`. */
   private checkForUpdate(): void {
-    if (this.pendingUpdateCheckRequestId !== null || !this.settings.app.updateManifestUrl) return;
+    if (this.pendingUpdateCheckRequestId !== null) return;
     const requestId = this.nextUpdateRequestId++;
     this.pendingUpdateCheckRequestId = requestId;
     this.host.requestUpdate(requestId, "check", this.settings.app.updateManifestUrl);
@@ -1059,7 +1059,6 @@ export class CommitsCore {
   /** Downloads, verifies, and stages the update `checkForUpdate` found. */
   private startUpdate(): void {
     if (this.updateAvailableVersion === null || this.pendingUpdateStageRequestId !== null) return;
-    if (!this.settings.app.updateManifestUrl) return;
     const requestId = this.nextUpdateRequestId++;
     this.pendingUpdateStageRequestId = requestId;
     this.sendUpdateStatus("Downloading update…");
