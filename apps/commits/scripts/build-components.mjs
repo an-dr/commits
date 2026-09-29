@@ -110,6 +110,11 @@ async function buildComponent(source, output, wizerPath) {
     witPath: filePath(new URL("vendor/bones/wit/extension.wit", root)),
     worldName: "extension",
   };
+  // componentize-js runs wizer with an empty environment unless told
+  // otherwise. Without HOME, wizer's wasmtime looks the user up in
+  // /etc/passwd for its cache config, and the CI container's --user uid has
+  // no entry there: "config file not specified and failed to get the default".
+  if (process.env.HOME !== undefined) options.env = { HOME: process.env.HOME };
   if (wizerPath !== undefined) options.wizerBin = wizerPath;
   step(`componentizing ${source}`);
   let result;
