@@ -1,23 +1,28 @@
 # Documentation
 
-- [`ROADMAP.md`](../ROADMAP.md) — product phases and target architecture
-- [`phase-0-1.md`](phase-0-1.md) — implemented walking skeleton and evidence
-- [`phase-2-3.md`](phase-2-3.md) — native capabilities and read backend evidence
-- [`phase-4.md`](phase-4.md) — standalone graphical read surface and exclusions
-- [`settings.md`](settings.md) — standalone persisted settings schema
-- [`ci.md`](ci.md) — the Docker build image, local CI runs, and cross-compiling Windows
-- [`syntax-highlighting.md`](syntax-highlighting.md) — code colouring in the full-diff panel: engine, languages, limits
-- [`updating.md`](updating.md) — self-update: manifest format, install layout, apply/rollback
-- [`desktop-integration.md`](desktop-integration.md) — registering the installed app with Windows and Linux desktops
-- [`design/settings.md`](design/settings.md) — extension-compatible and desktop settings boundary
-- [`shared-core.md`](shared-core.md) — MIT core snapshot, its local divergence, Bones integration, and submodule plan
-- [`mit-webview-transition.md`](mit-webview-transition.md) — executable plan for replacing the old page with the shared Git Graph interface
-- [`linux-startup-investigation.md`](linux-startup-investigation.md) — Linux startup faults, their evidence, and the control channel built to find them
-- [`adr/`](adr/) — settled architectural decisions, including the repository
-  layout (ADR-007), run-time page delivery (ADR-006), the shared core
-  divergence (ADR-008), the MIT relicense (ADR-011) and what belongs
-  upstream in bones rather than here (ADR-012)
-- [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) — upstream lineage and licensing
+New to the project? Start with the [README](../README.md) to try the app, then the [contribution guide](../CONTRIBUTING.md) to build it and submit a change.
 
-The `vendor/bones` documentation remains the authority for engine protocols
-and runtime behavior. Product-specific decisions live here.
+## Using Commits
+
+- [Settings](settings.md) — persisted options, appearance, and external tools.
+- [Troubleshooting](troubleshooting.md) — first checks and diagnostic logs when the app does not start correctly.
+- [Desktop integration](desktop-integration.md) — application registration and folder actions.
+- [Self-updating](updating.md) — installation, release manifests, update, and rollback.
+- [Syntax highlighting](syntax-highlighting.md) — languages and limits in the diff panel.
+
+## Building and contributing
+
+- [Continuous integration](ci.md) — Docker builds, local CI runs, and Windows cross-compilation.
+- [Repository layout](../ROADMAP.md#repository-layout-target) — intended boundaries and product direction.
+- [Architecture decisions](adr/) — settled decisions about the core, host, engine, settings, and licensing.
+- [Third-party notices](../THIRD_PARTY_NOTICES.md) — upstream lineage and licenses.
+
+## Background and investigations
+
+- [Phase 0–1](phase-0-1.md), [Phase 2–3](phase-2-3.md), and [Phase 4](phase-4.md) — implementation records and verification evidence.
+- [Shared core](shared-core.md) and [webview transition](mit-webview-transition.md) — shared code boundary and transition plan.
+- [Linux startup investigation](linux-startup-investigation.md) — diagnosis of earlier startup and responsiveness faults.
+- [Settings design](design/settings.md) — extension-compatible and desktop settings boundary.
+- [Technical debt](techdebt.md) — tracked limitations and follow-up work.
+
+The [`vendor/bones` documentation](../vendor/bones/README.md) remains the authority for engine protocols and runtime behavior. Product-specific decisions live here.

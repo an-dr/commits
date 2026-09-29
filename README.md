@@ -1,229 +1,57 @@
-# commits
+# Commits
 
-A standalone desktop Git client built on the
-[`bones`](vendor/bones) engine. The repository contains a snapshot of
-`@an-dr/commits-core` in [`packages/core`](packages/core) and a reusable webview
-shell in [`packages/webview-shell`](packages/webview-shell), while the Bones host
-and its adapter live under [`apps/commits`](apps/commits). The adapter is
-compiled to a WebAssembly component and runs the same Git Graph webview used by
-the extension in a wry panel.
+A standalone desktop Git client for exploring and working with repositories on Windows and Linux. Commits brings the Git Graph interface to a native app powered by [Bones](vendor/bones/README.md).
 
-Everything here is MIT-licensed, including the vendored engine; see
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the upstream lineage and
-the dependency licenses that carry their own terms.
+[![Build](https://github.com/an-dr/commits/actions/workflows/build.yml/badge.svg)](https://github.com/an-dr/commits/actions/workflows/build.yml) [![Latest release](https://img.shields.io/github/v/release/an-dr/commits)](https://github.com/an-dr/commits/releases/latest) [![MIT license](https://img.shields.io/github/license/an-dr/commits)](LICENSE)
 
-Phases 0 and 1 provide the walking skeleton: the native app, TypeScript guest
-toolchain, shared binary codec, `HostPort`, VS Code page API shim, and a typed
-echo round trip. Real Git behavior starts in Phase 2.
+![Commits showing a branch list, commit graph, and changed-file tree](docs/README/screenshot.png)
 
-## Prerequisites
+## Why Commits
 
-- Rust 1.94 or later
-- Node.js 22.12 or later and npm
-- CMake and Ninja
-- A working C/C++ toolchain
-- WebView2 on Windows
+Open a repository to browse its commit graph, inspect changes, and use Git actions in one place. The desktop app shares its core and webview with the Git Graph extension while running independently of VS Code.
 
-Nothing here is bundled, and a machine that has never built native Rust is
-missing most of it. On a fresh Windows box the two that actually stop the build
-are Rust and the MSVC toolchain, and neither failure names itself clearly:
-without Rust, `npm run build:host` reports an unknown `cargo`; without MSVC,
-`cargo` reports a missing `link.exe`. Install both up front:
+This is an **AI-driven project**: AI tools help develop and maintain it. People are welcome to contribute with or without AI. **A human reviews every contribution** before it is accepted; contributors should understand and verify the changes they submit. See [Contributing](CONTRIBUTING.md) for the review process.
 
-```powershell
-# Rust, per user, no administrator rights needed
-winget install --id Rustlang.Rustup -e
+## Install
 
-# MSVC compiler, linker and the Windows SDK, needed by the
-# x86_64-pc-windows-msvc target and the vendored engine's CMake build.
-# Requires administrator rights and downloads several gigabytes.
-winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override `
-  "--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-```
+1. Download the ZIP for your platform from the [latest release](https://github.com/an-dr/commits/releases/latest): Windows x64, Windows ARM64, or Linux x64.
+1. Extract it to a folder and run `commits-app.exe` on Windows or `commits-app` on Linux. On Linux, make the executable runnable if your extraction tool did not preserve its permissions (`chmod +x commits-app`).
 
-Verify before building, because a partial toolchain fails deep into a long
-compile rather than at the start. Each of these must print a path:
+## Quickstart
 
-```powershell
-(Get-Command cargo).Source
-(Get-Command cmake).Source
-(Get-Command ninja).Source
-& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
-  -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-```
+Choose a repository in the app. You can also pass a repository path when launching it from a terminal, for example `./commits-app /path/to/repository` on Linux or `.\commits-app.exe C:\path\to\repository` in PowerShell.
 
-Node must be 22.12 or later: `vitest` pulls in `vite` and `rolldown`, which
-refuse anything earlier. `npm install` only warns about this, then `npm test`
-fails, so it is easy to mistake for a broken checkout.
+The release ZIP contains the app payload. To build a launcher and install the app from source, follow [Build from source](CONTRIBUTING.md#build-from-source). The installed app can register itself with the desktop and check for updates; [desktop integration](docs/desktop-integration.md) and [updating](docs/updating.md) explain those features.
 
-WebView2 ships with current Windows 11. Confirm it, since the app opens an
-empty window without it:
+## Features
 
-```powershell
-(Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}").pv
-```
+- Browse commit history and switch between repositories.
+- Inspect commits, changed files, and diffs with syntax highlighting.
+- Work with branches and perform Git actions from the graph.
+- Open a repository or a folder containing repositories from the command line.
 
-Initialize the nested bones dependencies after cloning:
+## Configuration
 
-```powershell
-git submodule update --init --recursive
-npm install
-```
+Adjust appearance, desktop behavior, and external tools through [settings](docs/settings.md).
 
-A clone that predates the bones 1.0 pin also carries a nested `agents`
-submodule that the 1.0 tree no longer has. Git cannot drop it on its own — it
-reports `unable to rmdir agents: Directory not empty` and leaves an untracked
-directory that reads as part of the checkout. Clear it once, from the
-repository root:
+## Documentation
 
-```powershell
-Remove-Item -Recurse -Force vendor\bones\agents -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force .git\modules\vendor\bones\modules\agents -ErrorAction SilentlyContinue
-git -C vendor\bones config --remove-section submodule.agents
-```
+The [documentation index](docs/index.md) links to architecture decisions, configuration, build and release details, and troubleshooting. The [roadmap](ROADMAP.md) records product direction.
 
-The last line prints `no such section` on a clone that never had it, which is
-the harmless case — nothing to clear.
+### Repository map
 
-On Windows ARM64, `npm run build` bootstraps a repository-local `wizer`
-10.0.0 because the upstream npm package has no prebuilt ARM64 executable.
-That first build is slow; later builds reuse `.tools/wizer/bin/wizer.exe`.
+| Area | Purpose |
+| --- | --- |
+| [Desktop app](apps/commits/README.md) | Native host, WebAssembly adapter, and webview |
+| [Shared packages](packages/README.md) | Core logic and webview shell |
+| [Native crates](crates/README.md) | Reusable operating system capabilities |
 
-## Build and test
+## Contributing
 
-```powershell
-npm run build
-npm run verify
-```
+Bug reports, documentation improvements, tests, and code are welcome. Start with the [contribution guide](CONTRIBUTING.md), which covers setup, useful areas of the codebase, checks, and pull requests. You can browse [open issues](https://github.com/an-dr/commits/issues) or open an issue to discuss an idea before taking on a larger change.
 
-Each part builds on its own, so an unchanged part is never rebuilt. The host is
-the slow one because it compiles the vendored engine; the page is the fast loop.
+## License and status
 
-| Target | Rebuilds | Run it after changing |
-| --- | --- | --- |
-| `npm run build:web` | page bundle and markup | `apps/commits/web`, `packages/webview-shell` |
-| `npm run build:wasm` | the WebAssembly components | `apps/commits/bones-adapter`, `packages/core` |
-| `npm run build:host` | the native executables | `apps/commits/host`, `crates/`, `vendor/bones` |
+Commits is released under the [MIT license](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for upstream lineage and dependency terms.
 
-`npm run dist:web`, `dist:wasm` and `dist:host` refresh the matching part of
-`dist/app` in place. `npm run clean` is the only thing that removes output.
-
-Assemble a runnable release directory:
-
-```powershell
-npm run dist
-.\dist\app\commits.exe
-```
-
-## Opening a repository
-
-`commits` takes one optional argument: the repository to open.
-
-```powershell
-commits C:\path\to\repository
-commits .
-```
-
-A relative path resolves against the shell's working directory, so `commits .`
-opens the folder you are standing in. The path must be a git repository; a
-missing folder, a file, or a folder without a `.git` leaves the app on the
-chooser saying which of those it was, rather than failing to start.
-
-Started with no argument, it opens the chooser rather than reattaching to
-whatever was last in use. The chooser lists recent repositories, and its input
-is pre-labelled with the last one — pressing Enter on the empty box reopens it,
-so the common case is still one keystroke. The same list is under **Recent** in
-the menu, for switching without leaving the graph.
-
-Three flags are answered by `commits` itself; everything else reaches the app
-untouched:
-
-```powershell
-commits --version    # the installed app version, and the launcher's own build
-commits --help       # usage
-commits --rollback   # drop the newest installed version for the previous one
-```
-
-`--version` prints both numbers on purpose. `commits.exe` is a small permanent
-entry point that starts the real application from a version folder beside it,
-and the two are updated by different mechanisms, so they can drift:
-
-```text
-commits 1.1.0
-launcher 1.1.0
-```
-
-Matching numbers mean the entry point is current. If they disagree, the
-application is newer than the thing starting it — start `commits` once and it
-repairs itself, since the running app replaces the launcher whenever the
-version it came from carries a newer one. See
-[`docs/updating.md`](docs/updating.md) for the mechanism.
-
-## Troubleshooting a blank window
-
-A window that opens black, with no menu bar, means the `commits` component
-failed to attach. The engine treats that as non-fatal -- it logs the error and
-keeps ticking -- so nothing ever opens the panel. The app now reports this in a
-dialog and writes `commits.log` beside the executable; the previous run is kept
-as `commits.prev.log`, because relaunching is the first thing anyone tries.
-
-```powershell
-Get-Content .\dist\app\commits.log
-```
-
-The line to look for is:
-
-```text
-[ERROR] engine: failed to load ...\extensions\commits.wasm: error while executing at wasm backtrace: ... init
-```
-
-This is a timing failure, not a broken build. `instantiate` plus `init` must
-finish inside a wall-clock budget, and `commits.wasm` is roughly 12 MB carrying
-an embedded JavaScript engine. Because the budget is wall clock, it is spent by
-any delay at all, not only by work: a busy machine, a first run where the file
-is not in the page cache and a virus scanner is still reading a newly written
-12 MB binary, or a launch straight after `npm run dist`.
-
-The engine's default budget of one second was too tight for this component --
-under heavy CPU load it failed every launch, while the same bytes loaded every
-time on an idle machine. The app therefore asks for thirty seconds through
-`Engine::extension_load_timeout` in
-[`apps/commits/host/src/main.rs`](apps/commits/host/src/main.rs); the same load
-that used to fail four times out of four now succeeds four times out of four.
-
-If you still see this, the machine is slower than that allowance rather than
-misconfigured: raise the value there. Relaunching on a quiet machine also
-works.
-
-The repository splits by who can use the code: [`packages/`](packages) holds
-what the VS Code extension consumes, [`apps/`](apps) holds this application, and
-each directory's README states what belongs in it.
-
-## Slow first paint on Linux (fixed)
-
-On Linux the window used to stay solid white for up to a minute after launch
-before the graph appeared, with `commits.log` already showing the panel as
-open the whole time:
-
-```text
-[INFO] commits: commits graph panel opened
-```
-
-The cause was the app's own page server. It answered connections one at a
-time on a single thread, with no read timeout, and WebKit opens a spare
-socket it never sends a request on. That socket was accepted first, the
-reader blocked on it, and the real `GET /page.html` sat unread in the kernel
-receive buffer -- visible as a non-empty `Recv-Q` in `ss -tnp` -- until
-WebKit's own idle timeout closed the spare socket about a minute later. The
-server then served the page and it painted at once.
-
-Each connection now gets its own thread and a read timeout, so a silent
-socket costs nothing. `page.rs` carries a regression test that opens a silent
-connection first and asserts the next request is still answered immediately.
-
-The `cosmic-comp` buffer-import errors visible in `journalctl` during the
-same window were unrelated: they hit other windows in the session too, and
-they did not move the timing in either direction.
-
-Architecture and current verification evidence are indexed in
-[`docs/index.md`](docs/index.md).
+The project is under active development. Releases currently target Windows x64, Windows ARM64, and Linux x64; [CI](docs/ci.md) builds all three and runs tests on Linux x64 and Windows x64.
