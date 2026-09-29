@@ -20,14 +20,22 @@ web   page bundle and markup only
 wasm  the WebAssembly components only
 host  the native executables only
 all   every part (default)
+
+.PARAMETER Target
+A Rust target triple to cross-compile the host for, such as
+x86_64-pc-windows-msvc; empty builds for the machine running this. A
+Windows target builds through cargo-xwin (docs/ci.md).
 #>
 param(
     [ValidateSet("web", "wasm", "host", "all")]
-    [string]$Part = "all"
+    [string]$Part = "all",
+    [string]$Target = ""
 )
 
 $ErrorActionPreference = "Stop"
-$isWindowsPlatform = $env:OS -eq "Windows_NT"
+# What decides the executables' names is the platform they are built for,
+# not the one building them.
+$isWindowsPlatform = if ($Target -ne "") { $Target -like "*-windows-*" } else { $env:OS -eq "Windows_NT" }
 
 $root = Split-Path -Parent $PSScriptRoot
 $output = Join-Path $root "dist/app"
@@ -95,7 +103,16 @@ if ($Part -in @("host", "all")) {
     # One package, three binaries: the app, the launcher that starts it, and
     # the askpass/editor helpers. The mechanism behind the launcher is
     # bones-upgrader's; the name is ours, so the binary is declared here.
-    cargo build --release -p commits-app
+    if ($Target -eq "") {
+        cargo build --release -p commits-app
+        $binDir = Join-Path $root "target/release"
+    } elseif ($isWindowsPlatform) {
+        cargo xwin build --release --target $Target -p commits-app
+        $binDir = Join-Path $root "target/$Target/release"
+    } else {
+        cargo build --release --target $Target -p commits-app
+        $binDir = Join-Path $root "target/$Target/release"
+    }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     # The launcher is the permanent entry point: it picks the current version
     # folder before running the real app logic, built separately as
@@ -105,17 +122,17 @@ if ($Part -in @("host", "all")) {
     # type is stable while the file behind it can be replaced.
     $launcherExe = if ($isWindowsPlatform) { "commits-launcher.exe" } else { "commits-launcher" }
     $entryPointExe = if ($isWindowsPlatform) { "commits.exe" } else { "commits" }
-    Copy-Item (Join-Path $root "target/release/$launcherExe") (Join-Path $outputFull $entryPointExe) -Force
+    Copy-Item (Join-Path $binDir $launcherExe) (Join-Path $outputFull $entryPointExe) -Force
     # The same launcher also travels *inside* the version folder, under its
     # build name. That copy is what the app installs over the entry point
     # when the two differ -- without it in the payload, a launcher fix can
     # never reach a machine that already has one. Keeping the two names
     # apart is what lets the entry point stay stable while the file behind
     # it is replaceable.
-    Copy-Item (Join-Path $root "target/release/$launcherExe") (Join-Path $versionDirFull $launcherExe) -Force
+    Copy-Item (Join-Path $binDir $launcherExe) (Join-Path $versionDirFull $launcherExe) -Force
     foreach ($helper in @("commits-askpass", "commits-editor", "commits-app")) {
         $helperExe = if ($isWindowsPlatform) { "$helper.exe" } else { $helper }
-        Copy-Item (Join-Path $root "target/release/$helperExe") (Join-Path $versionDirFull $helperExe) -Force
+        Copy-Item (Join-Path $binDir $helperExe) (Join-Path $versionDirFull $helperExe) -Force
     }
     Write-Host "Updated the executables in $outputFull ($versionDirFull for the versioned parts)"
 }

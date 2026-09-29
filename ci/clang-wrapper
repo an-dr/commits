@@ -1,0 +1,23 @@
+#!/usr/bin/python3
+# cargo-xwin passes MSVC-style include flags (/imsvc DIR) to every C
+# compiler, but ring builds Windows arm64 with plain clang, which rejects
+# them. Called as clang-cl this passes straight through in cl mode; called
+# as clang it rewrites that flag to -isystem. See docs/ci.md.
+import os
+import sys
+
+REAL = "/usr/lib/llvm-19/bin/clang"
+args = sys.argv[1:]
+if "--driver-mode=cl" in args:
+    os.execv(REAL, [REAL] + args)
+if os.path.basename(sys.argv[0]) == "clang-cl":
+    os.execv(REAL, [REAL, "--driver-mode=cl"] + args)
+rewritten, i = [], 0
+while i < len(args):
+    if args[i] == "/imsvc" and i + 1 < len(args):
+        rewritten += ["-isystem", args[i + 1]]
+        i += 2
+    else:
+        rewritten.append(args[i])
+        i += 1
+os.execv(REAL, [REAL] + rewritten)

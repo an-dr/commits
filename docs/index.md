@@ -5,6 +5,7 @@
 - [`phase-2-3.md`](phase-2-3.md) — native capabilities and read backend evidence
 - [`phase-4.md`](phase-4.md) — standalone graphical read surface and exclusions
 - [`settings.md`](settings.md) — standalone persisted settings schema
+- [`ci.md`](ci.md) — the Docker build image, local CI runs, and cross-compiling Windows
 - [`syntax-highlighting.md`](syntax-highlighting.md) — code colouring in the full-diff panel: engine, languages, limits
 - [`updating.md`](updating.md) — self-update: manifest format, install layout, apply/rollback
 - [`desktop-integration.md`](desktop-integration.md) — registering the installed app with Windows and Linux desktops

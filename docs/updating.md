@@ -110,7 +110,7 @@ git push origin main v1.8.0
 ```
 
 The [`build`](../.github/workflows/build.yml) workflow builds all three
-platforms. Each one runs
+platforms in one Docker image ([`ci.md`](ci.md)). Each one runs
 [`scripts/package-release.ps1`](../scripts/package-release.ps1), which zips
 its version folder as `commits-<version>-<platform>.zip` and writes the
 platform's manifest next to it, pointing at that zip on the tag's release

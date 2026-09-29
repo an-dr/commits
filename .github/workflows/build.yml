@@ -1,16 +1,11 @@
 name: build
 
-# Builds, tests and packages all three release platforms on every push. A
-# v<version> tag also publishes them as a GitHub release, which is where the
-# installed app looks for updates (docs/updating.md). Every platform is
-# required: a release missing one would leave that platform's installs
-# without updates, so a red platform must stop the release.
-#
-# Windows arm64 once died inside componentize-js shortly after spawning the
-# locally bootstrapped wizer, while the same path worked on an arm64
-# developer machine. The instrumentation in
-# apps/commits/scripts/build-components.mjs and the cache steps below preserve
-# enough evidence to diagnose another runner-only failure.
+# Every platform builds in one Docker image (ci/Dockerfile) through the same
+# script a developer runs locally: scripts/ci-docker.sh <platform>. Windows is
+# cross-compiled there, so the only job outside Docker is windows-tests, which
+# runs the Rust tests on real Windows. A v<version> tag also publishes the
+# builds as a GitHub release, where the installed app looks for updates.
+# See docs/ci.md and docs/updating.md.
 
 on:
   push:
@@ -21,117 +16,80 @@ on:
 
 jobs:
   build:
-    name: build (${{ matrix.name }})
-    runs-on: ${{ matrix.os }}
+    name: build (${{ matrix.platform }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: windows-x64
-            os: windows-latest
-          - name: windows-arm64
-            os: windows-11-arm
-          - name: linux-x64
-            os: ubuntu-latest
+        platform: [linux-x64, windows-x64, windows-arm64]
 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - uses: actions/setup-node@v4
+      # The image, a Rust build and the Windows SDK together outgrow the
+      # runner's free space; these preinstalled toolchains are never used.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      # The cargo registry and the downloaded Windows SDK are the same on
+      # every run; ci-docker.sh mounts this directory into the container.
+      - uses: actions/cache@v4
         with:
-          # 22.12 exits silently inside componentize-js on Windows ARM64;
-          # 22.23.2 completes the same wizer invocation on the same machine.
-          node-version: "22.23.2"
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      # wry's webkit2gtk backend and the vendored SDL3-from-source build both
-      # need these; windows-latest and windows-11-arm ship MSVC/CMake/Ninja
-      # already (see runner-images), so only Linux needs an explicit install.
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake ninja-build \
-            libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
-            libasound2-dev libxss-dev
-
-      # Not `npm ci`: some optional native dependencies (e.g. @napi-rs/wasm-runtime's
-      # peer deps) are platform-gated, so a lockfile resolved on one OS is not
-      # guaranteed complete for another -- `npm ci`'s strict lockfile-completeness
-      # check fails on Linux for exactly that reason. `npm install` resolves
-      # what the current platform actually needs instead of requiring the
-      # lockfile to already list every platform's variants.
-      - run: npm install
-
-      # win-arm64 has no prebuilt wizer, so `npm run build:wasm` builds one
-      # with `cargo install` -- five minutes of wasmtime on that runner, on
-      # every single run. The key carries the version the build script pins,
-      # so bumping it there invalidates this without anyone remembering to.
-      # Restore and save are separate so the save runs even when a later step
-      # fails: the whole point is that a red arm64 run must not also mean
-      # another five minutes of wasmtime on the next attempt.
-      - name: Restore the bootstrapped wizer
-        id: wizer-cache
-        if: matrix.name == 'windows-arm64'
-        uses: actions/cache/restore@v4
-        with:
-          path: .tools/wizer
-          key: wizer-10.0.0-${{ matrix.name }}
-
-      # Run as three steps rather than one build, so a failure names the
-      # stage it happened in. This is not cosmetic: windows-arm64 has failed
-      # here with exit code 1 and no output at all, and a step named "build
-      # wasm components" is the difference between knowing that much and
-      # knowing nothing. Each dist.ps1 part builds and then places its output
-      # in dist/app, so nothing is built twice.
-      - name: Build the page
-        shell: pwsh
-        run: ./scripts/dist.ps1 -Part web
-
-      - name: Build the wasm components
-        shell: pwsh
-        run: ./scripts/dist.ps1 -Part wasm
-
-      - name: Save the bootstrapped wizer
-        if: always() && matrix.name == 'windows-arm64' && steps.wizer-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: .tools/wizer
-          key: wizer-10.0.0-${{ matrix.name }}
-
-      - name: Build the host executables
-        shell: pwsh
-        run: ./scripts/dist.ps1 -Part host
-
-      - run: npm run check
-
-      - run: npm test
-
-      - run: cargo test --workspace
+          path: ~/.cache/commits-ci
+          key: commits-ci-${{ matrix.platform }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: commits-ci-${{ matrix.platform }}-
 
       # Only a tag names the release; any other run packages against
       # v<version>, which checks the same files without publishing them.
-      - name: Package the release
-        shell: pwsh
-        run: ./scripts/package-release.ps1 -Platform ${{ matrix.name }} -Repository ${{ github.repository }} -Tag "${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}"
+      - name: Build in Docker
+        run: ./scripts/ci-docker.sh ${{ matrix.platform }} "${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}"
 
       # The zip is also the runnable build: unzip it and run commits-app, or
       # its Install menu entry, to try this commit.
       - name: Upload the release files
         uses: actions/upload-artifact@v4
         with:
-          name: commits-${{ matrix.name }}-${{ github.sha }}
+          name: commits-${{ matrix.platform }}-${{ github.sha }}
           path: release/*
           if-no-files-found: error
           retention-days: 30
 
+      # windows-tests loads these; building them on Windows would repeat the
+      # whole wasm toolchain outside Docker.
+      - name: Upload the wasm components
+        if: matrix.platform == 'linux-x64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: components-${{ github.sha }}
+          path: dist/extensions/*.wasm
+          if-no-files-found: error
+          retention-days: 1
+
+  # A cross-compiled binary cannot run in a Linux container, so this is where
+  # Windows-only code is actually executed (docs/ci.md).
+  windows-tests:
+    name: test (windows-x64, native)
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: components-${{ github.sha }}
+          path: dist/extensions
+
+      - run: cargo test --workspace
+
   release:
     name: publish release
-    needs: build
+    needs: [build, windows-tests]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -139,6 +97,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: commits-*
           path: release
           merge-multiple: true
 
