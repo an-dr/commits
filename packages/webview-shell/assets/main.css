@@ -518,6 +518,13 @@ body.fullDiffPanelHidden #fullDiffPanel {
   padding: 10px;
   opacity: 0.75;
 }
+/* As wide as the longest line, so a row's background runs under all of its
+   text rather than stopping at the edge of the scrolled viewport. */
+.diffFullView,
+.diffRawView {
+  width: max-content;
+  min-width: 100%;
+}
 .diffRow {
   display: flex;
   align-items: flex-start;
@@ -566,6 +573,11 @@ body.fullDiffPanelHidden #fullDiffPanel {
   flex: 1 1 50%;
   min-width: 0;
   overflow: auto;
+  /* One column as wide as the pane's longest line, for the same reason as
+     .diffFullView above. */
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr);
+  align-content: start;
 }
 .diffSbsPaneNew {
   border-left: 1px solid rgba(128, 128, 128, 0.35);
