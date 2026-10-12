@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 import { Reader, Writer } from "./codec";
 import {
   decodeGitResult,
+  decodeLaunchRequest,
+  decodeUpgradeResult,
+  decodeDesktopResult,
   decodeNativeResult,
-  decodeUpdaterResult,
   decodeWatchEvent,
   encodeGitCancel,
   encodeGitRun,
@@ -13,7 +15,6 @@ import {
   encodeOsRequest,
   encodeRepoOsRequest,
   encodeToolRun,
-  encodeUpdaterRequest,
   encodeWatchRequest,
 } from "./native";
 
@@ -27,6 +28,17 @@ const fromHex = (hex: string): Uint8Array =>
   Uint8Array.from(hex.match(/.{2}/g)?.map((byte) => Number.parseInt(byte, 16)) ?? []);
 
 describe("native protocol", () => {
+  it("decodes the shared startup and handoff launch fixtures", () => {
+    expect(decodeLaunchRequest(fromHex(fixtures.launch_startup))).toMatchObject({ sequence: 0, kind: "repository", paths: ["C:/repo"], show: "changes", theme: "dark" });
+    expect(decodeLaunchRequest(fromHex(fixtures.launch_handoff))).toMatchObject({ sequence: 2, paths: ["C:/other"], show: "conflicts", commit: "abcd", branch: "main" });
+    expect(() => decodeLaunchRequest(fromHex(fixtures.launch_handoff).slice(0, -1))).toThrow();
+  });
+  it("decodes Bones update and desktop result vocabularies", () => {
+    expect(decodeUpgradeResult(new Writer().u32(7).u8(0).raw(new TextEncoder().encode("1.9.0")).finish())).toMatchObject({ requestId: 7, ok: true, available: true, version: "1.9.0" });
+    expect(decodeUpgradeResult(new Writer().u32(8).u8(4).u8(1).string("1.8.1").raw(new TextEncoder().encode("1.9.0")).finish())).toMatchObject({ previous: "1.8.1", version: "1.9.0" });
+    expect(decodeDesktopResult(new Writer().u32(9).u8(0).u8(1).finish())).toMatchObject({ requestId: 9, ok: true });
+    expect(() => decodeUpgradeResult(new Writer().u32(1).u8(7).finish())).toThrow();
+  });
   it("encodes a deterministic Git request", () => {
     const reader = new Reader(encodeGitRun({
       requestId: 7,
@@ -136,22 +148,4 @@ describe("native protocol", () => {
     );
   });
 
-  it("encodes an updater request and decodes its result", () => {
-    expect(encodeUpdaterRequest(3, "check", "https://example.com/manifest.json"))
-      .toEqual(new Writer().u32(3).u8(0).string("https://example.com/manifest.json").finish());
-    expect(encodeUpdaterRequest(3, "stage", "https://example.com/manifest.json")[4]).toBe(1);
-    expect(encodeUpdaterRequest(3, "install", "")[4]).toBe(2);
-    expect(encodeUpdaterRequest(3, "register", "")[4]).toBe(3);
-    expect(encodeUpdaterRequest(3, "unregister", "")[4]).toBe(4);
-
-    const result = new Writer().u32(3).u8(1).u8(1).u8(0).string("1.2.0").string("").finish();
-    expect(decodeUpdaterResult(result)).toEqual({
-      requestId: 3,
-      ok: true,
-      available: true,
-      fresh: false,
-      version: "1.2.0",
-      error: "",
-    });
-  });
 });

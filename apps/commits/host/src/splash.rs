@@ -11,10 +11,10 @@
 //! component's panel is a separate child webview created later -- later means
 //! on top -- and this one is closed once it reports itself open.
 
+use bones_kernel::bus::{Envelope, Handler, Module, ModuleContext, Registry};
+use bones_kernel::logging::Logger;
 use bones_messages::web::{ClosePanel, Command, OpenPanel, PanelOpened, PanelSource};
 use bones_messages::{DecodeMessage, Message};
-use bones_engine::bus::{Envelope, Handler, Module, ModuleContext, Registry};
-use bones_engine::logging::Logger;
 
 /// Bus endpoint name, and so the panel owner the web module records.
 pub const ENDPOINT: &str = "splash";
@@ -65,7 +65,11 @@ impl SplashModule {
         // its own thread and answers regardless. (A `data:` URL renders, but
         // leaves the page at an opaque origin, where wry panics outright on
         // any `window.ipc` call.)
-        let url = match registry.call(ENDPOINT, crate::page::ENDPOINT, &[crate::page::LOADING_REQUEST]) {
+        let url = match registry.call(
+            ENDPOINT,
+            crate::page::ENDPOINT,
+            &[crate::page::LOADING_REQUEST],
+        ) {
             Ok(url) => String::from_utf8_lossy(&url).into_owned(),
             Err(_) => return,
         };
@@ -166,7 +170,10 @@ mod tests {
         };
 
         splash.handle(&opened("commits", "other"));
-        assert!(splash.shown, "another panel of the same owner is not the one");
+        assert!(
+            splash.shown,
+            "another panel of the same owner is not the one"
+        );
 
         splash.handle(&opened("splash", "loading"));
         assert!(splash.shown, "its own panel opening must not dismiss it");

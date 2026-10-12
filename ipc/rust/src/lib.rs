@@ -68,6 +68,28 @@ pub fn web_fixtures() -> BTreeMap<&'static str, String> {
 
 pub fn native_fixtures() -> BTreeMap<&'static str, String> {
     let mut fixtures = BTreeMap::new();
+    for (name, sequence, json) in [
+        (
+            "launch_startup",
+            0,
+            r#"{"kind":"repository","paths":["C:/repo"],"show":"changes","branch":null,"commit":null,"theme":"dark"}"#,
+        ),
+        (
+            "launch_handoff",
+            2,
+            r#"{"kind":"repository","paths":["C:/other"],"show":"conflicts","branch":"main","commit":"abcd","theme":null}"#,
+        ),
+    ] {
+        fixtures.insert(
+            name,
+            hex(&native::LaunchRequest {
+                sequence,
+                json: json.into(),
+            }
+            .encode()
+            .unwrap()),
+        );
+    }
     fixtures.insert(
         "git_run",
         hex(&GitRun {

@@ -1,21 +1,17 @@
 # Wire contract
 
-The message formats crossing a process or component boundary: the binary Bones
-web-panel protocol and the native service requests and results.
+This directory defines message formats crossing a process or component boundary: Bones web-panel messages and the app's native service requests and results.
 
-Both language bindings live here together because neither is the source of
-truth. Rust generates the byte fixtures in `fixtures/`, TypeScript tests assert
-against those same bytes, and a change that breaks one side fails the other's
-tests. Splitting the bindings apart would remove the only mechanism that detects
-drift.
+Both language bindings live together. Rust generates the byte fixtures in `fixtures/`, TypeScript asserts against those bytes, and changes that break one side fail the other's tests. Types used on only one side stay with that side's code.
 
-A definition belongs here when both sides of a boundary must agree on its exact
-bytes. Types used on only one side belong with that side's code.
+Rust's framing primitives come from `bones-messages`. The TypeScript codec remains local because Bones ships no TypeScript; conformance fixtures hold it to the same framing.
 
-The framing underneath those definitions is not ours. `Reader` and `Writer` come
-from `bones-messages`, which the engine and every guest already share, so the
-primitives are defined once rather than reimplemented on each side of the
-submodule. What lives here is the message shapes built on them: which fields a
-git run or an OS request carries, and in what order. The TypeScript `Reader` and
-`Writer` in `ts/` remain a local reimplementation because bones ships no
-TypeScript, and the fixtures are what hold the two in agreement.
+## Launch requests
+
+The `launch` endpoint and `launch/request` topic use the same encoding: a little-endian u32 `sequence`, then a length-prefixed u32 UTF-8 JSON blob. The JSON carries `kind` (`none`, `repository`, or `rejected`), `paths` or `reason` as appropriate, and validated navigation and appearance options. `sequence` starts at zero and increases on handoff. Shared `launch_startup` and `launch_handoff` fixtures exercise both language bindings.
+
+A nonempty request to `launch` queries native repository-path facts for the health reader. `sources` answers JSON repository lists. Neither endpoint accepts writes. See the [command-line contract](../docs/command-line.md) for user-facing launch semantics.
+
+## Bones-owned services
+
+Update and desktop requests use the `bones-messages::upgrader` and `bones-messages::desktop` vocabularies. They carry a caller's u32 request id and a one-byte action; release URLs are fixed by native composition. TypeScript decodes their results into the app menu's internal status model. The replaced local updater wire format is removed.

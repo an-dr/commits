@@ -32,6 +32,8 @@ The release ZIP contains the app payload. To build a launcher and install the ap
 
 ## Configuration
 
+Callers can use [command-line navigation](docs/command-line.md), [repository sources](docs/repository-sources.md), and [session themes](docs/themes.md). The [repository health contract](docs/repository-health.md) defines the verdicts shown beside the repository selector.
+
 Adjust appearance, desktop behavior, and external tools through [settings](docs/settings.md).
 
 ## Documentation

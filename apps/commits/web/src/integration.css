@@ -1,0 +1,24 @@
+#standaloneHealth {
+  background: transparent;
+  border: 0;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+#standaloneHealth[data-urgency="advisory"] { color: var(--urgency-advisory); }
+#standaloneHealth[data-urgency="caution"] { color: var(--urgency-caution); }
+#standaloneHealth[data-urgency="warning"] { color: var(--urgency-warning); }
+#standaloneHealth:disabled { cursor: default; }
+#standaloneNotice { position: fixed; bottom: 12px; left: 16px; z-index: 10000; background: var(--vscode-editorWidget-background); color: var(--vscode-foreground); padding: 8px 12px; border: 1px solid var(--vscode-widget-border); max-width: 80vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#standaloneSources { max-height: 240px; overflow: auto; }
+.standaloneSourcesSelector .dropdownOptions, .standaloneSourcesSelector .dropdownNoResults, .standaloneSourcesSelector .dropdownFilter { display: none !important; }
+#standaloneSelector { width: 320px; max-width: 80vw; padding: 6px; }
+#repoSelect .dropdownCurrentValue { max-width: 200px; }
+#standaloneSelector h2, #standaloneSelector h3 { margin: 10px 0 6px; font-size: 13px; }
+#standaloneSources h2, #standaloneSources h3 { margin: 10px 0 6px; font-size: 13px; }
+.standaloneSourceRepo { display: flex; flex-direction: column; text-align: left; width: 100%; padding: 6px 8px; background: transparent; color: var(--vscode-foreground); border: 0; cursor: pointer; }
+.standaloneSourceRepo:hover { background: var(--vscode-list-hoverBackground); }
+.standaloneSourceRepo small { opacity: .7; }
+.standaloneSourceRepo span, .standaloneSourceRepo small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.standaloneSourceRepo:disabled { opacity: .4; cursor: default; }

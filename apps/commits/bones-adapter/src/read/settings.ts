@@ -148,6 +148,7 @@ export type AppSettings = Readonly<Record<string, unknown>> & {
   readonly timeFormat: TimeFormat;
   /** Manifest URL checked for a newer version at boot; empty disables self-update. */
   readonly updateManifestUrl: string;
+  readonly navigationMaxCommits: number;
   /**
    * External tools, in the order the Open in button offers them.
    *
@@ -209,6 +210,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   darkTheme: "graphite",
   timeFormat: "system",
   updateManifestUrl: "",
+  navigationMaxCommits: 10000,
   [TOOLS_KEY]: [VS_CODE_TOOL],
 };
 
@@ -253,6 +255,7 @@ export function validateSettings(candidate: unknown): SettingsDocument {
       darkTheme: typeof value.app.darkTheme === "string" ? value.app.darkTheme : "graphite",
       timeFormat: timeFormat === "12h" || timeFormat === "24h" ? timeFormat : "system",
       updateManifestUrl: typeof value.app.updateManifestUrl === "string" ? value.app.updateManifestUrl : "",
+      navigationMaxCommits: typeof value.app.navigationMaxCommits === "number" && Number.isFinite(value.app.navigationMaxCommits) && value.app.navigationMaxCommits >= 1 ? Math.floor(value.app.navigationMaxCommits) : 10000,
       // An absent key is a document written before tools existed, which takes
       // the default; a present empty list is someone who turned the tools off,
       // and stays off. `tools` is read as a fallback for a document written

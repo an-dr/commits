@@ -1,6 +1,9 @@
 import type { GitFileChangeType } from "@an-dr/commits-core/backend/types";
 import type { GitRepoSet, RequestMessage, ResponseMessage, SubmoduleView } from "@an-dr/commits-core/types";
 import { encodeFileRead, type GitResult, type NativeResult, type UpdaterResult, type WatchEvent } from "@commits/ipc/native";
+import { HealthReader, type RepositoryHealth } from "./health/facts";
+import { applyNavigation, type NavigationTarget } from "./navigation";
+import type { LaunchRequest } from "@commits/ipc/native";
 import { gravatarUrl } from "./gravatar";
 import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
@@ -66,6 +69,17 @@ interface PendingToolDiff {
 
 /** Bones owner of the unchanged MIT webview's host protocol. */
 export class CommitsCore {
+  private readonly health: HealthReader;
+  private latestHealth: RepositoryHealth | null = null;
+  private launchSequence = -1;
+  private pendingLaunch: LaunchRequest | null = null;
+  private pendingNavigation: NavigationTarget | null = null;
+  private loadingCommits = 0;
+  private awaitingFirstLoad = false;
+  private readonly navigationReads = new Map<number, (result: GitResult) => void>();
+  private sessionLaunch: LaunchRequest = { kind: "none" };
+  private navigationGeneration = 0;
+  private pendingInstallRegistration: UpdaterResult | null = null;
   private readonly repositories: RepositoryManager;
   private readonly persistent: PersistentExtensionState;
   private readonly graph: MitGraphBackend;
@@ -130,6 +144,11 @@ export class CommitsCore {
   private comparisonSequence = 0;
 
   constructor(private readonly host: HostPort) {
+    this.health = new HealthReader(host, (health) => {
+      if (health.repository !== this.currentRepository) return;
+      this.latestHealth = health;
+      this.send({ command: "repoHealth", ...health });
+    });
     const storage = {
       load: () => host.loadSavedState(),
       save: (value: Uint8Array<ArrayBufferLike>) => host.saveSavedState(value),
@@ -166,7 +185,9 @@ export class CommitsCore {
     this.host.subscribe("repo-os/result");
     this.host.subscribe("os/prompt");
     this.host.subscribe("git/completed");
-    this.host.subscribe("updater/completed");
+    this.host.subscribe("upgrader/result");
+    this.host.subscribe("desktop/result");
+    this.host.subscribe("launch/request");
     this.host.subscribe("repo/full-refresh");
     this.host.subscribe("repo/lightweight-refresh");
     // Fetched here rather than at construction so the request reaches a running
@@ -201,7 +222,20 @@ export class CommitsCore {
       case "standaloneReady":
         this.send({ command: "standaloneSettings", settings: this.settings, error: this.settingsError });
         return;
+      case "standaloneFocus":
+        this.refreshHealth();
+        this.sendSources();
+        return;
+      case "standaloneSources":
+        this.sendSources();
+        return;
+      case "standaloneHealthNavigate":
+        this.navigateHealth();
+        return;
       case "standaloneViewReady":
+        this.refreshHealth();
+        this.sendSources();
+        this.sendSessionAppearance();
         this.sendRecentRepositories();
         this.sendCurrentRepositories();
         this.sendCommitsRepoStatus();
@@ -293,6 +327,8 @@ export class CommitsCore {
           });
           return;
         }
+        this.loadingCommits++;
+        const loadingRepository = this.currentRepository;
         this.graph.loadCommits(
           {
             command: "loadCommits",
@@ -305,7 +341,13 @@ export class CommitsCore {
             showRemoteBranches: value.showRemoteBranches !== false,
             hard: value.hard === true,
           },
-          (response) => this.send(response),
+          (response) => {
+            this.send(response);
+            this.loadingCommits--;
+            if (loadingRepository === this.currentRepository) this.awaitingFirstLoad = false;
+            if (this.loadingCommits === 0 && this.pendingLaunch) { const launch = this.pendingLaunch; this.pendingLaunch = null; this.applyLaunch(launch); }
+            else if (this.loadingCommits === 0 && this.pendingNavigation) { const navigation = this.pendingNavigation; this.pendingNavigation = null; this.navigate(navigation); }
+          },
         );
         return;
       case "commitDetails":
@@ -392,7 +434,7 @@ export class CommitsCore {
         return;
       }
       case "repoInProgress":
-        this.send({ command: "repoInProgress", state: null });
+        this.sendInProgress();
         return;
       case "submoduleStatus":
         this.reportSubmodules();
@@ -726,6 +768,9 @@ export class CommitsCore {
       this.finishToolDiffSide(toolDiff, result);
       return;
     }
+    if (this.health.receive(result)) return;
+    const navigationRead = this.navigationReads.get(result.requestId);
+    if (navigationRead) { this.navigationReads.delete(result.requestId); navigationRead(result); return; }
     this.graph.receive(result);
     this.workingTreeActions.receive(result);
   }
@@ -752,6 +797,10 @@ export class CommitsCore {
       return;
     }
     if (result.requestId === this.pendingInstallRequestId) {
+      if (this.pendingInstallRegistration !== null) {
+        result = { ...this.pendingInstallRegistration, error: result.ok ? "" : `registration failed: ${result.error}` };
+        this.pendingInstallRegistration = null;
+      }
       this.pendingInstallRequestId = null;
       // An ok result with an error installed the files but could not
       // register them; the installed app's own Register retries that.
@@ -1012,7 +1061,11 @@ export class CommitsCore {
     // repository is offered on the chooser rather than opened behind the
     // user's back, so starting the app never silently reattaches to whatever
     // was last in use -- which is the whole point of asking for a path.
-    const launch = this.host.launchRepository();
+    const launch = this.pendingLaunch ?? this.host.launchRepository();
+    this.pendingLaunch = null;
+    this.launchSequence = launch.sequence ?? 0;
+    this.sessionLaunch = launch;
+    this.pendingNavigation = launch;
     if (launch.kind === "repository") {
       // Through addExternal and its normalised path, not by assignment: a
       // repository opened from the command line joins the recent list like
@@ -1033,6 +1086,7 @@ export class CommitsCore {
     // release for its own platform (docs/updating.md).
     this.checkForUpdate();
     const installStatus = this.host.installStatus();
+    this.host.requestLastApplied?.(this.nextUpdateRequestId++);
     if (installStatus.ok) {
       this.installStatusKind = installStatus.installed ? "hidden" : "ready";
       if (installStatus.installed) this.registration = installStatus.registered ? "registered" : "unregistered";
@@ -1053,7 +1107,7 @@ export class CommitsCore {
     if (this.pendingUpdateCheckRequestId !== null) return;
     const requestId = this.nextUpdateRequestId++;
     this.pendingUpdateCheckRequestId = requestId;
-    this.host.requestUpdate(requestId, "check", this.settings.app.updateManifestUrl);
+    this.host.requestUpdate(requestId, "check");
   }
 
   /** Downloads, verifies, and stages the update `checkForUpdate` found. */
@@ -1062,7 +1116,7 @@ export class CommitsCore {
     const requestId = this.nextUpdateRequestId++;
     this.pendingUpdateStageRequestId = requestId;
     this.sendUpdateStatus("Downloading update…");
-    this.host.requestUpdate(requestId, "stage", this.settings.app.updateManifestUrl);
+    this.host.requestUpdate(requestId, "stage");
   }
 
   private sendUpdateStatus(message: string, ready = false): void {
@@ -1083,7 +1137,7 @@ export class CommitsCore {
     const requestId = this.nextUpdateRequestId++;
     this.pendingInstallRequestId = requestId;
     this.sendInstallStatus("Installing…");
-    this.host.requestUpdate(requestId, "install", "");
+    this.host.requestUpdate(requestId, "install");
   }
 
   /** Registers or unregisters the installed app; only an installed run
@@ -1094,7 +1148,7 @@ export class CommitsCore {
     const requestId = this.nextUpdateRequestId++;
     this.pendingRegistrationRequestId = requestId;
     this.sendInstallStatus(action === "register" ? "Registering…" : "Unregistering…");
-    this.host.requestUpdate(requestId, action, "");
+    this.host.requestUpdate(requestId, action);
   }
 
   private sendInstallStatus(message = ""): void {
@@ -1204,11 +1258,16 @@ export class CommitsCore {
       // A worktree change is left alone: it cannot alter what is committed.
       this.graph.invalidate(event.repository);
     }
+    this.refreshHealth();
     this.send({ command: "refresh", scope: event.kind === "full" ? "all" : "worktree" });
   }
 
   private selectRepository(path: string, persist = true): void {
+    const changed = this.currentRepository !== path;
+    if (changed) this.navigationGeneration++;
+    if (changed) this.awaitingFirstLoad = true;
     this.currentRepository = path;
+    if (changed) { this.latestHealth = null; this.refreshHealth(); }
     this.watchCurrentRepository(path);
     if (persist) {
       this.state = this.persistent.save({
@@ -1415,6 +1474,104 @@ export class CommitsCore {
 
   private send(message: ResponseMessage | Record<string, unknown>): void {
     this.host.sendPageMessage(PANEL, message);
+    if ("status" in message && typeof message.command === "string" && !message.command.startsWith("standalone")) this.refreshHealth();
+  }
+
+  receiveUpgradeResult(result: UpdaterResult & { previous?: string | null }): void {
+    if ("previous" in result) {
+      if (result.previous && result.previous !== result.version) this.sendInstallStatus(`Updated to version ${result.version}`);
+      return;
+    }
+    if (result.requestId === this.pendingInstallRequestId && result.ok) {
+      this.pendingInstallRegistration = result;
+      this.host.requestUpdate(result.requestId, "register");
+      return;
+    }
+    this.receiveUpdaterResult(result);
+  }
+
+  receiveLaunchRequest(request: LaunchRequest): void {
+    const sequence = request.sequence ?? 0;
+    if (sequence <= this.launchSequence) return;
+    this.launchSequence = sequence;
+    if (!this.bootstrapped || this.loadingCommits > 0 || this.awaitingFirstLoad) { this.pendingLaunch = request; return; }
+    this.applyLaunch(request);
+  }
+
+  private applyLaunch(request: LaunchRequest): void {
+    this.navigationGeneration++;
+    if (request.theme || request.themeFileName) {
+      this.sessionLaunch = { ...this.sessionLaunch, ...(request.theme ? { theme: request.theme } : {}),
+        ...(request.themeFileName ? { themeFileName: request.themeFileName, themeFile: request.themeFile, themeFileError: request.themeFileError } : {}) };
+      this.sendSessionAppearance();
+    }
+    this.pendingNavigation = request;
+    if (request.kind === "repository") {
+      const previous = this.currentRepository;
+      this.addRepositories(request.paths);
+      this.sendRepos();
+      if (previous === this.currentRepository && !this.awaitingFirstLoad && this.loadingCommits === 0) {
+        this.pendingNavigation = null;
+        this.navigate(request);
+      }
+    }
+    else if (request.kind === "rejected") this.notice(request.reason);
+    else if (this.currentRepository) { this.pendingNavigation = null; this.navigate(request); }
+  }
+
+  private sendSessionAppearance(): void { this.send({ command: "standaloneSessionAppearance", ...this.sessionLaunch }); }
+  private sendSources(): void { this.send({ command: "standaloneSources", sources: this.host.repositorySources?.() ?? [] }); }
+  private notice(message: string): void { this.send({ command: "standaloneNotice", message }); }
+  private refreshHealth(): void { if (this.currentRepository) this.health.refresh(this.currentRepository); }
+
+  private sendInProgress(): void {
+    const health = this.latestHealth;
+    const operation = health?.facts.operation ?? (this.currentRepository ? this.host.repositoryState?.(this.currentRepository).operation : null);
+    this.send({ command: "repoInProgress", state: operation && operation !== "bisect" ? {
+      type: operation, subject: null, rebaseProgress: null, rebaseContext: null,
+      workingTreeStatus: health ? { changed: health.facts.changes, staged: 0, conflicts: health.facts.conflicted, untracked: 0 } : null,
+    } : null });
+  }
+
+  private navigateHealth(): void {
+    const health = this.latestHealth;
+    if (!health) return;
+    switch (health.verdict.id) {
+      case "dirty": this.navigate({ show: "changes" }); break;
+      case "conflicted": case "in-progress": this.navigate({ show: "conflicts" }); break;
+      case "detached": if (health.head) this.navigate({ commit: health.head }); break;
+      case "diverged": case "behind": case "ahead": case "unpublished": if (health.branch) this.navigate({ branch: health.branch }); break;
+    }
+  }
+
+  private navigate(target: NavigationTarget): void {
+    if (this.loadingCommits > 0 || this.awaitingFirstLoad) { this.pendingNavigation = target; return; }
+    applyNavigation(target, {
+      selectWorkingTree: () => { this.sendInProgress(); this.send({ command: "standaloneNavigate", hash: "*" }); },
+      selectGraph: () => this.send({ command: "standaloneNavigate", hash: null }),
+      selectRevision: (revision, branch) => this.selectNavigationRevision(revision, branch),
+    });
+  }
+
+  private selectNavigationRevision(revision: string, branch: boolean): void {
+    const repository = this.currentRepository;
+    if (!repository) return;
+    const generation = ++this.navigationGeneration;
+    const requestId = this.nextGitRequestId++;
+    this.navigationReads.set(requestId, (result) => {
+      if (generation !== this.navigationGeneration || repository !== this.currentRepository) return;
+      if (result.exitCode !== 0) { this.notice(`Could not select ${branch ? "branch" : "commit"} ${revision}: target does not exist.`); return; }
+      const hash = new TextDecoder().decode(result.stdout).trim();
+      const configured = this.settings.app.navigationMaxCommits;
+      const maxCommits = typeof configured === "number" && Number.isFinite(configured) ? Math.max(1, Math.floor(configured)) : 10000;
+      this.graph.loadCommits({ command: "loadCommits", repo: repository, branchName: "", branches: [], maxCommits, showRemoteBranches: true, hard: false }, (response) => {
+        if (generation !== this.navigationGeneration || repository !== this.currentRepository) return;
+        this.send(response);
+        if (response.command === "loadCommits" && response.commits.some((commit) => commit.hash === hash)) this.send({ command: "standaloneNavigate", hash });
+        else this.notice(`Could not select ${revision}: outside the loaded history (limit ${maxCommits}).`);
+      });
+    });
+    this.host.runGit({ requestId, cwd: repository, args: ["rev-parse", "--verify", "--end-of-options", `${branch ? `refs/heads/${revision}` : revision}^{commit}`] });
   }
 }
 

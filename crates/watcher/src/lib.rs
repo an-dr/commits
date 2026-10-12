@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
-use bones_engine::logging::Logger;
+use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_kernel::logging::Logger;
+use bones_kernel::watch::Watcher as RecommendedWatcher;
 use commits_ipc::native::{WatchEvent, WatchRequest};
-use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 pub const REQUEST_TOPIC: &str = "watcher/request";
 pub const FULL_TOPIC: &str = "repo/full-refresh";
@@ -57,13 +56,8 @@ pub fn is_interesting(path: &Path) -> bool {
 /// Only inside the Git directory: a `.lock` in a working tree is an ordinary
 /// file -- `Cargo.lock` is the obvious one -- and changing it is a real edit.
 pub fn is_metadata_lock(path: &Path) -> bool {
-    path.extension().is_some_and(|extension| extension == "lock")
-}
-
-/// Access events are non-mutating and can be emitted by a recursive watch's
-/// own directory scan, so they must not trigger a repository refresh.
-fn is_refresh_worthy(kind: EventKind) -> bool {
-    !matches!(kind, EventKind::Access(_))
+    path.extension()
+        .is_some_and(|extension| extension == "lock")
 }
 
 pub struct WatcherModule {
@@ -149,97 +143,85 @@ impl WatcherModule {
     }
 }
 
+/// Notify reports ordinary paths while Windows canonicalization produces
+/// verbatim prefixes. Compare one spelling, including UNC metadata roots.
+fn comparable_path(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{rest}"))
+    } else {
+        PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(&text))
+    }
+}
+
 fn register(
     bus: Bus,
     request: WatchRequest,
     logger: Option<&Logger>,
 ) -> Result<RecommendedWatcher, String> {
-        let repository = PathBuf::from(&request.repository);
-        let metadata = resolve_metadata_paths(&repository)?;
-        let request_id = request.request_id;
-        let repository_text = request.repository.clone();
-        let metadata_for_events = metadata.clone();
-        let (sender, receiver) = mpsc::channel::<(bool, String)>();
-        // The burst settles on its own thread rather than in the notify
-        // callback, which must return promptly, and rather than in the guest,
-        // which is event-driven under a watchdog budget and has no timers.
-        std::thread::spawn(move || {
-            while let Ok((mut full, mut path)) = receiver.recv() {
-                loop {
-                    match receiver.recv_timeout(QUIET_PERIOD) {
-                        Ok((next_full, next_path)) => {
-                            // A metadata change outranks a worktree one: it is
-                            // the reason the whole graph has to be reread.
-                            if next_full && !full {
-                                full = true;
-                                path = next_path;
-                            }
-                        }
-                        Err(RecvTimeoutError::Timeout) => break,
-                        Err(RecvTimeoutError::Disconnected) => return,
-                    }
-                }
-                let message = WatchEvent {
-                    request_id,
-                    kind: u8::from(!full),
-                    repository: repository_text.clone(),
-                    path,
-                };
-                if let Ok(payload) = message.encode() {
-                    bus.publish(Envelope {
-                        topic: if full { FULL_TOPIC } else { LIGHTWEIGHT_TOPIC }.into(),
-                        sender: "watcher".into(),
-                        correlation: Some(u64::from(request_id)),
-                        payload,
-                    });
-                }
-            }
-        });
-        let mut watcher =
-            notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
-                let Ok(event) = result else { return };
-                if !is_refresh_worthy(event.kind) {
-                    return;
-                }
-                for path in event.paths {
-                    if !is_interesting(&path) {
-                        continue;
-                    }
-                    let full = metadata_for_events
-                        .iter()
-                        .any(|root| path.starts_with(root));
-                    if full && is_metadata_lock(&path) {
-                        continue;
-                    }
-                    // A closed channel means the watch was stopped; the watcher
-                    // itself is dropped with it, so there is nothing to report.
-                    if sender
-                        .send((full, path.to_string_lossy().into_owned()))
-                        .is_err()
-                    {
-                        return;
-                    }
-                }
+    let repository = PathBuf::from(&request.repository);
+    let metadata = resolve_metadata_paths(&repository)?;
+    let request_id = request.request_id;
+    let repository_text = request.repository.clone();
+    let metadata_for_events: Vec<_> = metadata.iter().map(|path| comparable_path(path)).collect();
+    let mut watcher = RecommendedWatcher::new(QUIET_PERIOD, move |_, change| {
+        let paths: Vec<_> = change
+            .paths
+            .iter()
+            .filter(|path| is_interesting(path))
+            .filter(|path| {
+                let comparable = comparable_path(path);
+                let is_metadata = metadata_for_events
+                    .iter()
+                    .any(|root| comparable.starts_with(root));
+                // A lock also changes its parent directory's mtime. Metadata
+                // files report their own mutations; the live root adds none.
+                !is_metadata
+                    || (!is_metadata_lock(path)
+                        && !(path.is_dir() && metadata_for_events.contains(&comparable)))
             })
-            .map_err(|error| error.to_string())?;
-        let started = std::time::Instant::now();
-        watcher
-            .watch(&repository, RecursiveMode::Recursive)
-            .map_err(|error| error.to_string())?;
-        if let Some(logger) = logger {
-            logger.info(
-                "watcher",
-                &format!(
-                    "watching {} took {}ms",
-                    repository.display(),
-                    started.elapsed().as_millis()
-                ),
-            );
+            .collect();
+        let Some(path) = paths.first() else {
+            return;
+        };
+        let full = paths.iter().any(|path| {
+            metadata_for_events
+                .iter()
+                .any(|root| comparable_path(path).starts_with(root))
+        });
+        let message = WatchEvent {
+            request_id,
+            kind: u8::from(!full),
+            repository: repository_text.clone(),
+            path: path.to_string_lossy().into_owned(),
+        };
+        if let Ok(payload) = message.encode() {
+            bus.publish(Envelope {
+                topic: if full { FULL_TOPIC } else { LIGHTWEIGHT_TOPIC }.into(),
+                sender: "watcher".into(),
+                correlation: Some(u64::from(request_id)),
+                payload,
+            });
         }
+    })?;
+    let started = std::time::Instant::now();
+    watcher
+        .watch(&repository, true)
+        .map_err(|error| error.to_string())?;
+    if let Some(logger) = logger {
+        logger.info(
+            "watcher",
+            &format!(
+                "watching {} took {}ms",
+                repository.display(),
+                started.elapsed().as_millis()
+            ),
+        );
+    }
     for path in metadata {
-        if !path.starts_with(&repository) {
+        if !comparable_path(&path).starts_with(comparable_path(&repository)) {
             watcher
-                .watch(&path, RecursiveMode::Recursive)
+                .watch(&path, true)
                 .map_err(|error| error.to_string())?;
         }
     }

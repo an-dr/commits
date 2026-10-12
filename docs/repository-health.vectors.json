@@ -1,0 +1,368 @@
+{
+  "version": 1,
+  "verdicts": [
+    {
+      "id": "missing",
+      "label": "Missing",
+      "urgency": "warning"
+    },
+    {
+      "id": "not-a-repo",
+      "label": "Not a repository",
+      "urgency": "warning"
+    },
+    {
+      "id": "conflicted",
+      "label": "Conflicts",
+      "urgency": "warning"
+    },
+    {
+      "id": "in-progress",
+      "label": "In progress",
+      "urgency": "caution"
+    },
+    {
+      "id": "diverged",
+      "label": "Diverged",
+      "urgency": "caution"
+    },
+    {
+      "id": "behind",
+      "label": "Behind",
+      "urgency": "advisory"
+    },
+    {
+      "id": "dirty",
+      "label": "Uncommitted",
+      "urgency": "caution"
+    },
+    {
+      "id": "ahead",
+      "label": "Unpushed",
+      "urgency": "advisory"
+    },
+    {
+      "id": "detached",
+      "label": "Detached HEAD",
+      "urgency": "caution"
+    },
+    {
+      "id": "unpublished",
+      "label": "Unpublished",
+      "urgency": "advisory"
+    },
+    {
+      "id": "clean",
+      "label": "Clean",
+      "urgency": "normal"
+    }
+  ],
+  "cases": [
+    {
+      "name": "missing",
+      "facts": {
+        "exists": false,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "missing"
+    },
+    {
+      "name": "not-a-repo",
+      "facts": {
+        "exists": true,
+        "isRepo": false,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "not-a-repo"
+    },
+    {
+      "name": "conflicted",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 4,
+        "operation": null,
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "conflicted"
+    },
+    {
+      "name": "in-progress",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": "merge",
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "in-progress"
+    },
+    {
+      "name": "diverged",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 2,
+        "behind": 3,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "diverged"
+    },
+    {
+      "name": "behind",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 0,
+        "behind": 3,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "behind"
+    },
+    {
+      "name": "dirty",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 0,
+        "behind": 0,
+        "changes": 5,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "dirty"
+    },
+    {
+      "name": "ahead",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 2,
+        "behind": 0,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "ahead"
+    },
+    {
+      "name": "detached",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": true,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "detached"
+    },
+    {
+      "name": "unpublished",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": false,
+        "hasRemote": true
+      },
+      "verdict": "unpublished"
+    },
+    {
+      "name": "clean",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "clean"
+    },
+    {
+      "name": "conflicts outrank an operation",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 1,
+        "operation": "rebase",
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "conflicted"
+    },
+    {
+      "name": "diverged outranks dirty",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 2,
+        "behind": 3,
+        "changes": 5,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "diverged"
+    },
+    {
+      "name": "behind outranks dirty",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 0,
+        "behind": 2,
+        "changes": 3,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "behind"
+    },
+    {
+      "name": "dirty outranks ahead",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 2,
+        "behind": 0,
+        "changes": 3,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "dirty"
+    },
+    {
+      "name": "detached with no commits is clean",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": true,
+        "hasCommits": false,
+        "hasUpstream": false,
+        "hasRemote": true
+      },
+      "verdict": "clean"
+    },
+    {
+      "name": "no upstream and no remote is clean",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": null,
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": false,
+        "hasRemote": false
+      },
+      "verdict": "clean"
+    },
+    {
+      "name": "bisect is in progress",
+      "facts": {
+        "exists": true,
+        "isRepo": true,
+        "conflicted": 0,
+        "operation": "bisect",
+        "ahead": 0,
+        "behind": 0,
+        "changes": 0,
+        "detached": false,
+        "hasCommits": true,
+        "hasUpstream": true,
+        "hasRemote": true
+      },
+      "verdict": "in-progress"
+    }
+  ]
+}

@@ -1,5 +1,58 @@
 import { Reader, Writer } from "./codec";
 
+export interface LaunchOptions {
+  readonly sequence?: number;
+  readonly show?: "changes" | "conflicts" | "graph" | null;
+  readonly branch?: string | null;
+  readonly commit?: string | null;
+  readonly theme?: "light" | "dark" | null;
+  readonly themeFile?: unknown;
+  readonly themeFileName?: string;
+  readonly themeFileError?: string;
+}
+export type LaunchRequest = LaunchOptions & (
+  | { readonly kind: "none" }
+  | { readonly kind: "repository"; readonly paths: readonly string[] }
+  | { readonly kind: "rejected"; readonly reason: string }
+);
+
+export function decodeLaunchRequest(bytes: Uint8Array): LaunchRequest {
+  const reader = new Reader(bytes);
+  const sequence = reader.u32();
+  const value = JSON.parse(new TextDecoder().decode(reader.blob()));
+  reader.finish();
+  if (!value || !["none", "repository", "rejected"].includes(value.kind)) throw new Error("invalid launch outcome");
+  if (value.kind === "repository" && (!Array.isArray(value.paths) || !value.paths.every((path: unknown) => typeof path === "string"))) throw new Error("invalid launch paths");
+  if (value.kind === "rejected" && typeof value.reason !== "string") throw new Error("invalid launch rejection");
+  return { ...value, sequence };
+}
+
+/** Bones owns the update and desktop vocabularies; normalize outcomes for the app menu. */
+export function decodeUpgradeResult(bytes: Uint8Array): UpdaterResult & { previous?: string | null } {
+  const reader = new Reader(bytes);
+  const requestId = reader.u32();
+  const tag = reader.u8();
+  const result: UpdaterResult & { previous?: string | null } = { requestId, ok: tag !== 5, available: tag === 0, fresh: false, version: "", error: "" };
+  const rest = (): string => reader.stringRest();
+  switch (tag) {
+    case 0: case 2: result.version = rest(); return result;
+    case 1: reader.finish(); return result;
+    case 3: result.fresh = reader.u8() !== 0; reader.finish(); return result;
+    case 4: { const present = reader.u8() !== 0; const previous = reader.string(); result.previous = present ? previous : null; result.version = rest(); return result; }
+    case 5: result.error = rest(); return result;
+    default: throw new Error("unknown upgrade result");
+  }
+}
+
+export function decodeDesktopResult(bytes: Uint8Array): UpdaterResult {
+  const reader = new Reader(bytes);
+  const requestId = reader.u32();
+  const tag = reader.u8();
+  if (tag === 0) { reader.u8(); reader.finish(); return { requestId, ok: true, available: false, fresh: false, version: "", error: "" }; }
+  if (tag !== 1) throw new Error("unknown desktop result");
+  return { requestId, ok: false, available: false, fresh: false, version: "", error: new TextDecoder().decode(bytes.slice(5)) };
+}
+
 export interface GitRun {
   requestId: number;
   cwd: string;
@@ -248,32 +301,4 @@ export interface UpdaterResult {
   fresh: boolean;
   version: string;
   error: string;
-}
-
-/** `stage` re-fetches the manifest itself, so only the URL is ever needed. */
-export function encodeUpdaterRequest(
-  requestId: number,
-  action: UpdaterAction,
-  manifestUrl: string,
-): Uint8Array {
-  const tag: Record<UpdaterAction, number> = { check: 0, stage: 1, install: 2, register: 3, unregister: 4 };
-  return new Writer()
-    .u32(requestId)
-    .u8(tag[action])
-    .string(manifestUrl)
-    .finish();
-}
-
-export function decodeUpdaterResult(bytes: Uint8Array): UpdaterResult {
-  const reader = new Reader(bytes);
-  const result = {
-    requestId: reader.u32(),
-    ok: reader.u8() !== 0,
-    available: reader.u8() !== 0,
-    fresh: reader.u8() !== 0,
-    version: reader.string(),
-    error: reader.string(),
-  };
-  reader.finish();
-  return result;
 }

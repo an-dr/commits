@@ -13,7 +13,7 @@ Only the installed entry point is ever registered: `~/.commits/app/commits.exe` 
 | Windows | "Open in Commits" on a folder and on a folder's background, a Start Menu shortcut, and a desktop shortcut |
 | Linux | An application-list entry that is also the "Open With" choice for folders, and its icon |
 
-On Windows the folder actions are classic shell verbs under `HKEY_CURRENT_USER`, so no administrator rights are needed; Windows 11 lists them under "Show more options". On Linux the application-list entry declares folders as a type it opens, which is how GNOME Files (Ubuntu, Pop!_OS 22.04) and COSMIC Files (Pop!_OS 24.04) offer it under "Open With". The exact keys and files are listed in [`crates/desktop-integration`](../crates/desktop-integration/README.md), which does the work.
+On Windows the folder actions are classic shell verbs under `HKEY_CURRENT_USER`, so no administrator rights are needed; Windows 11 lists them under "Show more options". On Linux the application-list entry declares folders as a type it opens, which is how GNOME Files (Ubuntu, Pop!_OS 22.04) and COSMIC Files (Pop!_OS 24.04) offer it under "Open With". The exact keys and files are listed in [Bones’ desktop module](../vendor/bones/crates/bones-kernel/bones-module-desktop/README.md), which does the work.
 
 Most application lists pick up a new or removed registration immediately. A file manager's "Open With" list is read when the file manager starts, so one that was already running when Commits was registered offers it only after it is restarted; on COSMIC this includes `cosmic-files-applet`, which serves the desktop's own context menu.
 
@@ -35,14 +35,4 @@ When an install succeeds but its registration fails, the install is kept and the
 
 ## The wire
 
-Register and unregister are actions on the updater's correlated request topic, next to check, stage, and install:
-
-| Action | Tag | Does |
-| --- | --- | --- |
-| `check` | 0 | Compares the manifest with this build |
-| `stage` | 1 | Downloads and stages a newer version |
-| `install` | 2 | Installs the running build, then registers it |
-| `register` | 3 | Registers the installed entry point |
-| `unregister` | 4 | Removes that registration |
-
-The synchronous install-status query answers `[SUCCESS, installed, just_updated, registered, ...version]`; `registered` is only ever set for an installed run. An `install` result with `ok` set and a non-empty `error` means the files were installed and the registration failed.
+Registration uses Bones’ `desktop/request` and `desktop/result` topics, with correlated request ids: action 0 registers, 1 unregisters and 2 queries registration. Update and install actions use the separate `upgrader/request` and `upgrader/result` vocabulary. The app registers after installation succeeds, keeping installed files if registration fails.

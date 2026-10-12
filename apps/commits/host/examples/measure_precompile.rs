@@ -13,7 +13,7 @@ fn main() -> wasmtime::Result<()> {
     let path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "dist/extensions/commits.wasm".to_string());
-    let engine = bones_kernel::wasm_extensions::host::new_engine()?;
+    let engine = bones_kernel_infra::wasm_extensions::host::new_engine()?;
 
     let started = Instant::now();
     let component = Component::from_file(&engine, &path)?;
@@ -42,7 +42,11 @@ fn main() -> wasmtime::Result<()> {
     println!("compile_ms={:.1}", compile.as_secs_f64() * 1000.0);
     println!("serialize_ms={:.1}", serialize.as_secs_f64() * 1000.0);
     for (nth, elapsed) in deserialize.iter().enumerate() {
-        println!("deserialize_{}_ms={:.1}", nth + 1, elapsed.as_secs_f64() * 1000.0);
+        println!(
+            "deserialize_{}_ms={:.1}",
+            nth + 1,
+            elapsed.as_secs_f64() * 1000.0
+        );
     }
     Ok(())
 }

@@ -367,21 +367,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "bones-engine"
-version = "1.1.1"
+name = "bones-kernel"
+version = "2.0.0"
 dependencies = [
- "bones-kernel",
+ "bones-kernel-infra",
+ "bones-kernel-launch",
+ "bones-kernel-watch",
  "bones-messages",
+ "bones-module-desktop",
+ "bones-module-devtools",
  "bones-module-os",
  "bones-module-renderer",
+ "bones-module-single-instance",
  "bones-module-ui",
+ "bones-module-upgrade",
  "bones-module-web",
  "wasmtime",
 ]
 
 [[package]]
-name = "bones-kernel"
-version = "1.1.1"
+name = "bones-kernel-infra"
+version = "2.0.0"
 dependencies = [
  "bones-messages",
  "pubsub-bus",
@@ -391,16 +397,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "bones-kernel-launch"
+version = "2.0.0"
+dependencies = [
+ "dirs",
+]
+
+[[package]]
+name = "bones-kernel-watch"
+version = "2.0.0"
+dependencies = [
+ "notify",
+]
+
+[[package]]
+name = "bones-launcher"
+version = "2.0.0"
+dependencies = [
+ "bones-versioning",
+ "winresource",
+]
+
+[[package]]
 name = "bones-messages"
-version = "1.1.0"
+version = "1.2.0"
+
+[[package]]
+name = "bones-module-desktop"
+version = "2.0.0"
+dependencies = [
+ "bones-kernel-infra",
+ "bones-messages",
+ "dirs",
+ "windows",
+]
+
+[[package]]
+name = "bones-module-devtools"
+version = "2.0.0"
+dependencies = [
+ "bones-kernel-infra",
+ "bones-messages",
+ "serde_json",
+]
 
 [[package]]
 name = "bones-module-os"
-version = "1.1.1"
+version = "2.0.0"
 dependencies = [
  "arboard",
  "base64",
- "bones-kernel",
+ "bones-kernel-infra",
  "bones-messages",
  "native-tls",
  "open",
@@ -410,10 +457,10 @@ dependencies = [
 
 [[package]]
 name = "bones-module-renderer"
-version = "1.1.1"
+version = "2.0.0"
 dependencies = [
  "ab_glyph",
- "bones-kernel",
+ "bones-kernel-infra",
  "bones-messages",
  "epaint_default_fonts",
  "sdl3",
@@ -421,20 +468,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "bones-module-ui"
-version = "1.1.1"
+name = "bones-module-single-instance"
+version = "2.0.0"
 dependencies = [
- "bones-kernel",
+ "bones-kernel-infra",
+ "bones-messages",
+ "libc",
+ "windows",
+]
+
+[[package]]
+name = "bones-module-ui"
+version = "2.0.0"
+dependencies = [
+ "bones-kernel-infra",
  "bones-messages",
  "egui",
  "sdl3",
 ]
 
 [[package]]
-name = "bones-module-web"
-version = "1.1.1"
+name = "bones-module-upgrade"
+version = "2.0.0"
 dependencies = [
- "bones-kernel",
+ "base64",
+ "bones-kernel-infra",
+ "bones-messages",
+ "bones-versioning",
+ "dirs",
+ "native-tls",
+ "serde_json",
+ "sha2",
+ "ureq",
+ "zip",
+]
+
+[[package]]
+name = "bones-module-web"
+version = "2.0.0"
+dependencies = [
+ "bones-kernel-infra",
  "bones-messages",
  "gtk",
  "raw-window-handle",
@@ -445,15 +518,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "bones-upgrader"
-version = "1.1.1"
+name = "bones-versioning"
+version = "2.0.0"
 dependencies = [
- "base64",
- "dirs",
- "serde_json",
- "sha2",
- "winresource",
- "zip",
+ "semver",
 ]
 
 [[package]]
@@ -640,43 +708,31 @@ dependencies = [
 
 [[package]]
 name = "commits-app"
-version = "1.8.1"
+version = "1.9.0"
 dependencies = [
- "base64",
- "bones-engine",
  "bones-kernel",
+ "bones-kernel-infra",
+ "bones-launcher",
  "bones-messages",
  "bones-module-os",
- "bones-upgrader",
- "commits-desktop-integration",
+ "bones-versioning",
  "commits-git",
  "commits-ipc",
  "commits-os",
  "commits-watcher",
  "dirs",
- "native-tls",
  "rfd",
  "serde_json",
  "tempfile",
- "ureq",
  "wasmtime",
  "winresource",
-]
-
-[[package]]
-name = "commits-desktop-integration"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "tempfile",
- "windows",
 ]
 
 [[package]]
 name = "commits-git"
 version = "0.1.0"
 dependencies = [
- "bones-engine",
+ "bones-kernel",
  "commits-ipc",
 ]
 
@@ -693,7 +749,7 @@ name = "commits-os"
 version = "0.1.0"
 dependencies = [
  "base64",
- "bones-engine",
+ "bones-kernel",
  "commits-ipc",
  "keyring",
  "serde_json",
@@ -705,9 +761,8 @@ dependencies = [
 name = "commits-watcher"
 version = "0.1.0"
 dependencies = [
- "bones-engine",
+ "bones-kernel",
  "commits-ipc",
- "notify",
  "tempfile",
 ]
 

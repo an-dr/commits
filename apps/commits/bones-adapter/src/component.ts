@@ -8,8 +8,10 @@ import {
 } from "@commits/ipc/web";
 import {
   decodeGitResult,
+  decodeLaunchRequest,
+  decodeUpgradeResult,
+  decodeDesktopResult,
   decodeNativeResult,
-  decodeUpdaterResult,
   decodeWatchEvent,
 } from "@commits/ipc/native";
 
@@ -61,8 +63,12 @@ function onMessage(
       core.receiveOsResult(decodeNativeResult(payload));
     } else if (topic === "git/completed") {
       core.receiveGitResult(decodeGitResult(payload));
-    } else if (topic === "updater/completed") {
-      core.receiveUpdaterResult(decodeUpdaterResult(payload));
+    } else if (topic === "launch/request") {
+      if (_sender === "launch") core.receiveLaunchRequest(decodeLaunchRequest(payload));
+    } else if (topic === "upgrader/result") {
+      core.receiveUpgradeResult(decodeUpgradeResult(payload));
+    } else if (topic === "desktop/result") {
+      core.receiveUpdaterResult(decodeDesktopResult(payload));
     } else if (topic === "os/prompt") {
       core.receivePrompt(new TextDecoder().decode(payload));
     } else if (topic === "repo/full-refresh" || topic === "repo/lightweight-refresh") {

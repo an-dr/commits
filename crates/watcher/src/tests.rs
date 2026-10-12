@@ -3,15 +3,13 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
+use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use commits_ipc::native::WatchRequest;
-use notify::event::AccessKind;
-use notify::EventKind;
 use tempfile::tempdir;
 
 use crate::{
-    is_interesting, is_metadata_lock, is_refresh_worthy, resolve_metadata_paths, WatcherModule,
-    FULL_TOPIC, LIGHTWEIGHT_TOPIC, REQUEST_TOPIC,
+    is_interesting, is_metadata_lock, resolve_metadata_paths, WatcherModule, FULL_TOPIC,
+    LIGHTWEIGHT_TOPIC, REQUEST_TOPIC,
 };
 
 #[test]
@@ -71,8 +69,28 @@ fn source_and_refs_are_worth_reporting() {
 
 #[test]
 fn access_only_events_do_not_trigger_a_refresh() {
-    assert!(!is_refresh_worthy(EventKind::Access(AccessKind::Read)));
-    assert!(is_refresh_worthy(EventKind::Any));
+    let temp = tempdir().unwrap();
+    fs::create_dir(temp.path().join(".git")).unwrap();
+    let file = temp.path().join("file.txt");
+    fs::write(&file, "contents").unwrap();
+    let (bus, topics, _module) = start_watching(temp.path(), 17);
+    assert_eq!(fs::read_to_string(file).unwrap(), "contents");
+    assert!(collect_for(&bus, &topics, Duration::from_millis(450)).is_empty());
+}
+
+#[test]
+fn metadata_locks_do_not_trigger_a_refresh() {
+    let temp = tempdir().unwrap();
+    fs::create_dir(temp.path().join(".git")).unwrap();
+    let (bus, topics, _module) = start_watching(temp.path(), 18);
+    let lock = temp.path().join(".git/index.lock");
+    fs::write(&lock, "lock").unwrap();
+    fs::remove_file(lock).unwrap();
+    let events = collect_for(&bus, &topics, Duration::from_millis(500));
+    assert!(
+        events.is_empty(),
+        "metadata locks caused refreshes: {events:?}"
+    );
 }
 
 #[test]
@@ -298,5 +316,8 @@ fn stopping_a_watch_that_is_still_registering_installs_nothing() {
     module.handle(&envelope(1));
 
     std::thread::sleep(Duration::from_millis(300));
-    assert!(!module.is_watching(12), "a stopped watch was installed anyway");
+    assert!(
+        !module.is_watching(12),
+        "a stopped watch was installed anyway"
+    );
 }

@@ -588,7 +588,7 @@ export class MitGraphBackend {
   private run(cwd: string, args: string[], callback: (result: GitResult) => void): void {
     const requestId = this.nextRequestId++;
     this.pending.set(requestId, callback);
-    this.host.runGit({ requestId, cwd, args, timeoutMs: 15_000 });
+    this.host.runGit({ requestId, cwd, args, timeoutMs: 15_000, env: { GIT_OPTIONAL_LOCKS: "0" } });
   }
 }
 
@@ -748,6 +748,13 @@ function parseWorkingTreeChanges(
         ...(unstaged.get(entry.slice(2)) ?? NO_COUNTS),
         submodule: null,
       });
+      continue;
+    }
+    if (entry.startsWith("u ")) {
+      // The shared view has no separate conflict status (BUG-007), but an
+      // unmerged path must remain inspectable in the working-tree file list.
+      const path = entry.split(" ").slice(10).join(" ");
+      if (path) changes.push({ path, status: "M", staged: false, ...(unstaged.get(path) ?? NO_COUNTS), submodule: null });
       continue;
     }
     if (entry[0] !== "1" && entry[0] !== "2") continue;

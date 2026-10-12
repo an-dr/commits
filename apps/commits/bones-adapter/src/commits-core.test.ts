@@ -11,7 +11,8 @@ class StubHost implements HostPort {
   readonly topics: string[] = [];
   readonly osRequests: unknown[] = [];
   readonly gitRequests: GitRun[] = [];
-  readonly updateRequests: Array<{ requestId: number; action: UpdaterAction; manifestUrl: string }> = [];
+  readonly healthRequests: GitRun[] = [];
+  readonly updateRequests: Array<{ requestId: number; action: UpdaterAction }> = [];
   readonly watchRequests: Array<{ requestId: number; action: "start" | "stop"; repository: string }> = [];
   /** How many git requests a helper has already answered, so it can resume. */
   answeredGitRequests = 0;
@@ -41,7 +42,7 @@ class StubHost implements HostPort {
   commitsRepoStatus(): CommitsRepoStatus { return this.commitsRepoStatusValue; }
   launchRepository(): LaunchRepository { return this.launchValue; }
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void { this.savedState = value; }
-  runGit(request: GitRun): void { this.gitRequests.push(request); }
+  runGit(request: GitRun): void { (request.requestId >= 900_000 ? this.healthRequests : this.gitRequests).push(request); }
   respondPrompt(id: string, value: string): void { this.promptReplies.push(`${id}:${value}`); }
   requestOs(requestId: number, action: OsAction, value?: string): void {
     this.osRequests.push({ requestId, action, value });
@@ -51,8 +52,8 @@ class StubHost implements HostPort {
   requestRepoOs(requestId: number, action: RepoOsAction, value?: string): void {
     this.osRequests.push({ requestId, action, value });
   }
-  requestUpdate(requestId: number, action: UpdaterAction, manifestUrl: string): void {
-    this.updateRequests.push({ requestId, action, manifestUrl });
+  requestUpdate(requestId: number, action: UpdaterAction): void {
+    this.updateRequests.push({ requestId, action });
   }
   watchRepository(requestId: number, action: "start" | "stop", repository: string): void {
     this.watchRequests.push({ requestId, action, repository });
@@ -91,6 +92,50 @@ function bootPastUpdateCheck(core: CommitsCore, host: StubHost): void {
 }
 
 describe("CommitsCore MIT webview host", () => {
+  it("applies handoff paths and ignores older sequences", () => {
+    const host = new StubHost();
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receiveLaunchRequest({ kind: "repository", paths: ["C:/B"], sequence: 2, theme: "dark" });
+    core.receiveLaunchRequest({ kind: "repository", paths: ["C:/A"], sequence: 1 });
+    expect(host.watchRequests.at(-1)?.repository).toBe("C:/B");
+    expect(host.sent.some(([, value]) => (value as { command: string; lastActive?: string }).command === "standaloneRecentRepositories" && (value as { lastActive?: string }).lastActive === "C:/B")).toBe(true);
+    expect(host.sent).toContainEqual(["main", { command: "standaloneSessionAppearance", kind: "none", theme: "dark" }]);
+  });
+  it("keeps only the newest handoff while the initial graph loads", () => {
+    const host = new StubHost(); host.launchValue = { kind: "repository", paths: ["C:/A"], sequence: 0 };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receiveLaunchRequest({ kind: "repository", paths: ["C:/B"], sequence: 1 });
+    core.receivePageJson(JSON.stringify({ command: "loadCommits", repo: "C:/A", maxCommits: 300 }));
+    core.receiveLaunchRequest({ kind: "repository", paths: ["C:/C"], sequence: 2 });
+    expect(host.watchRequests.at(-1)?.repository).toBe("C:/A");
+    for (const request of [...host.gitRequests]) core.receiveGitResult({ requestId: request.requestId, status: "completed", exitCode: 0, stdout: new Uint8Array(), stderr: new Uint8Array() });
+    expect(host.watchRequests.at(-1)?.repository).toBe("C:/C");
+    expect(host.watchRequests.some((request) => request.repository === "C:/B")).toBe(false);
+  });
+  it("registers through the desktop action after Bones installs successfully", () => {
+    const host = new StubHost(); host.installStatusValue = { ...host.installStatusValue, installed: false };
+    const core = new CommitsCore(host); bootPastUpdateCheck(core, host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
+    const install = host.updateRequests.at(-1)!;
+    core.receiveUpgradeResult({ requestId: install.requestId, ok: true, available: false, fresh: true, version: "", error: "" });
+    expect(host.updateRequests.at(-1)).toMatchObject({ requestId: install.requestId, action: "register" });
+    core.receiveUpdaterResult({ requestId: install.requestId, ok: false, available: false, fresh: false, version: "", error: "denied" });
+    expect(host.sent.some(([, value]) => (value as { message?: string }).message?.includes("registration failed: denied"))).toBe(true);
+  });
+  it("applies a new deep link when the repository is already open", () => {
+    const host = new StubHost(); host.launchValue = { kind: "repository", paths: ["C:/A"], sequence: 0 };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "loadCommits", repo: "C:/A", maxCommits: 300 }));
+    for (const request of [...host.gitRequests]) core.receiveGitResult({ requestId: request.requestId, status: "completed", exitCode: 0, stdout: new Uint8Array(), stderr: new Uint8Array() });
+    const requests = host.gitRequests.length;
+    core.receiveLaunchRequest({ kind: "repository", paths: ["C:/A"], sequence: 1, commit: "abcd" });
+    const navigation = host.gitRequests.slice(requests).filter((request) => request.args.includes("abcd^{commit}"));
+    expect(navigation).toHaveLength(1);
+    expect(navigation[0].args).toEqual(["rev-parse", "--verify", "--end-of-options", "abcd^{commit}"]);
+  });
   it("opens the shared graph page and subscribes to native results", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
@@ -104,7 +149,9 @@ describe("CommitsCore MIT webview host", () => {
       "repo-os/result",
       "os/prompt",
       "git/completed",
-      "updater/completed",
+      "upgrader/result",
+      "desktop/result",
+      "launch/request",
       "repo/full-refresh",
       "repo/lightweight-refresh",
     ]);
@@ -608,7 +655,7 @@ describe("CommitsCore MIT webview host", () => {
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
     expect(host.updateRequests).toEqual([
-      { requestId: 70_000, action: "check", manifestUrl: "https://example.com/manifest.json" },
+      { requestId: 70_000, action: "check" },
     ]);
   });
 
@@ -618,7 +665,7 @@ describe("CommitsCore MIT webview host", () => {
 
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
-    expect(host.updateRequests).toEqual([{ requestId: 70_000, action: "check", manifestUrl: "" }]);
+    expect(host.updateRequests).toEqual([{ requestId: 70_000, action: "check" }]);
   });
 
   it("announces an available update once the check finds a newer version", () => {
@@ -671,7 +718,7 @@ describe("CommitsCore MIT webview host", () => {
 
     expect(host.updateRequests).toHaveLength(2);
     expect(host.updateRequests[1]).toEqual({
-      requestId: 70_001, action: "stage", manifestUrl: "https://example.com/manifest.json",
+      requestId: 70_001, action: "stage",
     });
 
     core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: true, fresh: false, version: "9.9.9", error: "" });
@@ -727,7 +774,7 @@ describe("CommitsCore MIT webview host", () => {
 
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
-    expect(host.updateRequests).toEqual([{ requestId: 70_001, action: "install", manifestUrl: "" }]);
+    expect(host.updateRequests).toEqual([{ requestId: 70_001, action: "install" }]);
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "ready", registration: "none", version: "0.2.0", message: "Installing…",
     }]);
@@ -803,7 +850,7 @@ describe("CommitsCore MIT webview host", () => {
 
     core.receivePageJson(JSON.stringify({ command: "standaloneRegister" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneRegister" }));
-    expect(host.updateRequests).toEqual([{ requestId: 70_001, action: "register", manifestUrl: "" }]);
+    expect(host.updateRequests).toEqual([{ requestId: 70_001, action: "register" }]);
 
     core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: false, fresh: false, version: "", error: "" });
 
@@ -1615,6 +1662,18 @@ describe("CommitsCore MIT webview host", () => {
       .map(([, message]) => message as { command: string; error?: string | null })
       .find((message) => message.command === "workingTreeChanges");
     expect(reply?.error).toBe("fatal: not a git repository");
+  });
+
+  it("lists unmerged porcelain-v2 files in working-tree changes", () => {
+    const host = new StubHost(); const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    core.receivePageJson(JSON.stringify({ command: "selectRepo", repo: "C:/repo" }));
+    core.receivePageJson(JSON.stringify({ command: "workingTreeChanges", repo: "C:/repo" }));
+    completeGitAt(host, core, 0, "u UU N... 100644 100644 100644 100644 aaa bbb ccc conflict file.ts\0");
+    completeGitAt(host, core, 1, "");
+    completeGitAt(host, core, 2, "1\t1\tconflict file.ts\0");
+    const reply = host.sent.map(([, value]) => value as { command: string; changes?: unknown[] }).find((message) => message.command === "workingTreeChanges");
+    expect(reply?.changes).toEqual([{ path: "conflict file.ts", status: "M", staged: false, additions: 1, deletions: 1, submodule: null }]);
   });
 
   it("reports what each branch tracks and where each remote points", () => {

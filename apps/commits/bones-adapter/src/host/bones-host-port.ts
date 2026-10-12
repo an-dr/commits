@@ -12,9 +12,9 @@ import {
 import type { CommitsRepoStatus, HostPort, InstallStatus, LaunchRepository, LogLevel, PageSource, SettingsIoResult } from "./host-port";
 import {
   encodeGitRun,
+  decodeLaunchRequest,
   encodeOsRequest,
   encodeRepoOsRequest,
-  encodeUpdaterRequest,
   encodeWatchRequest,
   type GitRun,
   type OsAction,
@@ -122,10 +122,17 @@ export class BonesHostPort implements HostPort {
       return { kind: "none" };
     }
     if (response.length === 0) return { kind: "none" };
-    const text = new TextDecoder().decode(response.slice(1));
-    if (response[0] === 1) return { kind: "repository", paths: text.split("\n").filter((path) => path !== "") };
-    if (response[0] === 2) return { kind: "rejected", reason: text };
-    return { kind: "none" };
+    return decodeLaunchRequest(response);
+  }
+
+  repositorySources(): readonly import("./host-port").RepositorySource[] {
+    try { return JSON.parse(new TextDecoder().decode(send("sources", new Uint8Array()))); }
+    catch (error) { hostLog("warn", `could not read repository sources: ${String(error)}`); return []; }
+  }
+
+  repositoryState(path: string): import("../health/facts").RepositoryState {
+    try { return JSON.parse(new TextDecoder().decode(send("launch", new TextEncoder().encode(path)))); }
+    catch (error) { hostLog("warn", `could not check repository state: ${String(error)}`); return { exists: false, isRepo: false, operation: null }; }
   }
 
   runGit(request: GitRun): void {
@@ -142,8 +149,12 @@ export class BonesHostPort implements HostPort {
     publish("repo-os/request", encodeRepoOsRequest(requestId, action, value));
   }
 
-  requestUpdate(requestId: number, action: UpdaterAction, manifestUrl: string): void {
-    publish("updater/request", encodeUpdaterRequest(requestId, action, manifestUrl));
+  requestUpdate(requestId: number, action: UpdaterAction): void {
+    const tags = { check: 0, stage: 1, install: 2, register: 0, unregister: 1 };
+    const bytes = new Uint8Array(5);
+    new DataView(bytes.buffer).setUint32(0, requestId, true);
+    bytes[4] = tags[action];
+    publish(action === "register" || action === "unregister" ? "desktop/request" : "upgrader/request", bytes);
   }
 
   watchRepository(requestId: number, action: "start" | "stop", repository: string): void {
@@ -153,7 +164,7 @@ export class BonesHostPort implements HostPort {
   installStatus(): InstallStatus {
     const failed = (error: string): InstallStatus => ({ ok: false, installed: false, registered: false, justUpdated: false, version: "", error });
     try {
-      const response = send("updater", new Uint8Array());
+      const response = send("installation", new Uint8Array());
       if (response[0] !== 0) {
         return failed(response.length > 1
           ? new TextDecoder().decode(response.slice(1))
@@ -170,6 +181,13 @@ export class BonesHostPort implements HostPort {
     } catch (error) {
       return failed(String(error));
     }
+  }
+
+  requestLastApplied(requestId: number): void {
+    const bytes = new Uint8Array(5);
+    new DataView(bytes.buffer).setUint32(0, requestId, true);
+    bytes[4] = 3;
+    publish("upgrader/request", bytes);
   }
 
   sendPageMessage(panel: string, message: unknown): void {

@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bones_engine::bus::{Envelope, Handler, Module, ModuleContext};
-use bones_engine::logging::Logger;
+use bones_kernel::bus::{Envelope, Handler, Module, ModuleContext};
+use bones_kernel::logging::Logger;
 
 /// Bus endpoint name the component addresses with a direct `send`.
 pub const ENDPOINT: &str = "page";
@@ -259,7 +259,9 @@ mod tests {
 
         let started = Instant::now();
         let mut client = TcpStream::connect(address).unwrap();
-        client.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
         client
             .write_all(b"GET /loading.html HTTP/1.1\r\nHost: localhost\r\n\r\n")
             .unwrap();

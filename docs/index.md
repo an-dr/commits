@@ -4,6 +4,10 @@ New to the project? Start with the [README](../README.md) to try the app, then t
 
 ## Using Commits
 
+- [Command line](command-line.md) — paths, single-instance handoff, navigation and session appearance.
+- [Repository health](repository-health.md) — verdict rules and [conformance vectors](repository-health.vectors.json).
+- [Repository sources](repository-sources.md) — caller-provided repository lists in the selector.
+- [Session themes](themes.md) — the caller-provided palette format.
 - [Settings](settings.md) — persisted options, appearance, and external tools.
 - [Troubleshooting](troubleshooting.md) — first checks and diagnostic logs when the app does not start correctly.
 - [Desktop integration](desktop-integration.md) — application registration and folder actions.

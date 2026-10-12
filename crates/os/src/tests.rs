@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
+use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use commits_ipc::native::{NativeResult, OsRequest};
 
 use crate::{OsModule, RepoOsBackend, REPO_REQUEST_TOPIC, REPO_RESULT_TOPIC};
@@ -20,7 +20,9 @@ impl RepoOsBackend for StubBackend {
         crate::parse_tool_run(request).map(|_| ())
     }
     fn start_github_device_code(&self) -> Result<Option<String>, String> {
-        Ok(Some("ABCD-1234\nhttps://github.com/login/device\ndevice-code\n5\n900".into()))
+        Ok(Some(
+            "ABCD-1234\nhttps://github.com/login/device\ndevice-code\n5\n900".into(),
+        ))
     }
     fn poll_github_token(&self, _request: &str) -> Result<Option<String>, String> {
         Ok(Some("gho_stub".into()))
@@ -74,10 +76,9 @@ fn publishes_results_for_every_capability() {
     let results = results.lock().unwrap();
     assert_eq!(results.len(), 4);
     // The scan reports what it found, newline-separated.
-    assert!(results
-        .iter()
-        .any(|result| result.request_id == 10
-            && result.value == "C:/code/alpha
+    assert!(results.iter().any(|result| result.request_id == 10
+        && result.value
+            == "C:/code/alpha
 C:/code/beta"));
     assert!(results
         .iter()
@@ -102,9 +103,16 @@ fn reads_a_tool_run_from_its_lines() {
     assert_eq!(run.args, vec!["-n".to_string(), "C:/repo".to_string()]);
     assert!(run.left.is_none() && run.right.is_none());
 
-    let diff = crate::parse_tool_run("code\na.ts\nYQ==\na.ts\nYg==\n--diff\n{left}\n{right}").unwrap();
-    assert_eq!(diff.left.as_ref().map(|blob| blob.base64.as_str()), Some("YQ=="));
-    assert_eq!(diff.right.as_ref().map(|blob| blob.base64.as_str()), Some("Yg=="));
+    let diff =
+        crate::parse_tool_run("code\na.ts\nYQ==\na.ts\nYg==\n--diff\n{left}\n{right}").unwrap();
+    assert_eq!(
+        diff.left.as_ref().map(|blob| blob.base64.as_str()),
+        Some("YQ==")
+    );
+    assert_eq!(
+        diff.right.as_ref().map(|blob| blob.base64.as_str()),
+        Some("Yg==")
+    );
     assert_eq!(diff.args.len(), 3);
 
     assert!(crate::parse_tool_run("").is_err());
@@ -115,7 +123,8 @@ fn reads_a_tool_run_from_its_lines() {
 #[test]
 fn writes_both_diff_sides_and_substitutes_their_paths() {
     let directory = tempfile::tempdir().unwrap();
-    let run = crate::parse_tool_run("code\na.ts\nYQ==\na.ts\nYg==\n--diff\n{left}\n{right}").unwrap();
+    let run =
+        crate::parse_tool_run("code\na.ts\nYQ==\na.ts\nYg==\n--diff\n{left}\n{right}").unwrap();
 
     let args = crate::materialize_tool_args(&run, directory.path()).unwrap();
 
@@ -174,7 +183,8 @@ fn reads_only_text_files_inside_the_repository() {
     std::fs::create_dir_all(&nested).unwrap();
     std::fs::write(nested.join("file.txt"), "one\ntwo\n").unwrap();
     std::fs::write(nested.join("binary.bin"), [0u8, 159, 146, 150]).unwrap();
-    let outside = std::env::temp_dir().join(format!("commits-os-outside-{}.txt", std::process::id()));
+    let outside =
+        std::env::temp_dir().join(format!("commits-os-outside-{}.txt", std::process::id()));
     std::fs::write(&outside, "secret").unwrap();
     let backend = crate::SystemOsBackend;
     let request = |path: &str| format!("{}\n{}", root.display(), path);
@@ -183,11 +193,17 @@ fn reads_only_text_files_inside_the_repository() {
         backend.read_file(&request("src/file.txt")).unwrap(),
         Some("one\ntwo\n".into())
     );
-    assert_eq!(backend.read_file(&request("src/missing.txt")).unwrap(), None);
+    assert_eq!(
+        backend.read_file(&request("src/missing.txt")).unwrap(),
+        None
+    );
     assert_eq!(backend.read_file(&request("src/binary.bin")).unwrap(), None);
     assert_eq!(backend.read_file(&request("src")).unwrap(), None);
     assert!(backend
-        .read_file(&request(&format!("../{}", outside.file_name().unwrap().to_string_lossy())))
+        .read_file(&request(&format!(
+            "../{}",
+            outside.file_name().unwrap().to_string_lossy()
+        )))
         .is_err());
     assert!(backend.read_file("no-newline-separator").is_err());
 

@@ -2,11 +2,11 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use bones_kernel::bus::{BudgetLimits, Bus, EndpointBudget, Envelope, Handler, Registry, Respond};
+use bones_kernel::logging::Logger;
+use bones_kernel_infra::wasm_extensions::host::{new_engine, DisplayInfo, ExtensionTimeouts, Host};
 use bones_messages::web::PageMessage;
 use bones_messages::{EncodeMessage, Message};
-use bones_engine::bus::{BudgetLimits, Bus, EndpointBudget, Envelope, Handler, Registry, Respond};
-use bones_engine::logging::Logger;
-use bones_kernel::wasm_extensions::host::{new_engine, DisplayInfo, ExtensionTimeouts, Host};
 
 const MESSAGE_COUNT: usize = 1_000;
 /// Well past any plausible cold start or message handling, so a slow machine

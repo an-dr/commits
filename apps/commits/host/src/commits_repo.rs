@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use bones_engine::bus::{Envelope, Handler, Module, ModuleContext};
+use bones_kernel::bus::{Envelope, Handler, Module, ModuleContext};
 
 /// Bus endpoint reporting the fixed local clone of the commits project's own
 /// repository, at `~/.commits/repo`.
@@ -35,7 +35,9 @@ impl Default for CommitsRepoModule {
 impl CommitsRepoModule {
     #[cfg(test)]
     fn new(path: impl Into<PathBuf>) -> Self {
-        Self { path: Some(path.into()) }
+        Self {
+            path: Some(path.into()),
+        }
     }
 
     fn resolve_path(&self) -> Result<&Path, String> {
@@ -72,12 +74,17 @@ impl Module for CommitsRepoModule {
     /// the working directory to spawn `git clone` into.
     fn respond(&mut self, sender: &str, _payload: &[u8]) -> Option<Vec<u8>> {
         if sender != OWNER {
-            return Some(encode_failure("the commits repo path is private to the commits component"));
+            return Some(encode_failure(
+                "the commits repo path is private to the commits component",
+            ));
         }
         Some(match self.resolve_path() {
             Ok(path) => {
                 let present = if path.exists() { PRESENT } else { ABSENT };
-                let parent = path.parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+                let parent = path
+                    .parent()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_default();
                 encode_success(present, &parent, &path.to_string_lossy())
             }
             Err(error) => encode_failure(&error),
@@ -120,7 +127,8 @@ mod tests {
         let path = directory.path().join("repo");
         let mut module = CommitsRepoModule::new(&path);
 
-        let (present, parent, reported_path) = decode_success(&module.respond("commits", &[]).unwrap());
+        let (present, parent, reported_path) =
+            decode_success(&module.respond("commits", &[]).unwrap());
 
         assert_eq!(present, ABSENT);
         assert_eq!(parent, directory.path().to_string_lossy());
@@ -146,7 +154,13 @@ mod tests {
         let mut module = CommitsRepoModule::new(parent.join("repo"));
 
         assert!(!parent.exists());
-        Module::init(&mut module, &mut bones_engine::bus::ModuleContext::new(&mut bones_engine::bus::ServiceRegistry::new())).unwrap();
+        Module::init(
+            &mut module,
+            &mut bones_kernel::bus::ModuleContext::new(
+                &mut bones_kernel::bus::ServiceRegistry::new(),
+            ),
+        )
+        .unwrap();
 
         assert!(parent.is_dir());
     }
@@ -165,6 +179,8 @@ mod tests {
         let response = module.respond("commits", &[]).unwrap();
 
         assert_eq!(response[0], FAILURE);
-        assert!(String::from_utf8(response[1..].to_vec()).unwrap().contains("home directory"));
+        assert!(String::from_utf8(response[1..].to_vec())
+            .unwrap()
+            .contains("home directory"));
     }
 }

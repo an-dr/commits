@@ -1,5 +1,27 @@
 use bones_messages::codec::{DecodeError, EncodeError, Reader, Writer};
 
+/// Launch outcome and validated options, identical at startup and handoff.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LaunchRequest {
+    pub sequence: u32,
+    pub json: String,
+}
+impl LaunchRequest {
+    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
+        Ok(Writer::new()
+            .u32(self.sequence)
+            .try_blob(self.json.as_bytes())?
+            .finish())
+    }
+    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
+        let mut reader = Reader::new(bytes);
+        let sequence = reader.read_u32()?;
+        let json = String::from_utf8_lossy(reader.read_blob()?).into_owned();
+        reader.finish()?;
+        Ok(Self { sequence, json })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitRequest {
     Run(GitRun),
@@ -284,104 +306,6 @@ impl NativeResult {
     }
 }
 
-/// A request to check for, stage, or install an application update, or to
-/// register the installed app with the desktop. `Check` and `Stage` need only
-/// a manifest URL: `Stage` re-fetches the manifest itself rather than
-/// requiring the caller to have kept `Check`'s result around. `Install`
-/// (stages the running build itself, for a not-yet-installed run, then
-/// registers it), `Register` and `Unregister` ignore `manifest_url`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UpdaterRequest {
-    pub request_id: u32,
-    pub action: u8,
-    pub manifest_url: String,
-}
-
-impl UpdaterRequest {
-    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
-        Ok(Writer::new()
-            .u32(self.request_id)
-            .u8(self.action)
-            .try_str(&self.manifest_url)?
-            .finish())
-    }
-
-    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
-        let mut reader = Reader::new(bytes);
-        let request = Self {
-            request_id: reader.read_u32()?,
-            action: reader.read_u8()?,
-            manifest_url: reader.read_str()?.to_string(),
-        };
-        if request.action > 4 {
-            return Err(DecodeError::InvalidTag {
-                message: "updater action",
-                tag: request.action,
-            });
-        }
-        reader.finish()?;
-        Ok(request)
-    }
-}
-
-/// Outcome of an [`UpdaterRequest`]. `available` and `version` describe the
-/// manifest's own version regardless of `action`, so a `Stage` result also
-/// tells the caller what it just staged. `fresh` matters only for `Install`:
-/// whether the files landed directly at the install location (nothing was
-/// installed yet, so there is nothing left to do) rather than staged for an
-/// existing launcher to apply on its next start.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UpdaterResult {
-    pub request_id: u32,
-    pub ok: bool,
-    pub available: bool,
-    pub fresh: bool,
-    pub version: String,
-    pub error: String,
-}
-
-impl UpdaterResult {
-    pub fn encode(&self) -> Result<Vec<u8>, EncodeError> {
-        Ok(Writer::new()
-            .u32(self.request_id)
-            .u8(u8::from(self.ok))
-            .u8(u8::from(self.available))
-            .u8(u8::from(self.fresh))
-            .try_str(&self.version)?
-            .try_str(&self.error)?
-            .finish())
-    }
-
-    pub fn decode(bytes: &[u8]) -> Result<Self, DecodeError> {
-        let mut reader = Reader::new(bytes);
-        let request_id = reader.read_u32()?;
-        let ok = decode_bool(reader.read_u8()?)?;
-        let available = decode_bool(reader.read_u8()?)?;
-        let fresh = decode_bool(reader.read_u8()?)?;
-        let result = Self {
-            request_id,
-            ok,
-            available,
-            fresh,
-            version: reader.read_str()?.to_string(),
-            error: reader.read_str()?.to_string(),
-        };
-        reader.finish()?;
-        Ok(result)
-    }
-}
-
-fn decode_bool(byte: u8) -> Result<bool, DecodeError> {
-    match byte {
-        0 => Ok(false),
-        1 => Ok(true),
-        tag => Err(DecodeError::InvalidTag {
-            message: "boolean",
-            tag,
-        }),
-    }
-}
-
 fn read_strings(reader: &mut Reader<'_>) -> Result<Vec<String>, DecodeError> {
     let count = reader.read_u16()?;
     (0..count)
@@ -391,9 +315,7 @@ fn read_strings(reader: &mut Reader<'_>) -> Result<Vec<String>, DecodeError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        GitRequest, GitResult, GitRun, OsRequest, UpdaterRequest, UpdaterResult, WatchRequest,
-    };
+    use super::{GitRequest, GitResult, GitRun, OsRequest, WatchRequest};
     use bones_messages::codec::DecodeError;
 
     /// The generic `os` endpoint is the engine's now, so its bytes are
@@ -511,62 +433,6 @@ src/a.ts"
             OsRequest::decode_repo(&sign_in.encode().unwrap()).unwrap(),
             sign_in
         );
-
-        let check = UpdaterRequest {
-            request_id: 3,
-            action: 0,
-            manifest_url: "https://example.com/manifest.json".into(),
-        };
-        assert_eq!(
-            UpdaterRequest::decode(&check.encode().unwrap()).unwrap(),
-            check
-        );
-
-        let install = UpdaterRequest {
-            request_id: 4,
-            action: 2,
-            manifest_url: String::new(),
-        };
-        assert_eq!(
-            UpdaterRequest::decode(&install.encode().unwrap()).unwrap(),
-            install
-        );
-
-        let unregister = UpdaterRequest {
-            request_id: 5,
-            action: 4,
-            manifest_url: String::new(),
-        };
-        assert_eq!(
-            UpdaterRequest::decode(&unregister.encode().unwrap()).unwrap(),
-            unregister
-        );
-
-        let staged = UpdaterResult {
-            request_id: 3,
-            ok: true,
-            available: true,
-            fresh: false,
-            version: "1.2.0".into(),
-            error: String::new(),
-        };
-        assert_eq!(
-            UpdaterResult::decode(&staged.encode().unwrap()).unwrap(),
-            staged
-        );
-
-        let installed_fresh = UpdaterResult {
-            request_id: 4,
-            ok: true,
-            available: true,
-            fresh: true,
-            version: String::new(),
-            error: String::new(),
-        };
-        assert_eq!(
-            UpdaterResult::decode(&installed_fresh.encode().unwrap()).unwrap(),
-            installed_fresh
-        );
     }
 
     #[test]
@@ -574,8 +440,6 @@ src/a.ts"
         assert!(GitRequest::decode(&[9]).is_err());
         assert!(WatchRequest::decode(&[1, 0, 0, 0, 2, 0, 0]).is_err());
         assert!(OsRequest::decode(&[1, 0, 0, 0, 10, 0, 0]).is_err());
-        assert!(UpdaterRequest::decode(&[1, 0, 0, 0, 5, 0, 0]).is_err());
-        assert!(UpdaterResult::decode(&[1, 0, 0, 0, 2]).is_err());
 
         let mut cancel = vec![1, 7, 0, 0, 0];
         cancel.push(1);

@@ -2,7 +2,7 @@ import type { SettingsDocument } from "@commits/adapter/read/settings";
 
 export type ThemeMode = "light" | "dark";
 
-interface ThemeColours {
+export interface ThemeColours {
   readonly canvas: string;
   readonly surface: string;
   readonly elevated: string;
@@ -17,10 +17,13 @@ interface ThemeColours {
   readonly negative: string;
   readonly warning: string;
   readonly shadow: string;
+  readonly urgencyAdvisory: string;
+  readonly urgencyCaution: string;
+  readonly urgencyWarning: string;
 }
 
 /** Code colours for the full-diff panel, one per `--syntax-*` property in THEME.md. */
-interface SyntaxColours {
+export interface SyntaxColours {
   readonly keyword: string;
   readonly string: string;
   readonly comment: string;
@@ -60,23 +63,31 @@ export const DARK_THEMES: readonly ThemePreset[] = [
 ];
 
 /** Resolves system mode and independently stored light/dark selections. */
-export function resolveAppearance(settings: SettingsDocument, systemDark: boolean): ThemePreset {
-  const mode = settings.app.mode === "system" ? (systemDark ? "dark" : "light") : settings.app.mode;
+export interface ThemeFile { readonly version: 1; readonly name: string; readonly light: ThemePreset; readonly dark: ThemePreset }
+export interface SessionAppearance { mode?: ThemeMode; file?: ThemeFile }
+
+export function resolveAppearance(settings: SettingsDocument, systemDark: boolean, session: SessionAppearance = {}): ThemePreset {
+  const mode = session.mode ?? (settings.app.mode === "system" ? (systemDark ? "dark" : "light") : settings.app.mode);
+  if (session.file) return session.file[mode];
   const themes = mode === "dark" ? DARK_THEMES : LIGHT_THEMES;
   const selected = mode === "dark" ? settings.app.darkTheme : settings.app.lightTheme;
   return themes.find(({ id }) => id === selected) ?? themes[0];
 }
 
 /** Keeps the active palette synchronized with settings and operating-system mode. */
-export function createAppearanceController(): { update(settings: SettingsDocument): void } {
+export function createAppearanceController(): { update(settings: SettingsDocument): void; override(session: SessionAppearance): void } {
   const query = window.matchMedia("(prefers-color-scheme: dark)");
   let settings: SettingsDocument | null = null;
+  let session: SessionAppearance = {};
   const apply = (): void => {
     if (settings === null) return;
-    applyTheme(resolveAppearance(settings, query.matches));
+    applyTheme(resolveAppearance(settings, query.matches, session));
   };
   query.addEventListener("change", apply);
-  return { update(value) { settings = value; apply(); } };
+  return {
+    update(value) { if (settings && settings.app.mode !== value.app.mode) session.mode = undefined; settings = value; apply(); },
+    override(value) { session = { ...session, ...value }; apply(); },
+  };
 }
 
 function applyTheme(theme: ThemePreset): void {
@@ -117,6 +128,9 @@ function applyTheme(theme: ThemePreset): void {
     "--vscode-editorError-foreground": colours.negative,
     "--vscode-gitDecoration-untrackedResourceForeground": colours.positive,
     "--vscode-widget-shadow": colours.shadow,
+    "--urgency-advisory": colours.urgencyAdvisory,
+    "--urgency-caution": colours.urgencyCaution,
+    "--urgency-warning": colours.urgencyWarning,
   };
   for (const [token, value] of Object.entries(theme.syntax)) variables[`--syntax-${token}`] = value;
   for (const [name, value] of Object.entries(variables)) document.documentElement.style.setProperty(name, value);
@@ -127,7 +141,44 @@ function preset(id: string, name: string, mode: ThemeMode, values: readonly stri
   const [keyword, string, comment, number, fn, type, variable, constant, meta, tag] = syntaxValues;
   return {
     id, name, mode,
-    colours: { canvas, surface, elevated, text, border, input, hover, selection, selectionText, accent, positive, negative, warning, shadow },
+    colours: { canvas, surface, elevated, text, border, input, hover, selection, selectionText, accent, positive, negative, warning, shadow,
+      urgencyAdvisory: mode === "light" ? "#a66a00" : "#e5ad45", urgencyCaution: mode === "light" ? "#bd421f" : "#fa845c", urgencyWarning: mode === "light" ? "#b62665" : "#ef7fac" },
     syntax: { keyword, string, comment, number, function: fn, type, variable, constant, meta, tag },
   };
+}
+
+function isColour(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  if (/^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(value)) return true;
+  const rgba = /^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?|\.\d+)\s*\)$/.exec(value);
+  return rgba !== null && rgba.slice(1, 4).every((channel) => Number(channel) <= 255);
+}
+
+/** Validates all required tokens, retaining only keys in the Commits contract. */
+export function parseThemeFile(json: unknown): ThemeFile | Error {
+  const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+  if (!record(json) || json.version !== 1 || typeof json.name !== "string") return new Error("expected version 1 and a name");
+  const palettes: Partial<Record<ThemeMode, ThemePreset>> = {};
+  for (const mode of ["light", "dark"] as const) {
+    const input = json[mode];
+    if (!record(input) || !record(input.colours)) return new Error(`${mode}.colours is required`);
+    const base = (mode === "light" ? LIGHT_THEMES : DARK_THEMES)[0];
+    const colours: Record<string, string> = {};
+    for (const key of Object.keys(base.colours)) {
+      if (!isColour(input.colours[key])) return new Error(`${mode}.colours.${key} is missing or invalid`);
+      colours[key] = input.colours[key];
+    }
+    let syntax = base.syntax;
+    if (input.syntax !== undefined) {
+      if (!record(input.syntax)) return new Error(`${mode}.syntax must be an object`);
+      const tokens: Record<string, string> = {};
+      for (const key of Object.keys(base.syntax)) {
+        if (!isColour(input.syntax[key])) return new Error(`${mode}.syntax.${key} is missing or invalid`);
+        tokens[key] = input.syntax[key];
+      }
+      syntax = tokens as unknown as SyntaxColours;
+    }
+    palettes[mode] = { id: "session", name: json.name, mode, colours: colours as unknown as ThemeColours, syntax };
+  }
+  return { version: 1, name: json.name, light: palettes.light!, dark: palettes.dark! };
 }

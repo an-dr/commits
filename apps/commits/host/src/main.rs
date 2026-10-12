@@ -3,15 +3,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commits_repo;
-mod control;
+mod desktop;
 mod diagnostics;
+mod installation;
 mod launch;
+mod launch_request;
 mod page;
 mod settings;
+mod sources;
 mod splash;
-mod release;
-mod updater;
-mod desktop;
 
 use std::sync::mpsc::Receiver;
 
@@ -23,16 +23,27 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let (logger, failures) = diagnostics::install();
     satisfy_legacy_launcher();
-    watch_startup_failure(failures);
-    refresh_launcher(&logger);
+    // A secondary launch must not rotate the primary process' diagnostic log.
+    let primary = match bones_kernel::instance::claim(
+        installation::identity().app_stem,
+        bones_kernel::instance::Handoff {
+            args: std::env::args().skip(1).collect(),
+            cwd: std::env::current_dir()?,
+        },
+        std::time::Duration::from_secs(2),
+    )? {
+        bones_kernel::instance::Claim::HandedOff => return Ok(()),
+        bones_kernel::instance::Claim::Primary(primary) => primary,
+    };
+    let (logger, failures) = diagnostics::install();
     let page = page::PageModule::new(logger.clone());
     let splash = splash::SplashModule::new(logger.clone());
     let git = commits_git::GitModule::default().with_logger(logger.clone());
-    let control = control::ControlModule::new(logger.clone());
     let watcher = commits_watcher::WatcherModule::default().with_logger(logger.clone());
-    bones_engine::Engine::new()
+    watch_startup_failure(failures);
+    refresh_launcher(&logger);
+    bones_kernel::Kernel::new()
         .logger(logger.clone())
         // `commits.wasm` is ~12 MB carrying an embedded JavaScript engine, so
         // `instantiate` + `init` needs far more than the engine's one second
@@ -53,7 +64,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         // folder", exactly where dist.ps1/install.ps1 place them. State is
         // different: it must survive an update, so it resolves to the
         // shared, install-wide location one level up (see
-        // bones_upgrader::shared_or_exe_relative) rather than being
+        // UpgradeModule::shared_path) rather than being
         // siloed inside whichever version folder happens to be running.
         // Named "components"/"state" rather than bones' own
         // "extensions"/"states" defaults -- this app's own vocabulary,
@@ -64,6 +75,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .window("commits", 1200, 1000)
         .min_window_size(1200, 800)
         .web()
+        .single_instance(primary)
+        .desktop(desktop::integration()?)
+        .upgrade(installation::config())
         // Modules init in registration order, so these two come first: the
         // page server has to be listening before the splash can ask it for a
         // URL, and the loading page wants to be up before the slower modules
@@ -80,20 +94,29 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(commits_repo::CommitsRepoModule::default())
         .module(launch::LaunchModule::default())
         // Inert unless COMMITS_CONTROL_PORT is set; see `control`.
-        .module(control)
-        .module(updater::UpdaterModule::default())
+        .module(
+            bones_kernel::devtools::Devtools::from_env("COMMITS_CONTROL_PORT")
+                .logger(logger.clone())
+                .redacting(|envelope| {
+                    envelope.topic == "os/prompt-response"
+                        || envelope.topic == "repo-os/request"
+                        || envelope.topic == "web/page-message"
+                }),
+        )
+        .module(installation::InstallationModule)
+        .module(sources::SourcesModule::default())
         .run()?;
     Ok(())
 }
 
 /// Resolves `name` for the engine builder's `saves_dir`: see
-/// `bones_upgrader::shared_or_exe_relative` for why this needs to be
+/// `UpgradeModule::shared_path` for why this needs to be
 /// install-wide rather than always exe-relative. Falls back to the plain
 /// relative name (the engine's own default behavior) if the running
 /// executable's path cannot be resolved at all.
 fn shared_data_dir(name: &str) -> std::path::PathBuf {
-    let identity = bones_upgrader::host_identity();
-    bones_upgrader::shared_or_exe_relative(&identity, name)
+    bones_kernel::upgrade::UpgradeModule::new(installation::config())
+        .shared_path(name)
         .unwrap_or_else(|| std::path::PathBuf::from(name))
 }
 
@@ -131,16 +154,16 @@ fn satisfy_legacy_launcher() {
 /// rather than surfaced -- a refresh that fails leaves exactly the entry
 /// point that was already there, which is a worse launcher rather than a
 /// broken app, and refusing to open over it would be the larger failure.
-fn refresh_launcher(logger: &bones_engine::logging::Logger) {
-    match bones_upgrader::refresh_launcher_from_running_exe(&bones_upgrader::host_identity()) {
+fn refresh_launcher(logger: &bones_kernel::logging::Logger) {
+    match bones_kernel::upgrade::UpgradeModule::new(installation::config()).refresh_launcher() {
         Ok(true) => logger.log(
-            bones_engine::logging::Level::Info,
+            bones_kernel::logging::Level::Info,
             "updater",
             "installed this version's launcher as the entry point",
         ),
         Ok(false) => {}
         Err(error) => logger.log(
-            bones_engine::logging::Level::Warn,
+            bones_kernel::logging::Level::Warn,
             "updater",
             &format!("could not refresh the entry point: {error}"),
         ),

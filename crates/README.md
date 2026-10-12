@@ -2,11 +2,9 @@
 
 Native modules this application needs and the engine does not provide.
 
-The rule that decides what belongs here is the opposite of what it used to be. A crate that could serve another host unchanged does not belong here at all: it belongs in `bones`, where every host gets it. What is left in this directory is what only a git client could want -- spawning `git`, watching a repository's files, and the OS actions that need a repository to mean anything.
+The rule that decides what belongs here is the opposite of what it used to be. A crate that could serve another host unchanged does not belong here at all: it belongs in `bones`, where every host gets it. What is left in this directory is what only a git client could want -- spawning `git`, classifying changes from Bones’ folder watcher, and the OS actions that need a repository to mean anything.
 
-Anything genuinely generic is upstream. Clipboard, browser, file pickers and HTTPS fetch are the engine's `os` module; self-update is `bones-upgrader`; the wire codec is `bones-messages`. When something here turns out to be reusable, the move is a contribution to bones and a submodule bump, never a copy (ADR-003).
-
-One crate here breaks that rule on purpose. [`desktop-integration`](desktop-integration) registers an installed application with the desktop and needs no repository, so it belongs in bones; it is written here first, as a self-contained crate with no Commits-specific API, and moves upstream as a contribution and a submodule bump (BUG-006 in [`docs/techdebt.md`](../docs/techdebt.md)).
+Anything genuinely generic is upstream. Clipboard, browser, file pickers and HTTPS fetch are the engine's `os` module; self-update is Bones’ `upgrade` module, desktop registration is its `desktop` module; the wire codec is `bones-messages`. When something here turns out to be reusable, the move is a contribution to bones and a submodule bump, never a copy (ADR-003).
 
 Code that only makes sense for the standalone client -- its window, layout or lifecycle -- belongs in `apps/commits/host` instead.
 

@@ -31,10 +31,7 @@ export interface CommitsRepoStatus {
  * or a checkout with unrelated repositories inside it. The first is the one
  * to open.
  */
-export type LaunchRepository =
-  | { readonly kind: "none" }
-  | { readonly kind: "repository"; readonly paths: readonly string[] }
-  | { readonly kind: "rejected"; readonly reason: string };
+export type LaunchRepository = import("@commits/ipc/native").LaunchRequest;
 
 export interface InstallStatus {
   readonly ok: boolean;
@@ -77,6 +74,8 @@ export interface HostPort {
   commitsRepoStatus(): CommitsRepoStatus;
   /** The repository named on the command line, already resolved and checked by the host. */
   launchRepository(): LaunchRepository;
+  repositorySources?(): readonly RepositorySource[];
+  repositoryState?(path: string): import("../health/facts").RepositoryState;
   /** Raw bytes persisted by bones in this component's file-backed save slot. */
   loadSavedState(): Uint8Array<ArrayBufferLike>;
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void;
@@ -103,9 +102,13 @@ export interface HostPort {
    */
   watchRepository(requestId: number, action: "start" | "stop", repository: string): void;
   /** Checks a manifest for a newer version, stages its verified asset, or stages the running build itself. */
-  requestUpdate(requestId: number, action: import("@commits/ipc/native").UpdaterAction, manifestUrl: string): void;
+  requestUpdate(requestId: number, action: import("@commits/ipc/native").UpdaterAction): void;
   /** Whether this running build is the one installed at the canonical location. */
   installStatus(): InstallStatus;
+  requestLastApplied?(requestId: number): void;
   sendPageMessage(panel: string, message: unknown): void;
   subscribe(topic: string): void;
 }
+
+export interface RepositorySource { readonly name: string; readonly repositories: readonly SourceRepository[] }
+export interface SourceRepository { readonly name: string; readonly path: string; readonly group?: string | null; readonly favorite?: boolean; readonly available: boolean }

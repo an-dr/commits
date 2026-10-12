@@ -17,7 +17,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use bones_engine::logging::{Level, LogSink, Logger};
+use bones_kernel::logging::{Level, LogSink, Logger};
 
 /// Category the engine logs its own extension bookkeeping under.
 const ENGINE: &str = "engine";
@@ -27,13 +27,13 @@ const LOG_FILE: &str = "commits.log";
 const PREVIOUS_LOG_FILE: &str = "commits.prev.log";
 
 /// Resolves the log the same way `saves_dir`/`extensions_dir` do (see
-/// `bones_upgrader::shared_or_exe_relative`): beside the running
+/// `UpgradeModule::shared_path`): beside the running
 /// executable for a dev build, so a copied `dist/app` keeps its diagnostics
 /// with it, or at the shared install-wide location when running from an
 /// installed version folder, so `commits.log` survives across updates
 /// instead of starting over in each new version folder.
 pub fn log_path() -> Option<PathBuf> {
-    bones_upgrader::shared_or_exe_relative(&bones_upgrader::host_identity(), LOG_FILE)
+    bones_kernel::upgrade::UpgradeModule::new(crate::installation::config()).shared_path(LOG_FILE)
 }
 
 /// Installs the file logger, returning it alongside the channel that carries
@@ -179,8 +179,16 @@ mod tests {
     fn reports_an_extension_load_failure_exactly_once() {
         let (sink, failures, _buffer) = sink();
 
-        sink.log(Level::Error, "engine", "failed to load components/commits.wasm: trap");
-        sink.log(Level::Error, "engine", "failed to load components/other.wasm: trap");
+        sink.log(
+            Level::Error,
+            "engine",
+            "failed to load components/commits.wasm: trap",
+        );
+        sink.log(
+            Level::Error,
+            "engine",
+            "failed to load components/other.wasm: trap",
+        );
 
         assert!(failures.recv().unwrap().starts_with("failed to load"));
         // The sender is dropped with the first report, so a second failing

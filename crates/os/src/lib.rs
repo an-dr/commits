@@ -22,7 +22,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 
-use bones_engine::bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use commits_ipc::native::{NativeResult, OsRequest};
 
 pub mod discover;
@@ -83,11 +83,17 @@ impl RepoOsBackend for SystemOsBackend {
     fn run_tool(&self, request: &str) -> Result<(), String> {
         let run = parse_tool_run(request)?;
         let args = materialize_tool_args(&run, &std::env::temp_dir())?;
-        std::process::Command::new(&run.program)
-            .args(&args)
-            .spawn()
-            .map(|_| ())
-            .map_err(|error| format!("could not start {}: {error}", run.program))
+        match bones_kernel::launch::launch(&bones_kernel::launch::Program {
+            program: run.program.clone(),
+            args,
+            cwd: std::env::current_dir().map_err(|error| error.to_string())?,
+            env: Vec::new(),
+        })? {
+            bones_kernel::launch::Launched::Started => Ok(()),
+            bones_kernel::launch::Launched::NotFound { searched } => {
+                Err(format!("could not find {searched}"))
+            }
+        }
     }
     fn find_repositories(&self, path: &str) -> Result<Option<String>, String> {
         let found = discover::find_repositories(std::path::Path::new(path));
@@ -148,9 +154,8 @@ pub fn parse_tool_run(value: &str) -> Result<ToolRun, String> {
     let left_base64 = field();
     let right_name = field();
     let right_base64 = field();
-    let blob = |name: String, base64: String| {
-        (!name.is_empty()).then_some(ToolBlob { name, base64 })
-    };
+    let blob =
+        |name: String, base64: String| (!name.is_empty()).then_some(ToolBlob { name, base64 });
     Ok(ToolRun {
         program,
         args: lines.map(|argument| argument.to_string()).collect(),
@@ -214,7 +219,11 @@ pub fn materialize_tool_args(
     Ok(run
         .args
         .iter()
-        .map(|argument| argument.replace("{left}", &left_path).replace("{right}", &right_path))
+        .map(|argument| {
+            argument
+                .replace("{left}", &left_path)
+                .replace("{right}", &right_path)
+        })
         .collect())
 }
 
@@ -244,7 +253,9 @@ fn read_repository_file(
     }
     // Invalid UTF-8 means the file is not text the panel can show, which is the
     // same outcome as a file it cannot read.
-    Ok(std::fs::read(&target).ok().and_then(|bytes| String::from_utf8(bytes).ok()))
+    Ok(std::fs::read(&target)
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok()))
 }
 
 pub struct OsModule {
@@ -256,7 +267,7 @@ pub struct OsModule {
     /// times a second for the two minutes askpass waits.
     announced: HashSet<String>,
     /// Absent in tests, which construct the module directly.
-    logger: Option<bones_engine::logging::Logger>,
+    logger: Option<bones_kernel::logging::Logger>,
 }
 
 impl OsModule {
@@ -276,7 +287,7 @@ impl OsModule {
     /// request that never ran and one that failed silently looked identical
     /// from the outside -- the window simply did nothing (matches
     /// `commits_git::GitModule::with_logger`'s own reasoning).
-    pub fn with_logger(mut self, logger: bones_engine::logging::Logger) -> Self {
+    pub fn with_logger(mut self, logger: bones_kernel::logging::Logger) -> Self {
         self.logger = Some(logger);
         self
     }
@@ -301,7 +312,10 @@ impl OsModule {
     fn start(&self, request: OsRequest) {
         let Some(bus) = self.bus.clone() else { return };
         let repo_backend = self.repo_backend.clone();
-        self.log(&format!("#{} run: action {}", request.request_id, request.action));
+        self.log(&format!(
+            "#{} run: action {}",
+            request.request_id, request.action
+        ));
         let logger = self.logger.clone();
         thread::spawn(move || {
             let started = Instant::now();
@@ -311,7 +325,11 @@ impl OsModule {
                 if result.accepted {
                     logger.info(
                         "repo-os",
-                        &format!("#{} done in {elapsed}ms ({} bytes out)", request.request_id, result.value.len()),
+                        &format!(
+                            "#{} done in {elapsed}ms ({} bytes out)",
+                            request.request_id,
+                            result.value.len()
+                        ),
                     );
                 } else {
                     logger.error(
@@ -319,7 +337,11 @@ impl OsModule {
                         &format!(
                             "#{} done in {elapsed}ms: {}",
                             request.request_id,
-                            if result.error.is_empty() { "refused with no reason given" } else { &result.error }
+                            if result.error.is_empty() {
+                                "refused with no reason given"
+                            } else {
+                                &result.error
+                            }
                         ),
                     );
                 }
@@ -380,11 +402,16 @@ impl Module for OsModule {
 
     fn render(&mut self) {
         let Some(bus) = self.bus.clone() else { return };
-        let Ok(entries) = std::fs::read_dir(prompt_directory()) else { return };
+        let Ok(entries) = std::fs::read_dir(prompt_directory()) else {
+            return;
+        };
         let mut waiting = HashSet::new();
         for entry in entries.flatten() {
             let path = entry.path();
-            if !path.extension().is_some_and(|extension| extension == "request") {
+            if !path
+                .extension()
+                .is_some_and(|extension| extension == "request")
+            {
                 continue;
             }
             let (Some(id), Ok(body)) = (
@@ -398,7 +425,12 @@ impl Module for OsModule {
                 continue;
             }
             let payload = format!("{id}\n{body}").into_bytes();
-            bus.publish(Envelope { topic: PROMPT_TOPIC.into(), sender: "os".into(), correlation: None, payload });
+            bus.publish(Envelope {
+                topic: PROMPT_TOPIC.into(),
+                sender: "os".into(),
+                correlation: None,
+                payload,
+            });
         }
         // Answered or abandoned: askpass removes its request either way, and
         // forgetting it here lets a later prompt with the same id -- a
@@ -408,17 +440,24 @@ impl Module for OsModule {
 }
 
 fn prompt_directory() -> std::path::PathBuf {
-    std::env::current_exe().ok().and_then(|path| path.parent().map(|parent| parent.join("saves/prompts"))).unwrap_or_else(|| std::path::PathBuf::from("saves/prompts"))
+    std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(|parent| parent.join("saves/prompts")))
+        .unwrap_or_else(|| std::path::PathBuf::from("saves/prompts"))
 }
 
 fn execute_repo(backend: &dyn RepoOsBackend, request: &OsRequest) -> NativeResult {
     let outcome = match request.action {
         0 => backend.read_file(&request.value),
         1 => backend.find_repositories(&request.value),
-        2 => backend.run_tool(&request.value).map(|_| Some(String::new())),
+        2 => backend
+            .run_tool(&request.value)
+            .map(|_| Some(String::new())),
         3 => backend.start_github_device_code(),
         4 => backend.poll_github_token(&request.value),
-        5 => backend.store_github_token(&request.value).map(|_| Some(String::new())),
+        5 => backend
+            .store_github_token(&request.value)
+            .map(|_| Some(String::new())),
         _ => Err("unknown repo-os action".into()),
     };
     into_result(request.request_id, outcome)

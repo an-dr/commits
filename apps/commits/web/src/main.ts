@@ -7,10 +7,12 @@ import { buildGraphShell } from "@an-dr/commits-webview-shell/shell";
 import { DEFAULT_SETTINGS, type SettingsDocument } from "@commits/adapter/read/settings";
 import { toolbarIcons } from "@an-dr/commits-core/webview/utils/icons";
 import "./standalone-theme.css";
+import "./integration.css";
 import { CredentialPrompts, credentialPromptHost } from "./credential-prompts";
 import { createViewState } from "./settings";
 import { SettingsEditor } from "./settings-editor";
 import { createAppearanceController } from "./themes";
+import { wireIntegration } from "./integration";
 
 const STATE_KEY = "commits.mit-webview.state";
 
@@ -96,6 +98,7 @@ async function boot(): Promise<void> {
   let nextSettingsRequestId = 1;
   let settingsEditor: SettingsEditor;
   const appearance = createAppearanceController();
+  wireIntegration(appearance);
   // Set once startCommitsView's module resolves below; applies a saved
   // settings change to the already-built graph view without reopening it.
   let applyLiveSettings: (() => void) | null = null;

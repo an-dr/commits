@@ -1,297 +1,63 @@
 # Self-updating the standalone app
 
-The standalone build can check a hosted manifest for a newer version,
-download and checksum-verify it, and apply it on the next launch — with an
-automatic fallback to the previous version if the new one fails to start.
-This document is the publisher's and operator's reference; see
-[`ADR-005`](adr/ADR-005-use-correlated-bus-replies-for-long-native-work.md)
-for why the check and download run as correlated, non-blocking bus requests
-rather than synchronous calls.
+Commits uses Bones’ upgrade module to check its release manifest, download and verify a release, and install it in a new version folder. Work runs off the window thread through correlated `upgrader/request` and `upgrader/result` messages. The permanent launcher selects an installed build and exits; it does not supervise the app or delete versions.
 
 ## Install layout
-
-An installation the launcher can update looks like this:
 
 ```text
 ~/.commits/
   app/
-    commits.exe           # the permanent entry point -- stable name, replaced
-                           # in place by the app when a version ships a newer one
-    1.2.0/                 # a version folder: commits-app.exe, commits-launcher.exe,
-                           # page.html, components/, ...
-    1.3.0/                 # the current version -- the highest by folder name
-    state/                   # user save data, shared across every version -- also
-                             # holds updater.bin, the version last recorded for the
-                             # "Updated to X" banner (see "Confirming an update took
-                             # effect" below)
+    commits.exe
+    1.8.1/
+    1.9.0/
+      commits-app.exe
+      commits-launcher.exe
+      page.html
+      components/
+    state/
   settings.json
-  repo/                     # the commits project's own clone (Clone Commits Repo)
+  sources/
 ```
 
-`commits.exe`, not `commits-app.exe`, is the permanent entry point: the
-desktop registration (see [`desktop-integration.md`](desktop-integration.md))
-points at it, and it is the name users type. On
-every start it picks the current version folder -- the highest by name under
-`app/` -- and launches that version's `commits-app.exe`. There is nothing to
-apply first: installing a version means its folder already exists, so the
-very next start already sees it as the newest one on disk.
+Linux executable names omit `.exe`. The launcher at the install root is the stable entry point used by desktop registration. Every version carries its own `commits-launcher` payload; the app refreshes the entry point from it on startup. `state` is shared across installed versions. `COMMITS_INSTALL_DIR` redirects the installation to a scratch folder.
 
-## The two processes replace each other
+Versions use strict SemVer precedence; build metadata alone does not make an update newer. A second installation of the same version uses a `version~instance` folder instead of overwriting the existing build. Bones retains the current and previous versions.
 
-Neither process can replace itself while it is running, so each replaces the
-other. The launcher swaps the app by picking a different version folder on
-its next start. The app swaps the launcher by writing over the file at the
-install root — which is why every version folder also carries
-`commits-launcher.exe`, the launcher that shipped with that version.
+## Release source
 
-The name changes on the way in. The payload is `commits-launcher.exe` and
-the entry point is `commits.exe`: they live in one tree during an install,
-and what belongs inside a version folder is decided by filename, so sharing
-a name would quietly drop the launcher from every payload.
-
-On startup the app compares the two. If they differ, it renames the current
-entry point to `commits.exe.old` and copies the shipped one into place —
-renaming rather than overwriting, because Windows refuses to overwrite a
-running image but allows renaming one, and the launcher that started this
-very process may still be alive. A later start deletes the leftover, once
-nothing is executing it.
-
-This direction used to be missing, and its absence was not theoretical: an
-install rewrote the version folder underneath the entry point and never the
-entry point itself, so `commits.exe` stayed whatever version first created
-it. A launcher bug — including one that dropped the command-line argument
-before the app ever saw it — could not be fixed by any number of updates.
-
-A version folder that carries no `commits-launcher.exe` is left alone. Every
-folder installed before this release looks like that, and none of them is an
-error.
-
-Only the current and previous version folders are kept; anything older is
-deleted once a new one is installed. `components/` (the built-in WASM
-components) is versioned along with the rest of a version folder -- updated
-with every release, and cleaned up automatically along with its version once
-pruned -- rather than shared. `state/` is different: it must survive an
-update, so it sits outside every version folder instead. This is purely
-structural, not tied to `~/.commits/app` specifically: `commits-app.exe`
-resolves `state/`'s location by checking whether its own directory's name
-parses as a version and its parent has a launcher beside it, so a `dist/app`
-build assembled the same way (see [`phase-0-1.md`](phase-0-1.md)) behaves
-identically without any extra configuration.
-
-## Where updates come from
-
-Every build checks the latest
-[GitHub release](https://github.com/an-dr/commits/releases) for a manifest
-matching its own build type, fixed at compile time:
-
-| Build | Manifest asset |
-| --- | --- |
-| Windows x64 | `commits-windows-x64.json` |
-| Windows arm64 | `commits-windows-arm64.json` |
-| Linux x64 | `commits-linux-x64.json` |
-
-The app reads it from
-`https://github.com/an-dr/commits/releases/latest/download/<asset>`, which
-GitHub redirects to that asset on the newest release that is not marked as
-a pre-release. A build for any other platform has no default source and does
-not check.
-
-`app.updateManifestUrl` (see [`settings.md`](settings.md)) overrides the
-default when it is set, for testing a manifest served from anywhere else.
-
-## Publishing a release
-
-Pushing a tag named `v<version>`, where the version matches
-`apps/commits/host/Cargo.toml`, publishes a release:
-
-```sh
-git tag v1.8.0
-git push origin main v1.8.0
-```
-
-The [`build`](../.github/workflows/build.yml) workflow builds all three
-platforms in one Docker image ([`ci.md`](ci.md)). Each one runs
-[`scripts/package-release.ps1`](../scripts/package-release.ps1), which zips
-its version folder as `commits-<version>-<platform>.zip` and writes the
-platform's manifest next to it, pointing at that zip on the tag's release
-with its SHA-256. The `release` job then creates the GitHub release with all
-six files. The packaging script refuses a tag that does not match the
-version, because a release whose manifest names an older version would never
-be offered to anyone.
-
-Every other push and pull request builds and packages the same files and keeps
-them as workflow artifacts for 30 days, without publishing a release.
-
-## The manifest
-
-The manifest is a small JSON document:
+The default source is the latest GitHub release of `an-dr/commits`. Its platform manifests are `commits-linux-x64.json`, `commits-windows-x64.json`, and `commits-windows-arm64.json`. The host fixes the source when it composes the upgrade module. `app.updateManifestUrl` overrides it; an empty value selects GitHub. Restart the app after changing this setting so the host reads the new source. A guest can request an action but cannot choose a release URL.
 
 ```json
 {
-  "version": "1.3.0",
-  "url": "https://example.com/releases/commits-1.3.0.zip",
-  "sha256": "…64 hex characters…"
+  "version": "1.9.0",
+  "url": "https://example.com/commits-1.9.0.zip",
+  "sha256": "64 hexadecimal characters"
 }
 ```
 
-- `version` is compared against this build's own `CARGO_PKG_VERSION`
-  (`apps/commits/host/Cargo.toml`'s `[package] version`) using a
-  dot-separated numeric comparison — `1.2.0` reads as older than `1.10.0`,
-  not lexically. A release therefore needs that version bumped, or every
-  later build will keep reporting itself up to date. The same comparison,
-  applied to version folder names instead of a manifest field, is also how
-  the launcher picks which installed version is current.
-- `url` is a ZIP of a version's contents (`commits-app.exe`, the other
-  helper executables, `commits-launcher.exe`, `page.html`, and a
-  `components/` folder for any WASM component being updated). Include the
-  launcher: it is how a launcher fix reaches an existing install, and a
-  payload without one simply leaves whatever entry point is already there.
-  Never name it `commits.exe` inside the ZIP — that is the entry point's
-  name, not the payload's.
-- The ZIP is downloaded by the app itself rather than through the shared
-  `os` fetch, whose 5 MB cap suits small documents and is far smaller than a
-  release. The app allows up to 256 MB, with a 60-second limit on each read
-  rather than on the whole download. ZIP extraction does not carry file
-  permissions, so on Linux the app marks the extracted executables (files
-  with no extension at the top of the version folder) executable again.
-- `sha256` is optional but recommended: when present, a downloaded asset
-  that does not match is refused outright rather than installed. Omitting
-  it is a deliberate choice for a publisher who cannot commit to a checksum
-  immediately, not a silent weakening — always set it when you can.
+The ZIP contains the version's executables, `page.html`, `components/`, and the launcher payload named `commits-launcher`, never the installed entry-point name `commits`. Publishing scripts always include a SHA-256 checksum. The Bones module owns HTTPS and the 256 MiB download limit, independent of the generic `os` fetch cap. Extracted Linux executables regain execute permission.
 
-Publish the manifest and the ZIP together and update `version`/`url`/`sha256`
-as the last step of a release, once the asset itself is final.
+## App menu
 
-## What happens on click
+Check finds a newer manifest and offers Update. Update downloads and stages it, then offers Restart; the launcher selects the new folder on the next run. Install and register copies an unpacked build into the canonical install, then registers its entry point through Bones’ separate desktop module. Registration failure leaves the installed files intact and reports the failure. The installed app can retry Register with system. Unregister removes desktop integration and keeps installed files.
 
-"Update to `<version>`" appears in the app menu only once a check finds a
-manifest version newer than the running build. Clicking it re-fetches the
-manifest, downloads and verifies the asset, and extracts it into its own new
-version folder under `app/`, `components/` and all — all on a background
-thread, so the window stays responsive. If a version folder by that name
-already exists (a dev build that never bumped its version, most commonly),
-the new one gets a short content-hash suffix rather than overwriting it. The
-menu label then switches to "Restart to update"; the new version becomes
-current only once `commits.exe` is started again and finds it as the newest
-folder on disk. That start also refreshes the entry point itself, if the new
-version brought a different launcher with it.
+The app asks Bones for the version previously recorded under the `upgrader` persistence key. A changed version produces the one-time Updated notice. First runs and development builds do not claim they were updated.
 
-## Install: pushing a running build without a manifest
+## Recovery and command line
 
-"Install and register" appears in the app menu instead, whenever this run's own directory
-is *not* a version folder under `~/.commits/app` — a dev build, or a build
-launched ad hoc rather than through the installed `commits.exe`. It needs no
-manifest URL or network access at all, and does one of two things depending
-on whether `~/.commits/app` already has a launcher in it:
+The [command-line contract](command-line.md) owns all flags, path handling and single-instance behavior. Use `commits --previous` to start the previous installed build when a newer build cannot start. The launcher never deletes a build. Recovery mutations belong to the app's upgrade module.
 
-- **Already installed** (some version is there): copies this run's own
-  directory into a new version folder, the same way a downloaded update
-  does. The label switches to "Restart to install"; the existing
-  `~/.commits/app/commits.exe` picks it up as current the next time it
-  starts, and that start replaces the entry point too if the pushed build
-  carries a different launcher.
-- **Nothing installed yet**: there is no launcher yet to ever pick up a
-  pushed version folder, so this places the launcher at `~/.commits/app`
-  itself and the rest of the build into its own first version folder. This
-  already completes the install; the entry disappears rather than prompting
-  a restart. Run `~/.commits/app/commits.exe` to actually start it.
+## Publishing a release
 
-Either way, the install then registers `~/.commits/app/commits.exe` with the
-operating system — shortcuts, the application list, and "Open in Commits" for
-folders — as described in [`desktop-integration.md`](desktop-integration.md).
-[`scripts/install.ps1`](../scripts/install.ps1) performs the same file copy
-from a shell and never registers anything; the installed app's "Register with
-system" does that afterwards.
+Bump `apps/commits/host/Cargo.toml` and `UPGRADER_LAUNCHER_VERSION` in `.cargo/config.toml` together. After the bumped commit is on `main`, push the matching tag:
 
-## Launch
-
-On every start, `commits.exe` (the launcher):
-
-1. Picks the current version folder under `~/.commits/app` — the highest by
-   name, the same comparison the manifest check uses.
-2. Launches that version's `commits-app.exe`, forwarding its own arguments
-   unread, and exits.
-
-It does not supervise what it started. It used to: it waited up to 45
-seconds for a health marker and, failing to see one, deleted that version's
-folder and fell back to the previous one. That check measured wall clock, so
-it could not tell a slow machine from a broken build — and being wrong meant
-deleting a version that worked. A guess that destructive, made on every
-launch, cost more than the recovery it bought.
-
-Recovering from a version that genuinely cannot start is a deliberate act
-now. Both version folders are still on disk (see "Install layout"), and the
-previous one becomes current again the moment the newest is removed:
-
-```powershell
-commits --rollback
+```sh
+git tag v1.9.0
+git push origin main v1.9.0
 ```
 
-It refuses when the newest is the only version installed, since deleting it
-would leave the entry point with nothing to start at all.
-
-## The command line
-
-The launcher answers three flags itself and forwards everything else to the
-app unread — a repository path, and anything a later app learns to take. A
-flag counts only as the first argument, which costs nothing, because no path
-the app opens begins with a dash.
-
-| Flag | Does |
-| --- | --- |
-| `--version` | prints the installed app version and the launcher's own build |
-| `--help` | prints usage |
-| `--rollback` | drops the newest version folder for the previous one |
-
-The launcher answers them rather than the app because it is the process the
-shell waits on: the app is spawned detached with no stdio, so nothing it
-printed could reach the terminal.
-
-`--version` prints both numbers because the interesting answer is whether
-they agree. A launcher left behind by an old install starts a perfectly
-current app while being years out of date itself, and nothing else makes
-that visible:
-
-```text
-commits 1.1.0
-launcher 1.0.1     # this pair disagreeing is the bug, not a display quirk
-```
-
-`unknown` for the launcher means the build never stamped
-`UPGRADER_LAUNCHER_VERSION` — see [`.cargo/config.toml`](../.cargo/config.toml).
-
-Both binaries are GUI-subsystem executables, so they own no console. The
-launcher borrows the calling terminal's to answer, and prefers a redirect
-when the caller supplied one, so `commits --version > versions.txt` writes
-to the file rather than to the screen. Started from Explorer there is
-neither, and the text goes nowhere — which is correct, since nobody asked
-for it.
-
-A launch that only prints to standard output/error and opens no window
-failed before startup could begin. When `commits-app.exe` itself starts but
-the window stays blank, its own failed-startup dialog names the log path;
-see "Troubleshooting a blank window" in the [README](../README.md).
-
-## Confirming an update took effect
-
-The app records its own version on every start through bones' own
-`persistence` module (`wasm_extensions::persistence::Persistence`, the same
-mechanism a WASM extension uses to save its own state) — a `persistence/save`
-publish keyed by the `updater` module's own bus name, landing at
-`state/updater.bin`, no separate on-disk state of this crate's own to manage.
-It compares that against what it last recorded, read back via a direct `send`
-to the `persistence` endpoint. The first start after that comparison changes
-— a version that differs from last time, however it got there (a downloaded
-update or a direct Install) — shows "Updated to version X" once next to the
-menu button. A first run ever (no prior save) does not trigger this; there is
-nothing to compare yet.
+The [build workflow](../.github/workflows/build.yml) builds Linux x64, Windows x64 and Windows ARM64. [Package release](../scripts/package-release.ps1) publishes `commits-<version>-<platform>.zip` and `commits-<platform>.json` for each platform: six assets total. It refuses a tag that does not match the app version. Other pushes retain build artifacts without publishing a release.
 
 ## Checking behavior locally
 
-`scripts/package-release.ps1 -Platform linux-x64` (or the platform you are on)
-produces a real zip and manifest from `dist/app`. To test an update, point
-`updateManifestUrl` at a manifest whose `version` is higher than the
-running build's, served from anywhere reachable over HTTPS (a local static
-file server works for testing). `COMMITS_INSTALL_DIR` can redirect the
-install location to a scratch directory instead of the real `~/.commits/app`
-while testing the launcher directly.
+Build and assemble with `npm run dist`. [Install](../scripts/install.ps1) installs files without registration. Set `app.updateManifestUrl` to a test manifest served over HTTPS and restart to exercise the updater. Set `COMMITS_INSTALL_DIR` to keep the experiment outside the normal installation. The [desktop integration](desktop-integration.md) page describes registration separately.
