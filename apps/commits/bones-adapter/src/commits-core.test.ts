@@ -148,6 +148,35 @@ describe("CommitsCore MIT webview host", () => {
     expect(navigation).toHaveLength(1);
     expect(navigation[0].args).toEqual(["rev-parse", "--verify", "--end-of-options", "abcd^{commit}"]);
   });
+  it("searches no more history than the graph loads and names that limit", () => {
+    const host = new StubHost(); host.launchValue = { kind: "repository", paths: ["C:/A"], sequence: 0 };
+    host.settingsBytes = new TextEncoder().encode(JSON.stringify({ version: 2, core: {}, app: { navigationMaxCommits: 10_000 } }));
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    const answer = (stdout = ""): void => { for (const request of host.gitRequests.splice(0)) core.receiveGitResult({ requestId: request.requestId, status: "completed", exitCode: 0, stdout: new TextEncoder().encode(stdout), stderr: new Uint8Array() }); };
+    core.receivePageJson(JSON.stringify({ command: "loadCommits", repo: "C:/A", maxCommits: 300 }));
+    answer();
+    core.receiveLaunchRequest({ kind: "repository", paths: ["C:/A"], sequence: 1, commit: "abcd" });
+    answer("abcd0000\n");
+    const log = host.gitRequests.find((request) => request.args[0] === "log");
+    expect(log?.args).toContain("--max-count=2001");
+    answer();
+    expect(host.sent.some(([, value]) => (value as { message?: string }).message === "Could not select abcd: outside the loaded history (limit 2000).")).toBe(true);
+  });
+  it("does not apply a rejected handoff's navigation on the next refresh", () => {
+    const host = new StubHost(); host.launchValue = { kind: "repository", paths: ["C:/A"], sequence: 0 };
+    const core = new CommitsCore(host);
+    core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
+    const answer = (): void => { for (const request of host.gitRequests.splice(0)) core.receiveGitResult({ requestId: request.requestId, status: "completed", exitCode: 0, stdout: new Uint8Array(), stderr: new Uint8Array() }); };
+    core.receivePageJson(JSON.stringify({ command: "loadCommits", repo: "C:/A", maxCommits: 300 }));
+    answer();
+    core.receiveLaunchRequest({ kind: "rejected", reason: "nothing at C:/missing", sequence: 1, branch: "feature" });
+    core.receivePageJson(JSON.stringify({ command: "loadCommits", repo: "C:/A", maxCommits: 300 }));
+    const refresh = [...host.gitRequests];
+    answer();
+    expect([...refresh, ...host.gitRequests].some((request) => request.args.some((arg) => arg.includes("feature")))).toBe(false);
+    expect(host.sent.some(([, value]) => (value as { command?: string; message?: string }).command === "standaloneNotice")).toBe(true);
+  });
   it("opens the shared graph page and subscribes to native results", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);

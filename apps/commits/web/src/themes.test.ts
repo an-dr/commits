@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "@commits/adapter/read/settings";
-import { DARK_THEMES, LIGHT_THEMES, resolveAppearance, parseThemeFile } from "./themes";
+import { DARK_THEMES, LIGHT_THEMES, resolveAppearance, parseThemeFile, sessionAfterSettingsChange } from "./themes";
 
 describe("standalone appearance", () => {
   const file = () => ({ version: 1, name: "Caller", light: { colours: { ...LIGHT_THEMES[0].colours, ignored: "future" } }, dark: { colours: DARK_THEMES[0].colours } });
@@ -18,6 +18,15 @@ describe("standalone appearance", () => {
     for (const canvas of ["red", "rgba(256,0,0,1)", "rgba(0,0,0,1.2)", "url(x)", "#12345"]) {
       expect(parseThemeFile({ ...file(), light: { colours: { ...LIGHT_THEMES[0].colours, canvas } } })).toBeInstanceOf(Error);
     }
+  });
+  it("lets a preset saved in Settings replace the session palette", () => {
+    const parsed = parseThemeFile(file());
+    if (parsed instanceof Error) throw parsed;
+    const session = { mode: "dark" as const, file: parsed };
+    const renamed = { ...DEFAULT_SETTINGS, app: { ...DEFAULT_SETTINGS.app, darkTheme: "midnight" } };
+    expect(sessionAfterSettingsChange(session, DEFAULT_SETTINGS, renamed)).toEqual({ mode: "dark", file: undefined });
+    expect(resolveAppearance(renamed, true, sessionAfterSettingsChange(session, DEFAULT_SETTINGS, renamed)).id).toBe("midnight");
+    expect(sessionAfterSettingsChange(session, DEFAULT_SETTINGS, DEFAULT_SETTINGS)).toEqual(session);
   });
   it("ships separate light and dark theme catalogs", () => {
     expect(LIGHT_THEMES.map(({ id }) => id)).toEqual(["paper", "solarized-light", "high-contrast-light"]);

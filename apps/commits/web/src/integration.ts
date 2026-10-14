@@ -1,14 +1,25 @@
 import type { RepositoryHealth } from "@commits/adapter/health/facts";
 import type { RepositorySource, SourceRepository } from "@commits/adapter/host/host-port";
 import { parseThemeFile, type SessionAppearance } from "./themes";
+import { WEBVIEW } from "./webview-contract";
 
 const post = (command: string): void => window.ipc.postMessage(JSON.stringify({ command }));
+
+/**
+ * One spelling per folder, for deduplication: forward slashes, no trailing
+ * slash, and lower case for drive-letter and UNC paths, which Windows treats
+ * case-insensitively. POSIX paths keep their case.
+ */
+export function comparablePath(path: string): string {
+  const normalized = path.replace(/\\/g, "/").replace(/\/$/, "");
+  return /^([A-Za-z]:|\/\/)/.test(normalized) ? normalized.toLowerCase() : normalized;
+}
 
 /** Stable per-source sections: favorites, alphabetical groups, then ungrouped. */
 export function sourceGroups(source: RepositorySource): { name: string; repositories: SourceRepository[] }[] {
   const seen = new Set<string>();
   const repositories = source.repositories.filter((entry) => {
-    const key = entry.path.replace(/\\/g, "/").replace(/\/$/, "");
+    const key = comparablePath(entry.path);
     if (seen.has(key)) return false;
     seen.add(key); return true;
   });
@@ -20,21 +31,25 @@ export function sourceGroups(source: RepositorySource): { name: string; reposito
   ].filter((group) => group.repositories.length > 0);
 }
 
-/** Adds standalone integrations without coupling the shared graph to a caller. */
+/**
+ * Adds the standalone integrations to the shared graph page. It extends
+ * markup the shared packages render, named in {@link WEBVIEW}; the shared
+ * graph itself knows nothing about callers.
+ */
 export function wireIntegration(appearance: { override(session: SessionAppearance): void }): void {
   let health: RepositoryHealth | null = null;
   let sources: readonly RepositorySource[] = [];
   let recent: readonly string[] = [];
   const renderSelector = (): void => {
-    const menu = document.querySelector<HTMLElement>("#repoSelect .dropdownMenu");
+    const menu = document.querySelector<HTMLElement>(WEBVIEW.repositoryMenu);
     if (!menu || menu.querySelector("#standaloneSelector")) return;
     const selector = document.createElement("div"); selector.id = "standaloneSelector";
     menu.append(selector);
     menu.classList.add("standaloneSourcesSelector");
-    populateSources(selector, sources, recent, () => document.querySelector<HTMLElement>("#repoSelect .dropdownCurrentValue")?.click());
+    populateSources(selector, sources, recent, () => document.querySelector<HTMLElement>(WEBVIEW.repositoryMenuToggle)?.click());
   };
   const renderHealth = (): void => {
-    const activity = document.getElementById("activityStatus");
+    const activity = document.getElementById(WEBVIEW.activityStatusId);
     if (!activity || !health) return;
     let button = document.getElementById("standaloneHealth") as HTMLButtonElement | null;
     if (!button) {
@@ -51,10 +66,10 @@ export function wireIntegration(appearance: { override(session: SessionAppearanc
     button.title = verdict.id === "behind" || verdict.id === "diverged" ? "Behind counts only what the last fetch saw" : verdict.label;
   };
   const observer = new MutationObserver(() => { renderHealth(); renderSelector(); });
-  observer.observe(document.getElementById("controls") ?? document.body, { childList: true, subtree: true });
+  observer.observe(document.getElementById(WEBVIEW.controlsId) ?? document.body, { childList: true, subtree: true });
   window.addEventListener("focus", () => post("standaloneFocus"));
   document.addEventListener("click", (event) => {
-    if ((event.target as Element | null)?.closest("#repoSelect, #standaloneMenuOpen, #standaloneMenuRecentGroup")) post("standaloneSources");
+    if ((event.target as Element | null)?.closest(WEBVIEW.sourceRefreshTriggers)) post("standaloneSources");
   });
   window.addEventListener("bones-message", (event) => {
     let data: Record<string, unknown>;
@@ -79,12 +94,12 @@ export function wireIntegration(appearance: { override(session: SessionAppearanc
       case "standaloneNavigate": {
         // The shared graph consumes its load response synchronously before this frame.
         requestAnimationFrame(() => {
-          if (data.hash === null) { document.getElementById("view")?.scrollTo(0, 0); return; }
-          const row = data.hash === "*" ? document.querySelector<HTMLElement>("tr.unsavedChanges")
-            : Array.from(document.querySelectorAll<HTMLElement>("tr[data-hash]")).find((row) => row.dataset.hash === data.hash);
+          if (data.hash === null) { document.getElementById(WEBVIEW.viewId)?.scrollTo(0, 0); return; }
+          const row = data.hash === "*" ? document.querySelector<HTMLElement>(WEBVIEW.workingTreeRow)
+            : Array.from(document.querySelectorAll<HTMLElement>(WEBVIEW.commitRow)).find((row) => row.dataset.hash === data.hash);
           if (!row) { showNotice(data.hash === "*" ? "No working-tree changes to select." : "Target is outside the loaded history."); return; }
           row.scrollIntoView({ block: "center" });
-          row.querySelector<HTMLElement>(".description")?.click();
+          row.querySelector<HTMLElement>(WEBVIEW.rowDescription)?.click();
         });
         break;
       }
@@ -101,7 +116,7 @@ function showNotice(message: string): void {
 
 function renderSources(sources: readonly RepositorySource[]): void {
   let container = document.getElementById("standaloneSources");
-  const recent = document.getElementById("standaloneRecentRepos");
+  const recent = document.getElementById(WEBVIEW.recentRepositoriesId);
   if (!recent) return;
   if (!container) { container = document.createElement("div"); container.id = "standaloneSources"; recent.after(container); }
   populateSources(container, sources);

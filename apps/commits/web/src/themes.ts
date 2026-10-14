@@ -74,6 +74,23 @@ export function resolveAppearance(settings: SettingsDocument, systemDark: boolea
   return themes.find(({ id }) => id === selected) ?? themes[0];
 }
 
+/**
+ * What survives of a session's appearance override after Settings is saved.
+ *
+ * The user's own choice in Settings wins over what a caller supplied for the
+ * session: a changed mode drops the session mode, and a changed light or dark
+ * preset drops the session palette, so the saved change is visible at once.
+ */
+export function sessionAfterSettingsChange(session: SessionAppearance, previous: SettingsDocument, next: SettingsDocument): SessionAppearance {
+  const modeChanged = previous.app.mode !== next.app.mode;
+  const presetChanged = previous.app.lightTheme !== next.app.lightTheme || previous.app.darkTheme !== next.app.darkTheme;
+  return {
+    ...session,
+    ...(modeChanged ? { mode: undefined } : {}),
+    ...(presetChanged ? { file: undefined } : {}),
+  };
+}
+
 /** Keeps the active palette synchronized with settings and operating-system mode. */
 export function createAppearanceController(): { update(settings: SettingsDocument): void; override(session: SessionAppearance): void } {
   const query = window.matchMedia("(prefers-color-scheme: dark)");
@@ -85,7 +102,11 @@ export function createAppearanceController(): { update(settings: SettingsDocumen
   };
   query.addEventListener("change", apply);
   return {
-    update(value) { if (settings && settings.app.mode !== value.app.mode) session.mode = undefined; settings = value; apply(); },
+    update(value) {
+      if (settings) session = sessionAfterSettingsChange(session, settings, value);
+      settings = value;
+      apply();
+    },
     override(value) { session = { ...session, ...value }; apply(); },
   };
 }

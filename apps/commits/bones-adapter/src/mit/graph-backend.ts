@@ -119,6 +119,13 @@ interface CachedHistory {
   readonly moreCommitsAvailable: boolean;
 }
 
+/**
+ * The most commits one graph load reads. Larger loads make the view slow to
+ * render, so every caller -- the page and command-line navigation alike -- is
+ * held to it.
+ */
+export const MAX_LOADED_COMMITS = 2_000;
+
 export class MitGraphBackend {
   private readonly requestIds = new RequestIds("graph");
   private readonly pending = new Map<number, (result: GitResult) => void>();
@@ -148,7 +155,7 @@ export class MitGraphBackend {
   }
 
   loadCommits(request: LoadCommitsRequest, deliver: (response: QueryResponse) => void): void {
-    const maxCommits = clamp(request.maxCommits, 1, 2_000);
+    const maxCommits = clamp(request.maxCommits, 1, MAX_LOADED_COMMITS);
     const separator = "%x1f";
     const logArgs = [
       "log",

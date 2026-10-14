@@ -4,7 +4,8 @@ import type { HostPort } from "../host/host-port";
 import type { GitRun } from "@commits/ipc/native";
 describe("health facts", () => {
   it("counts paths once and parses upstream divergence and conflicts", () => {
-    expect(parseStatus("# branch.head main\n# branch.upstream origin/main\n# branch.ab +2 -3\n1 MM change\n2 R. rename\nu UU conflict\n? untracked\n")).toEqual({ branch: "main", detached: false, hasUpstream: true, ahead: 2, behind: 3, changes: 4, conflicted: 1 });
+    expect(parseStatus("# branch.head main\n# branch.upstream origin/main\n# branch.ab +2 -3\n1 MM change\n2 R. rename\nu UU conflict\n? untracked\n")).toEqual({ branch: "main", detached: false, hasUpstream: true, ahead: 2, behind: 3, changes: 4, conflicted: 1,
+      workingTree: { staged: 2, changed: 1, conflicts: 1, untracked: 1 } });
   });
   it("handles detached and unpublished status", () => {
     expect(parseStatus("# branch.head (detached)\n")).toMatchObject({ detached: true, hasUpstream: false, branch: null });

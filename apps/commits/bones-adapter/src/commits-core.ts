@@ -7,7 +7,7 @@ import type { LaunchRequest } from "@commits/ipc/native";
 import { gravatarUrl } from "./gravatar";
 import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
-import { MitGraphBackend } from "./mit/graph-backend";
+import { MAX_LOADED_COMMITS, MitGraphBackend } from "./mit/graph-backend";
 import { buildToolRun, gitShowArgs } from "./mit/external-tools";
 import { WorkingTreeActions } from "./mit/working-tree-actions";
 import { RepositoryManager } from "./read/repository-manager";
@@ -344,7 +344,7 @@ export class CommitsCore {
           },
           (response) => {
             this.send(response);
-            this.launches.loadFinished(loadingRepository === this.currentRepository);
+            this.launches.loadFinished(loadingRepository, this.currentRepository);
           },
         );
         return;
@@ -1090,6 +1090,8 @@ export class CommitsCore {
     // the workspace. Standalone supplies none, which is what leaves the
     // chooser in front of them.
     if (this.repositories.all().length > 0) this.currentRepository ??= this.repositories.all()[0].path;
+    // The startup request's navigation waits for the opened repository's first load.
+    this.launches.launchApplied(launch, { repository: this.currentRepository, repositoryChanged: true });
     // An empty URL is not "off": the host then reads the latest GitHub
     // release for its own platform (docs/updating.md).
     this.checkForUpdate();
@@ -1522,8 +1524,8 @@ export class CommitsCore {
       this.notice(request.reason);
     }
     this.launches.launchApplied(request, {
+      repository: this.currentRepository,
       repositoryChanged: previous !== this.currentRepository,
-      hasRepository: this.currentRepository !== null,
     });
   }
 
@@ -1537,7 +1539,7 @@ export class CommitsCore {
     const operation = health?.facts.operation ?? (this.currentRepository ? this.host.repositoryState(this.currentRepository).operation : null);
     this.send({ command: "repoInProgress", state: operation && operation !== "bisect" ? {
       type: operation, subject: null, rebaseProgress: null, rebaseContext: null,
-      workingTreeStatus: health ? { changed: health.facts.changes, staged: 0, conflicts: health.facts.conflicted, untracked: 0 } : null,
+      workingTreeStatus: health?.workingTree ?? null,
     } : null });
   }
 
@@ -1545,11 +1547,15 @@ export class CommitsCore {
     const health = this.latestHealth;
     if (!health) return;
     switch (health.verdict.id) {
-      case "dirty": this.launches.requestNavigation({ show: "changes" }); break;
-      case "conflicted": case "in-progress": this.launches.requestNavigation({ show: "conflicts" }); break;
-      case "detached": if (health.head) this.launches.requestNavigation({ commit: health.head }); break;
-      case "diverged": case "behind": case "ahead": case "unpublished": if (health.branch) this.launches.requestNavigation({ branch: health.branch }); break;
+      case "dirty": this.navigateInCurrent({ show: "changes" }); break;
+      case "conflicted": case "in-progress": this.navigateInCurrent({ show: "conflicts" }); break;
+      case "detached": if (health.head) this.navigateInCurrent({ commit: health.head }); break;
+      case "diverged": case "behind": case "ahead": case "unpublished": if (health.branch) this.navigateInCurrent({ branch: health.branch }); break;
     }
+  }
+
+  private navigateInCurrent(target: NavigationTarget): void {
+    if (this.currentRepository) this.launches.requestNavigation(target, this.currentRepository);
   }
 
   /** Selects a target in the open repository; only the coordinator calls this, once the graph is settled. */
@@ -1570,8 +1576,9 @@ export class CommitsCore {
       if (!this.launches.isCurrent(generation) || repository !== this.currentRepository) return;
       if (result.exitCode !== 0) { this.notice(`Could not select ${branch ? "branch" : "commit"} ${revision}: target does not exist.`); return; }
       const hash = new TextDecoder().decode(result.stdout).trim();
-      const configured = this.settings.app.navigationMaxCommits;
-      const maxCommits = typeof configured === "number" && Number.isFinite(configured) ? Math.max(1, Math.floor(configured)) : 10000;
+      // The graph never loads more than MAX_LOADED_COMMITS, so a larger setting
+      // would only make the notice name a limit that was not applied.
+      const maxCommits = Math.min(this.settings.app.navigationMaxCommits, MAX_LOADED_COMMITS);
       this.graph.loadCommits({ command: "loadCommits", repo: repository, branchName: "", branches: [], maxCommits, showRemoteBranches: true, hard: false }, (response) => {
         if (!this.launches.isCurrent(generation) || repository !== this.currentRepository) return;
         this.send(response);

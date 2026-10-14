@@ -93,4 +93,4 @@ npm run check:settings-compat -- C:\path\to\an-dr-com-mit-s
 
 ## Command-line history search
 
-`app.navigationMaxCommits` limits the history loaded to select a command-line commit or branch tip. It defaults to 10,000 and accepts positive integers in `settings.json`. Session theme overrides never write this file. `app.updateManifestUrl` is read by the native host at startup; restart after changing it.
+`app.navigationMaxCommits` limits the history loaded to select a command-line commit or branch tip. It defaults to 2,000, which is also its maximum because the graph never loads more commits at once, and accepts positive integers in `settings.json`. Session theme overrides never write this file. `app.updateManifestUrl` is read by the native host at startup; restart after changing it.

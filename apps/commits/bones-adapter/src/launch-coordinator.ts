@@ -34,7 +34,8 @@ export class LaunchCoordinator {
   private awaitingFirstLoad = false;
   private lastSequence = -1;
   private pendingLaunch: LaunchRequest | null = null;
-  private pendingNavigation: NavigationTarget | null = null;
+  /** A navigation waiting for a load, and the repository it was issued for. */
+  private pendingNavigation: { readonly target: NavigationTarget; readonly repository: string } | null = null;
   private generation = 0;
 
   constructor(private readonly effects: LaunchEffects) {}
@@ -53,7 +54,6 @@ export class LaunchCoordinator {
     this.pendingLaunch = null;
     this.lastSequence = launch.sequence ?? 0;
     this.started = true;
-    this.pendingNavigation = launch;
     return launch;
   }
 
@@ -72,22 +72,29 @@ export class LaunchCoordinator {
   /**
    * Called by the owner once it has applied a launch's repositories and
    * appearance, to decide whether the launch's navigation runs now.
+   *
+   * A launch's navigation belongs to the repository it opened. A refused
+   * path or a launch that opened nothing has no repository to navigate in,
+   * so its flags are dropped rather than left to fire on whatever the user
+   * opens later.
    */
-  launchApplied(request: LaunchRequest, opened: { readonly repositoryChanged: boolean; readonly hasRepository: boolean }): void {
+  launchApplied(request: LaunchRequest, opened: { readonly repository: string | null; readonly repositoryChanged: boolean }): void {
     this.generation++;
-    if (request.kind === "repository" && !opened.repositoryChanged && this.phase === "ready") {
-      this.effects.navigate(request);
-    } else if (request.kind === "none" && opened.hasRepository) {
-      this.requestNavigation(request);
-    } else {
-      this.pendingNavigation = request;
+    if (request.kind === "rejected" || opened.repository === null) {
+      this.pendingNavigation = null;
+      return;
     }
+    if (opened.repositoryChanged) {
+      this.pendingNavigation = { target: request, repository: opened.repository };
+      return;
+    }
+    this.requestNavigation(request, opened.repository);
   }
 
-  /** Navigates now when the graph is settled, otherwise once it is. */
-  requestNavigation(target: NavigationTarget): void {
+  /** Navigates in `repository` now when its graph is settled, otherwise once it is. */
+  requestNavigation(target: NavigationTarget, repository: string): void {
     if (this.phase === "loading") {
-      this.pendingNavigation = target;
+      this.pendingNavigation = { target, repository };
       return;
     }
     this.effects.navigate(target);
@@ -105,20 +112,21 @@ export class LaunchCoordinator {
 
   /**
    * A graph load finished. Once nothing is loading, the newest waiting launch
-   * applies first; otherwise the waiting navigation does.
+   * applies first; otherwise the waiting navigation does, but only in the
+   * repository it was issued for.
    */
-  loadFinished(forCurrentRepository: boolean): void {
+  loadFinished(loadedRepository: string | null, currentRepository: string | null): void {
     this.loads--;
-    if (forCurrentRepository) this.awaitingFirstLoad = false;
+    if (loadedRepository === currentRepository) this.awaitingFirstLoad = false;
     if (this.loads > 0) return;
     if (this.pendingLaunch) {
       const launch = this.pendingLaunch;
       this.pendingLaunch = null;
       this.effects.applyLaunch(launch);
     } else if (this.pendingNavigation) {
-      const navigation = this.pendingNavigation;
+      const { target, repository } = this.pendingNavigation;
       this.pendingNavigation = null;
-      this.requestNavigation(navigation);
+      if (repository === currentRepository) this.requestNavigation(target, repository);
     }
   }
 

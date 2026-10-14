@@ -42,7 +42,7 @@ describe("LaunchCoordinator", () => {
     launches.receive(repository("C:/B", 1));
     launches.receive(repository("C:/C", 2));
     expect(applied).toEqual([]);
-    launches.loadFinished(true);
+    launches.loadFinished("C:/A", "C:/A");
     expect(applied.map((request) => request.sequence)).toEqual([2]);
   });
 
@@ -50,18 +50,45 @@ describe("LaunchCoordinator", () => {
     const { launches, navigated } = coordinator();
     launches.start({ kind: "none", sequence: 0 });
     launches.repositoryChanged();
-    launches.requestNavigation({ branch: "main" });
+    launches.requestNavigation({ branch: "main" }, "C:/A");
     expect(navigated).toEqual([]);
     launches.loadStarted();
-    launches.loadFinished(true);
+    launches.loadFinished("C:/A", "C:/A");
     expect(navigated).toEqual([{ branch: "main" }]);
   });
 
   it("navigates at once into a repository that is already open and loaded", () => {
     const { launches, navigated } = coordinator();
     launches.start({ kind: "none", sequence: 0 });
-    launches.launchApplied(repository("C:/A", 1, { commit: "abcd" }), { repositoryChanged: false, hasRepository: true });
+    launches.launchApplied(repository("C:/A", 1, { commit: "abcd" }), { repository: "C:/A", repositoryChanged: false });
     expect(navigated).toMatchObject([{ commit: "abcd" }]);
+  });
+
+  it("drops the navigation of a rejected launch instead of applying it to the open repository", () => {
+    const { launches, navigated } = coordinator();
+    launches.start({ kind: "none", sequence: 0 });
+    launches.loadStarted();
+    launches.launchApplied({ kind: "rejected", reason: "nothing at C:/missing", sequence: 1, branch: "x" }, { repository: "C:/A", repositoryChanged: false });
+    launches.loadFinished("C:/A", "C:/A");
+    expect(navigated).toEqual([]);
+  });
+
+  it("drops startup flags when no repository opened", () => {
+    const { launches, navigated } = coordinator();
+    launches.launchApplied(launches.start({ kind: "none", sequence: 0, commit: "abcd" }), { repository: null, repositoryChanged: true });
+    launches.repositoryChanged();
+    launches.loadStarted();
+    launches.loadFinished("C:/picked", "C:/picked");
+    expect(navigated).toEqual([]);
+  });
+
+  it("drops a waiting navigation when a different repository loads first", () => {
+    const { launches, navigated } = coordinator();
+    launches.start({ kind: "none", sequence: 0 });
+    launches.launchApplied(repository("C:/A", 1, { branch: "main" }), { repository: "C:/A", repositoryChanged: true });
+    launches.loadStarted();
+    launches.loadFinished("C:/B", "C:/B");
+    expect(navigated).toEqual([]);
   });
 
   it("makes an earlier navigation step stale once a newer one begins", () => {

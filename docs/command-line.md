@@ -10,7 +10,7 @@ commits [<path>] [--show changes|conflicts|graph] [--branch <name>] [--commit <s
 
 ## Navigation
 
-`--show changes` selects working-tree changes. `--show conflicts` selects the same row and preserves the existing unfinished-operation banner. `--show graph` opens the graph. `--branch` selects a branch tip; `--commit` selects a commit and takes precedence over a branch. Commit identifiers must contain 4–64 hexadecimal characters. Navigation waits for the repository to load. Missing targets produce a non-modal notice; history is searched up to `app.navigationMaxCommits` (10,000 by default, editable in `settings.json`).
+`--show changes` selects working-tree changes. `--show conflicts` selects the same row and preserves the existing unfinished-operation banner. `--show graph` opens the graph. `--branch` selects a branch tip; `--commit` selects a commit and takes precedence over a branch. Commit identifiers must contain 4–64 hexadecimal characters. Navigation waits for the repository to load. Missing targets produce a non-modal notice; history is searched up to `app.navigationMaxCommits` commits (2,000 by default and at most, editable in `settings.json`), and the notice names the limit that was used.
 
 ## One window
 
@@ -18,7 +18,7 @@ A second launch for the same user hands its arguments and working directory to t
 
 ## Appearance
 
-`--theme` selects a session mode; `--theme-file` supplies a [theme file](themes.md). Neither writes settings. A handoff without these flags keeps the current session override. A handoff supplying a flag replaces that part of the override. Appearance changes made in Settings take effect during the session.
+`--theme` selects a session mode; `--theme-file` supplies a [theme file](themes.md). Neither writes settings. A handoff without these flags keeps the current session override. A handoff supplying a flag replaces that part of the override. Appearance changes saved in Settings take effect during the session and replace the matching part of the override: a new mode replaces `--theme`, and a new light or dark preset replaces the `--theme-file` palette.
 
 ## Launcher flags
 
