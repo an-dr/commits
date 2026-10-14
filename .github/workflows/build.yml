@@ -95,6 +95,8 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           pattern: commits-*
@@ -109,7 +111,13 @@ jobs:
         run: |
           ls -l release
           test "$(ls release | wc -l)" -eq 6
+          awk -v version="${{ github.ref_name }}" '
+            found && /^## / { exit }
+            found { print; if (NF) has_notes = 1 }
+            index($0, "## [" substr(version, 2) "] - ") == 1 { found = 1 }
+            END { if (!found || !has_notes) exit 1 }
+          ' CHANGELOG.md > release-notes.md
           gh release create "${{ github.ref_name }}" release/* \
             --repo "${{ github.repository }}" \
             --title "Commits ${{ github.ref_name }}" \
-            --generate-notes
+            --notes-file release-notes.md
