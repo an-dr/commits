@@ -93,6 +93,48 @@ fn metadata_locks_do_not_trigger_a_refresh() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn metadata_locks_with_different_path_casing_do_not_trigger_a_refresh() {
+    let temp = tempdir().unwrap();
+    fs::create_dir(temp.path().join(".git")).unwrap();
+    let repository = temp.path().to_string_lossy().to_lowercase();
+    let (bus, topics, _module) = start_watching(Path::new(&repository), 19);
+    let lock = temp.path().join(".git/index.lock");
+    fs::write(&lock, "lock").unwrap();
+    fs::remove_file(lock).unwrap();
+    let events = collect_for(&bus, &topics, Duration::from_millis(500));
+    assert!(
+        events.is_empty(),
+        "metadata locks caused refreshes: {events:?}"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn metadata_locks_through_a_junction_do_not_trigger_a_refresh() {
+    let temp = tempdir().unwrap();
+    let repository = temp.path().join("repository");
+    fs::create_dir_all(repository.join(".git")).unwrap();
+    let alias = temp.path().join("alias");
+    let junction = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&alias)
+        .arg(&repository)
+        .output()
+        .unwrap();
+    assert!(junction.status.success(), "{junction:?}");
+    let (bus, topics, _module) = start_watching(&alias, 20);
+    let lock = alias.join(".git/index.lock");
+    fs::write(&lock, "lock").unwrap();
+    fs::remove_file(lock).unwrap();
+    let events = collect_for(&bus, &topics, Duration::from_millis(500));
+    assert!(
+        events.is_empty(),
+        "metadata locks caused refreshes: {events:?}"
+    );
+}
+
 #[test]
 fn a_burst_of_writes_is_reported_once() {
     let temp = tempdir().unwrap();

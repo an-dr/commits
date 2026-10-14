@@ -3,7 +3,7 @@ CMAKE_GENERATOR = "Ninja"
 
 # The application supplies installation identity to Bones explicitly in
 # host/src/installation.rs. The launcher's version stamp moves with the app.
-UPGRADER_LAUNCHER_VERSION = "1.9.0"
+UPGRADER_LAUNCHER_VERSION = "1.9.1"
 
 # Registered at github.com/settings/applications, with "Enable Device Flow"
 # turned on. Safe to commit: the device flow needs no client secret, only

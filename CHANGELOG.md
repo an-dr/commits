@@ -4,6 +4,13 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-10-15
+
+### Fixed
+
+- Windows repository watching ignores Git metadata locks when the watched path and canonical metadata path differ in letter case, preventing unnecessary refreshes.
+- Repository watching resolves junctions and Windows short paths before registering watches, so Git metadata locks are recognized and ignored through those paths too.
+
 ## [1.9.0] - 2026-10-14
 
 ### Added
@@ -164,7 +171,9 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 - The first standalone build: the shared repository graph and commit table in a Bones window, native Git, file-backed settings and state, repository discovery, and credential prompts.
 
-[Unreleased]: https://github.com/an-dr/commits/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/an-dr/commits/compare/v1.9.1...HEAD
+
+[1.9.1]: https://github.com/an-dr/commits/compare/v1.9.0...v1.9.1
 
 [1.9.0]: https://github.com/an-dr/commits/compare/v1.8.1...v1.9.0
 

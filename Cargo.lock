@@ -708,7 +708,7 @@ dependencies = [
 
 [[package]]
 name = "commits-app"
-version = "1.9.0"
+version = "1.9.1"
 dependencies = [
  "bones-kernel",
  "bones-kernel-infra",

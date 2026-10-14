@@ -143,15 +143,19 @@ impl WatcherModule {
     }
 }
 
-/// Notify reports ordinary paths while Windows canonicalization produces
-/// verbatim prefixes. Compare one spelling, including UNC metadata roots.
+/// Notify reports the watched spelling while Windows canonicalization can
+/// change its case and add verbatim prefixes. Compare one spelling, including
+/// UNC metadata roots, without changing case-sensitive paths on other systems.
 fn comparable_path(path: &Path) -> PathBuf {
     let text = path.to_string_lossy();
-    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
-        PathBuf::from(format!(r"\\{rest}"))
+    let text = if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
     } else {
-        PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(&text))
-    }
+        text.strip_prefix(r"\\?\").unwrap_or(&text).to_owned()
+    };
+    #[cfg(windows)]
+    let text = text.to_lowercase();
+    PathBuf::from(text)
 }
 
 fn register(
@@ -159,7 +163,10 @@ fn register(
     request: WatchRequest,
     logger: Option<&Logger>,
 ) -> Result<RecommendedWatcher, String> {
-    let repository = PathBuf::from(&request.repository);
+    // Register the same resolved spelling used for metadata roots. Otherwise
+    // junctions and Windows short paths make their events look like worktree edits.
+    let repository =
+        std::fs::canonicalize(&request.repository).map_err(|error| error.to_string())?;
     let metadata = resolve_metadata_paths(&repository)?;
     let request_id = request.request_id;
     let repository_text = request.repository.clone();
