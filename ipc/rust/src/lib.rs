@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use bones_messages::web::{
     ClosePanel, Command, Navigate, OpenPanel, PageMessage, PanelFailed, PanelSource, SendJson,
 };
-use bones_messages::EncodeMessage;
+use bones_messages::{desktop, upgrader, EncodeMessage};
 use native::{GitResult, GitRun, OsRequest, WatchRequest};
 
 /// Renders a payload as lowercase hex, the form the checked-in fixtures record
@@ -68,26 +68,101 @@ pub fn web_fixtures() -> BTreeMap<&'static str, String> {
 
 pub fn native_fixtures() -> BTreeMap<&'static str, String> {
     let mut fixtures = BTreeMap::new();
-    for (name, sequence, json) in [
-        (
-            "launch_startup",
-            0,
-            r#"{"kind":"repository","paths":["C:/repo"],"show":"changes","branch":null,"commit":null,"theme":"dark"}"#,
-        ),
-        (
-            "launch_handoff",
-            2,
-            r#"{"kind":"repository","paths":["C:/other"],"show":"conflicts","branch":"main","commit":"abcd","theme":null}"#,
-        ),
-    ] {
+    let startup = native::LaunchContent {
+        outcome: native::LaunchOutcome::Repository {
+            paths: vec!["C:/repo".into()],
+        },
+        show: Some("changes".into()),
+        branch: None,
+        commit: None,
+        theme: Some("dark".into()),
+        theme_file_name: None,
+        theme_file: None,
+        theme_file_error: None,
+    };
+    let handoff = native::LaunchContent {
+        outcome: native::LaunchOutcome::Repository {
+            paths: vec!["C:/other".into()],
+        },
+        show: Some("conflicts".into()),
+        branch: Some("main".into()),
+        commit: Some("abcd".into()),
+        theme: None,
+        ..startup.clone()
+    };
+    for (name, sequence, content) in [("launch_startup", 0, startup), ("launch_handoff", 2, handoff)] {
         fixtures.insert(
             name,
             hex(&native::LaunchRequest {
                 sequence,
-                json: json.into(),
+                json: content.to_json(),
             }
             .encode()
             .unwrap()),
+        );
+    }
+    // Bones owns these vocabularies; the fixtures pin the bytes the
+    // TypeScript encoders and decoders must agree with.
+    for (name, action) in [
+        ("upgrader_check", upgrader::Action::Check),
+        ("upgrader_stage", upgrader::Action::Stage),
+        ("upgrader_install", upgrader::Action::Install),
+        ("upgrader_last_applied", upgrader::Action::LastApplied),
+    ] {
+        fixtures.insert(
+            name,
+            hex(&upgrader::Request {
+                request_id: 70_001,
+                action,
+            }
+            .encode()),
+        );
+    }
+    for (name, action) in [
+        ("desktop_register", desktop::Action::Register),
+        ("desktop_unregister", desktop::Action::Unregister),
+    ] {
+        fixtures.insert(
+            name,
+            hex(&desktop::Request {
+                request_id: 70_002,
+                action,
+            }
+            .encode()),
+        );
+    }
+    for (name, outcome) in [
+        ("upgrader_available", upgrader::Outcome::Available { version: "1.9.0" }),
+        ("upgrader_installed", upgrader::Outcome::Installed { fresh: true }),
+        (
+            "upgrader_last_applied_result",
+            upgrader::Outcome::LastApplied {
+                previous: Some("1.8.1"),
+                current: "1.9.0",
+            },
+        ),
+        ("upgrader_failed", upgrader::Outcome::Failed { reason: "offline" }),
+    ] {
+        fixtures.insert(
+            name,
+            hex(&upgrader::Result {
+                request_id: 7,
+                outcome,
+            }
+            .encode()),
+        );
+    }
+    for (name, outcome) in [
+        ("desktop_registered", desktop::Outcome::Registered(true)),
+        ("desktop_failed", desktop::Outcome::Failed("denied")),
+    ] {
+        fixtures.insert(
+            name,
+            hex(&desktop::Result {
+                request_id: 9,
+                outcome,
+            }
+            .encode()),
         );
     }
     fixtures.insert(

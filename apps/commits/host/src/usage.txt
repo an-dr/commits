@@ -1,0 +1,2 @@
+commits [<path>] [--show changes|conflicts|graph] [--branch <name>] [--commit <sha>] [--theme light|dark] [--theme-file <file>]
+commits --version | --help | --previous [<path>]

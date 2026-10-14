@@ -9,6 +9,7 @@ mod installation;
 mod launch;
 mod launch_request;
 mod page;
+mod repository_state;
 mod settings;
 mod sources;
 mod splash;
@@ -105,6 +106,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         )
         .module(installation::InstallationModule)
         .module(sources::SourcesModule::default())
+        .module(repository_state::RepositoryStateModule)
         .run()?;
     Ok(())
 }

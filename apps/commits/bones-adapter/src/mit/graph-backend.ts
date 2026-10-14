@@ -9,6 +9,7 @@ import type {
 import type { GitWorkingTreeChange } from "@an-dr/commits-core/data-source/models";
 import type { GitResult, GitRun } from "@commits/ipc/native";
 import { RepositoryGraphCache } from "../cache/repository-graph-cache";
+import { RequestIds } from "../request-ids";
 
 interface GitHost {
   runGit(request: GitRun): void;
@@ -119,7 +120,7 @@ interface CachedHistory {
 }
 
 export class MitGraphBackend {
-  private nextRequestId = 30_000;
+  private readonly requestIds = new RequestIds("graph");
   private readonly pending = new Map<number, (result: GitResult) => void>();
   /**
    * Committed history per repository, so returning to a branch does not pay for
@@ -586,7 +587,7 @@ export class MitGraphBackend {
   }
 
   private run(cwd: string, args: string[], callback: (result: GitResult) => void): void {
-    const requestId = this.nextRequestId++;
+    const requestId = this.requestIds.next();
     this.pending.set(requestId, callback);
     this.host.runGit({ requestId, cwd, args, timeoutMs: 15_000, env: { GIT_OPTIONAL_LOCKS: "0" } });
   }

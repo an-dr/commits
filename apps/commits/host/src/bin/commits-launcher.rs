@@ -35,7 +35,8 @@ fn main() {
         .is_some_and(|arg| arg == "--version" || arg == "--help")
     {
         let text = if args[0] == "--help" {
-            "commits [<path>] [--show changes|conflicts|graph] [--branch <name>] [--commit <sha>] [--theme light|dark] [--theme-file <file>]\ncommits --version | --help | --previous [<path>]\n".to_string()
+            // One usage text for the launcher, the parser's tests and the docs.
+            include_str!("../usage.txt").to_string()
         } else {
             let folders = std::fs::read_dir(&install_dir)
                 .into_iter()

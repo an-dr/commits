@@ -27,6 +27,21 @@ export function decodeLaunchRequest(bytes: Uint8Array): LaunchRequest {
   return { ...value, sequence };
 }
 
+/** Tags of Bones' `upgrader::Action`; part of the wire format. */
+const UPGRADER_ACTION_TAGS = { check: 0, stage: 1, install: 2, lastApplied: 3 } as const;
+
+/** Tags of Bones' `desktop::Action`; part of the wire format. */
+const DESKTOP_ACTION_TAGS = { register: 0, unregister: 1 } as const;
+
+/** `lastApplied` asks which version ran before this one, for the Updated notice. */
+export function encodeUpgraderRequest(requestId: number, action: UpdaterAction | "lastApplied"): Uint8Array {
+  return new Writer().u32(requestId).u8(UPGRADER_ACTION_TAGS[action]).finish();
+}
+
+export function encodeDesktopRequest(requestId: number, action: DesktopAction): Uint8Array {
+  return new Writer().u32(requestId).u8(DESKTOP_ACTION_TAGS[action]).finish();
+}
+
 /** Bones owns the update and desktop vocabularies; normalize outcomes for the app menu. */
 export function decodeUpgradeResult(bytes: Uint8Array): UpdaterResult & { previous?: string | null } {
   const reader = new Reader(bytes);
@@ -44,13 +59,13 @@ export function decodeUpgradeResult(bytes: Uint8Array): UpdaterResult & { previo
   }
 }
 
-export function decodeDesktopResult(bytes: Uint8Array): UpdaterResult {
+export function decodeDesktopResult(bytes: Uint8Array): DesktopResult {
   const reader = new Reader(bytes);
   const requestId = reader.u32();
   const tag = reader.u8();
-  if (tag === 0) { reader.u8(); reader.finish(); return { requestId, ok: true, available: false, fresh: false, version: "", error: "" }; }
+  if (tag === 0) { reader.u8(); reader.finish(); return { requestId, ok: true, error: "" }; }
   if (tag !== 1) throw new Error("unknown desktop result");
-  return { requestId, ok: false, available: false, fresh: false, version: "", error: new TextDecoder().decode(bytes.slice(5)) };
+  return { requestId, ok: false, error: new TextDecoder().decode(bytes.slice(5)) };
 }
 
 export interface GitRun {
@@ -284,16 +299,24 @@ export function decodeNativeResult(bytes: Uint8Array): NativeResult {
   return result;
 }
 
-/** `install` stages the running build itself and then registers it with the
- * desktop; `register` and `unregister` act on the installed app. All three
- * ignore `manifestUrl`. */
-export type UpdaterAction = "check" | "stage" | "install" | "register" | "unregister";
+/** Bones' upgrade module: `check` compares the release source with this
+ * build, `stage` downloads a newer version, and `install` copies the running
+ * build to the canonical location. */
+export type UpdaterAction = "check" | "stage" | "install";
+
+/** Bones' desktop module: registers or removes the installed entry point. */
+export type DesktopAction = "register" | "unregister";
+
+/** Outcome of a {@link DesktopAction}. */
+export interface DesktopResult {
+  requestId: number;
+  ok: boolean;
+  error: string;
+}
 
 /** `fresh` matters only for the `install` action: whether the files landed
  * directly at the install location (nothing was installed yet) rather than
- * staged for an existing launcher to apply on its next start. An `install`
- * result with `ok` set and a non-empty `error` installed the files but
- * could not register them. */
+ * staged for an existing launcher to apply on its next start. */
 export interface UpdaterResult {
   requestId: number;
   ok: boolean;

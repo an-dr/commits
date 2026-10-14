@@ -25,10 +25,16 @@ pub struct SettingsModule {
     path: Option<PathBuf>,
 }
 
+/// Where the settings document lives: `~/.commits/settings.json`.
+pub fn settings_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".commits").join("settings.json"))
+}
+
 impl Default for SettingsModule {
     fn default() -> Self {
-        let path = dirs::home_dir().map(|home| home.join(".commits").join("settings.json"));
-        Self { path }
+        Self {
+            path: settings_path(),
+        }
     }
 }
 

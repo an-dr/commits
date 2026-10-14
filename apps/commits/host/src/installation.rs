@@ -1,5 +1,7 @@
 //! Commits' installation identity and read-only status; update work belongs to Bones.
 use bones_kernel::bus::{Envelope, Handler, Module, ModuleContext};
+use std::sync::OnceLock;
+
 use bones_kernel::upgrade::{AppIdentity, ReleaseSource, UpgradeConfig, UpgradeModule};
 
 pub fn identity() -> AppIdentity {
@@ -11,15 +13,24 @@ pub fn identity() -> AppIdentity {
     }
 }
 
+/// The upgrade configuration for this process. Cheap to call: the release
+/// source is read from `settings.json` once, on first use, and fixed for the
+/// rest of the run, so a changed `app.updateManifestUrl` applies after a
+/// restart (docs/settings.md).
 pub fn config() -> UpgradeConfig {
-    let settings = dirs::home_dir()
-        .and_then(|home| std::fs::read(home.join(".commits/settings.json")).ok())
-        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
-    UpgradeConfig::new(
-        identity(),
-        source_from_settings(settings.as_ref()),
-        env!("CARGO_PKG_VERSION"),
-    )
+    UpgradeConfig::new(identity(), release_source(), env!("CARGO_PKG_VERSION"))
+}
+
+fn release_source() -> ReleaseSource {
+    static SOURCE: OnceLock<ReleaseSource> = OnceLock::new();
+    SOURCE
+        .get_or_init(|| {
+            let settings = crate::settings::settings_path()
+                .and_then(|path| std::fs::read(path).ok())
+                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+            source_from_settings(settings.as_ref())
+        })
+        .clone()
 }
 
 fn source_from_settings(settings: Option<&serde_json::Value>) -> ReleaseSource {

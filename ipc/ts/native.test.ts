@@ -9,12 +9,14 @@ import {
   decodeDesktopResult,
   decodeNativeResult,
   decodeWatchEvent,
+  encodeDesktopRequest,
   encodeGitCancel,
   encodeGitRun,
   encodeFileRead,
   encodeOsRequest,
   encodeRepoOsRequest,
   encodeToolRun,
+  encodeUpgraderRequest,
   encodeWatchRequest,
 } from "./native";
 
@@ -33,11 +35,22 @@ describe("native protocol", () => {
     expect(decodeLaunchRequest(fromHex(fixtures.launch_handoff))).toMatchObject({ sequence: 2, paths: ["C:/other"], show: "conflicts", commit: "abcd", branch: "main" });
     expect(() => decodeLaunchRequest(fromHex(fixtures.launch_handoff).slice(0, -1))).toThrow();
   });
-  it("decodes Bones update and desktop result vocabularies", () => {
-    expect(decodeUpgradeResult(new Writer().u32(7).u8(0).raw(new TextEncoder().encode("1.9.0")).finish())).toMatchObject({ requestId: 7, ok: true, available: true, version: "1.9.0" });
-    expect(decodeUpgradeResult(new Writer().u32(8).u8(4).u8(1).string("1.8.1").raw(new TextEncoder().encode("1.9.0")).finish())).toMatchObject({ previous: "1.8.1", version: "1.9.0" });
-    expect(decodeDesktopResult(new Writer().u32(9).u8(0).u8(1).finish())).toMatchObject({ requestId: 9, ok: true });
+  it("decodes Bones update and desktop results as Bones encodes them", () => {
+    expect(decodeUpgradeResult(fromHex(fixtures.upgrader_available))).toMatchObject({ requestId: 7, ok: true, available: true, version: "1.9.0" });
+    expect(decodeUpgradeResult(fromHex(fixtures.upgrader_installed))).toMatchObject({ requestId: 7, ok: true, fresh: true });
+    expect(decodeUpgradeResult(fromHex(fixtures.upgrader_last_applied_result))).toMatchObject({ previous: "1.8.1", version: "1.9.0" });
+    expect(decodeUpgradeResult(fromHex(fixtures.upgrader_failed))).toMatchObject({ ok: false, error: "offline" });
+    expect(decodeDesktopResult(fromHex(fixtures.desktop_registered))).toEqual({ requestId: 9, ok: true, error: "" });
+    expect(decodeDesktopResult(fromHex(fixtures.desktop_failed))).toEqual({ requestId: 9, ok: false, error: "denied" });
     expect(() => decodeUpgradeResult(new Writer().u32(1).u8(7).finish())).toThrow();
+  });
+  it("encodes Bones update and desktop requests byte for byte", () => {
+    expect(toHex(encodeUpgraderRequest(70_001, "check"))).toBe(fixtures.upgrader_check);
+    expect(toHex(encodeUpgraderRequest(70_001, "stage"))).toBe(fixtures.upgrader_stage);
+    expect(toHex(encodeUpgraderRequest(70_001, "install"))).toBe(fixtures.upgrader_install);
+    expect(toHex(encodeUpgraderRequest(70_001, "lastApplied"))).toBe(fixtures.upgrader_last_applied);
+    expect(toHex(encodeDesktopRequest(70_002, "register"))).toBe(fixtures.desktop_register);
+    expect(toHex(encodeDesktopRequest(70_002, "unregister"))).toBe(fixtures.desktop_unregister);
   });
   it("encodes a deterministic Git request", () => {
     const reader = new Reader(encodeGitRun({

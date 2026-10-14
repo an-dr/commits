@@ -9,9 +9,11 @@ import {
   encodeOpenPanel,
   encodeSendJson,
 } from "@commits/ipc/web";
-import type { CommitsRepoStatus, HostPort, InstallStatus, LaunchRepository, LogLevel, PageSource, SettingsIoResult } from "./host-port";
+import type { CommitsRepoStatus, HostPort, InstallStatus, LogLevel, PageSource, RepositorySource, RepositoryState, SettingsIoResult } from "./host-port";
 import {
+  encodeDesktopRequest,
   encodeGitRun,
+  encodeUpgraderRequest,
   decodeLaunchRequest,
   encodeOsRequest,
   encodeRepoOsRequest,
@@ -19,6 +21,8 @@ import {
   type GitRun,
   type OsAction,
   type RepoOsAction,
+  type DesktopAction,
+  type LaunchRequest,
   type UpdaterAction,
 } from "@commits/ipc/native";
 
@@ -105,15 +109,14 @@ export class BonesHostPort implements HostPort {
   }
 
   /**
-   * Asks the host what the command line named. The first byte says which of
-   * the three cases this is; the rest is the newline-separated repositories
-   * found there, or the reason nothing was.
+   * Asks the host what the command line named, in the launch encoding the
+   * handoff topic shares (see ipc/README.md).
    *
    * A failed send is reported as "none" rather than as a refusal: the host
    * not answering says nothing about what the user typed, and inventing a
    * reason to show them would be worse than showing the plain chooser.
    */
-  launchRepository(): LaunchRepository {
+  launchRequest(): LaunchRequest {
     let response: Uint8Array;
     try {
       response = send("launch", new Uint8Array());
@@ -125,13 +128,13 @@ export class BonesHostPort implements HostPort {
     return decodeLaunchRequest(response);
   }
 
-  repositorySources(): readonly import("./host-port").RepositorySource[] {
+  repositorySources(): readonly RepositorySource[] {
     try { return JSON.parse(new TextDecoder().decode(send("sources", new Uint8Array()))); }
     catch (error) { hostLog("warn", `could not read repository sources: ${String(error)}`); return []; }
   }
 
-  repositoryState(path: string): import("../health/facts").RepositoryState {
-    try { return JSON.parse(new TextDecoder().decode(send("launch", new TextEncoder().encode(path)))); }
+  repositoryState(path: string): RepositoryState {
+    try { return JSON.parse(new TextDecoder().decode(send("repository-state", new TextEncoder().encode(path)))); }
     catch (error) { hostLog("warn", `could not check repository state: ${String(error)}`); return { exists: false, isRepo: false, operation: null }; }
   }
 
@@ -150,11 +153,11 @@ export class BonesHostPort implements HostPort {
   }
 
   requestUpdate(requestId: number, action: UpdaterAction): void {
-    const tags = { check: 0, stage: 1, install: 2, register: 0, unregister: 1 };
-    const bytes = new Uint8Array(5);
-    new DataView(bytes.buffer).setUint32(0, requestId, true);
-    bytes[4] = tags[action];
-    publish(action === "register" || action === "unregister" ? "desktop/request" : "upgrader/request", bytes);
+    publish("upgrader/request", encodeUpgraderRequest(requestId, action));
+  }
+
+  requestDesktop(requestId: number, action: DesktopAction): void {
+    publish("desktop/request", encodeDesktopRequest(requestId, action));
   }
 
   watchRepository(requestId: number, action: "start" | "stop", repository: string): void {
@@ -184,10 +187,7 @@ export class BonesHostPort implements HostPort {
   }
 
   requestLastApplied(requestId: number): void {
-    const bytes = new Uint8Array(5);
-    new DataView(bytes.buffer).setUint32(0, requestId, true);
-    bytes[4] = 3;
-    publish("upgrader/request", bytes);
+    publish("upgrader/request", encodeUpgraderRequest(requestId, "lastApplied"));
   }
 
   sendPageMessage(panel: string, message: unknown): void {

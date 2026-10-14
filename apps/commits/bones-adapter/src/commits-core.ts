@@ -1,6 +1,6 @@
 import type { GitFileChangeType } from "@an-dr/commits-core/backend/types";
 import type { GitRepoSet, RequestMessage, ResponseMessage, SubmoduleView } from "@an-dr/commits-core/types";
-import { encodeFileRead, type GitResult, type NativeResult, type UpdaterResult, type WatchEvent } from "@commits/ipc/native";
+import { encodeFileRead, type DesktopResult, type GitResult, type NativeResult, type UpdaterResult, type WatchEvent } from "@commits/ipc/native";
 import { HealthReader, type RepositoryHealth } from "./health/facts";
 import { applyNavigation, type NavigationTarget } from "./navigation";
 import type { LaunchRequest } from "@commits/ipc/native";
@@ -19,6 +19,8 @@ import {
   type PersistentState,
 } from "./read/persistent-state";
 import { DEFAULT_SETTINGS, parseSettings, validateSettings, type SettingsDocument } from "./read/settings";
+import { RequestIds } from "./request-ids";
+import { LaunchCoordinator } from "./launch-coordinator";
 
 const PANEL = "main";
 
@@ -71,14 +73,9 @@ interface PendingToolDiff {
 export class CommitsCore {
   private readonly health: HealthReader;
   private latestHealth: RepositoryHealth | null = null;
-  private launchSequence = -1;
-  private pendingLaunch: LaunchRequest | null = null;
-  private pendingNavigation: NavigationTarget | null = null;
-  private loadingCommits = 0;
-  private awaitingFirstLoad = false;
+  private readonly launches: LaunchCoordinator;
   private readonly navigationReads = new Map<number, (result: GitResult) => void>();
   private sessionLaunch: LaunchRequest = { kind: "none" };
-  private navigationGeneration = 0;
   private pendingInstallRegistration: UpdaterResult | null = null;
   private readonly repositories: RepositoryManager;
   private readonly persistent: PersistentExtensionState;
@@ -125,9 +122,9 @@ export class CommitsCore {
   /** This build's own version, shown in the About menu. */
   private appVersion = "";
   private bootstrapped = false;
-  private nextOsRequestId = 50_000;
-  private nextGitRequestId = 60_000;
-  private nextUpdateRequestId = 70_000;
+  private readonly osRequestIds = new RequestIds("os");
+  private readonly gitRequestIds = new RequestIds("git");
+  private readonly updateRequestIds = new RequestIds("update");
   /** Nested submodules discovered per repository root, keyed by root path. */
   private readonly submodules = new Map<string, readonly SubmoduleView[]>();
   /** Root paths a submodule discovery has already been issued for, so a
@@ -144,6 +141,10 @@ export class CommitsCore {
   private comparisonSequence = 0;
 
   constructor(private readonly host: HostPort) {
+    this.launches = new LaunchCoordinator({
+      applyLaunch: (request) => this.applyLaunch(request),
+      navigate: (target) => this.navigate(target),
+    });
     this.health = new HealthReader(host, (health) => {
       if (health.repository !== this.currentRepository) return;
       this.latestHealth = health;
@@ -174,7 +175,7 @@ export class CommitsCore {
     path: string,
     deliver: (content: string | null) => void,
   ): void {
-    const requestId = this.nextOsRequestId++;
+    const requestId = this.osRequestIds.next();
     this.pendingOs.set(requestId, { kind: "readFile", deliver });
     this.host.requestRepoOs(requestId, "read-file", encodeFileRead(repo, path));
   }
@@ -327,7 +328,7 @@ export class CommitsCore {
           });
           return;
         }
-        this.loadingCommits++;
+        this.launches.loadStarted();
         const loadingRepository = this.currentRepository;
         this.graph.loadCommits(
           {
@@ -343,10 +344,7 @@ export class CommitsCore {
           },
           (response) => {
             this.send(response);
-            this.loadingCommits--;
-            if (loadingRepository === this.currentRepository) this.awaitingFirstLoad = false;
-            if (this.loadingCommits === 0 && this.pendingLaunch) { const launch = this.pendingLaunch; this.pendingLaunch = null; this.applyLaunch(launch); }
-            else if (this.loadingCommits === 0 && this.pendingNavigation) { const navigation = this.pendingNavigation; this.pendingNavigation = null; this.navigate(navigation); }
+            this.launches.loadFinished(loadingRepository === this.currentRepository);
           },
         );
         return;
@@ -652,14 +650,14 @@ export class CommitsCore {
         return;
       case "copyToClipboard":
         if (typeof value.data === "string" && typeof value.type === "string") {
-          const requestId = this.nextOsRequestId++;
+          const requestId = this.osRequestIds.next();
           this.pendingOs.set(requestId, { kind: "copy", type: value.type });
           this.host.requestOs(requestId, "clipboard-write", value.data);
         }
         return;
       case "openExternalUrl":
         if (typeof value.url === "string") {
-          const requestId = this.nextOsRequestId++;
+          const requestId = this.osRequestIds.next();
           this.pendingOs.set(requestId, { kind: "openExternalUrl" });
           this.host.requestOs(requestId, "open-url", value.url);
         }
@@ -669,14 +667,14 @@ export class CommitsCore {
         return;
       case "fetchAvatar":
         if (typeof value.email === "string" && value.email) {
-          const requestId = this.nextOsRequestId++;
+          const requestId = this.osRequestIds.next();
           this.pendingOs.set(requestId, { kind: "fetchAvatar", email: value.email });
           this.host.requestOs(requestId, "fetch-url", gravatarUrl(value.email));
         }
         return;
       case "githubSignIn": {
         const promptId = asString(value.id);
-        const requestId = this.nextOsRequestId++;
+        const requestId = this.osRequestIds.next();
         this.pendingOs.set(requestId, { kind: "githubDeviceCode", promptId });
         this.host.requestRepoOs(requestId, "start-github-device-code");
         return;
@@ -725,7 +723,7 @@ export class CommitsCore {
       }
       const [userCode, verificationUri, deviceCode, interval, expiresIn] = result.value.split("\n");
       this.send({ command: "githubSignIn", promptId: pending.promptId, signInStatus: "code", userCode, verificationUri });
-      const pollId = this.nextOsRequestId++;
+      const pollId = this.osRequestIds.next();
       this.pendingOs.set(pollId, { kind: "githubToken", promptId: pending.promptId });
       this.host.requestRepoOs(pollId, "poll-github-token", `${deviceCode}\n${interval}\n${expiresIn}`);
     } else if (pending.kind === "githubToken") {
@@ -736,7 +734,7 @@ export class CommitsCore {
         });
         return;
       }
-      const storeId = this.nextOsRequestId++;
+      const storeId = this.osRequestIds.next();
       this.pendingOs.set(storeId, { kind: "githubTokenStored" });
       this.host.requestRepoOs(storeId, "store-github-token", result.value);
       // The username-phase askpass process is still waiting on this same
@@ -775,7 +773,8 @@ export class CommitsCore {
     this.workingTreeActions.receive(result);
   }
 
-  receiveUpdaterResult(result: UpdaterResult): void {
+  /** Check and stage outcomes from Bones' upgrade module. */
+  private finishUpdateRequest(result: UpdaterResult): void {
     if (result.requestId === this.pendingUpdateCheckRequestId) {
       this.pendingUpdateCheckRequestId = null;
       if (result.ok && result.available) {
@@ -794,27 +793,39 @@ export class CommitsCore {
         // The available update is still there to retry; only the attempt failed.
         this.sendUpdateStatus(`Update failed: ${result.error || "unknown error"}`);
       }
-      return;
     }
-    if (result.requestId === this.pendingInstallRequestId) {
-      if (this.pendingInstallRegistration !== null) {
-        result = { ...this.pendingInstallRegistration, error: result.ok ? "" : `registration failed: ${result.error}` };
-        this.pendingInstallRegistration = null;
-      }
-      this.pendingInstallRequestId = null;
-      // An ok result with an error installed the files but could not
-      // register them; the installed app's own Register retries that.
-      const registered = result.error ? `, but ${result.error}` : " and registered";
-      if (result.ok && result.fresh) {
-        this.installStatusKind = "done";
-        this.sendInstallStatus(`Installed to ~/.commits/app${registered} — launch commits.exe to use it.`);
-      } else if (result.ok) {
-        this.installStatusKind = "staged";
-        this.sendInstallStatus(`Installed${registered} — restart commits.exe to apply.`);
-      } else {
-        this.installStatusKind = "ready";
-        this.sendInstallStatus(`Install failed: ${result.error || "unknown error"}`);
-      }
+  }
+
+  /**
+   * Reports a finished install. Bones installs the files and the desktop
+   * module registers them; `error` set on an ok result means the files were
+   * installed but registration failed, which the installed app's own
+   * Register retries.
+   */
+  private finishInstall(result: UpdaterResult): void {
+    this.pendingInstallRequestId = null;
+    const registered = result.error ? `, but ${result.error}` : " and registered";
+    if (result.ok && result.fresh) {
+      this.installStatusKind = "done";
+      this.sendInstallStatus(`Installed to ~/.commits/app${registered} — launch commits.exe to use it.`);
+    } else if (result.ok) {
+      this.installStatusKind = "staged";
+      this.sendInstallStatus(`Installed${registered} — restart commits.exe to apply.`);
+    } else {
+      this.installStatusKind = "ready";
+      this.sendInstallStatus(`Install failed: ${result.error || "unknown error"}`);
+    }
+  }
+
+  /**
+   * Outcomes from Bones' desktop module: either the registration that
+   * completes an install, or a Register/Unregister the user asked for.
+   */
+  receiveDesktopResult(result: DesktopResult): void {
+    if (result.requestId === this.pendingInstallRequestId && this.pendingInstallRegistration !== null) {
+      const installed = this.pendingInstallRegistration;
+      this.pendingInstallRegistration = null;
+      this.finishInstall({ ...installed, error: result.ok ? "" : `registration failed: ${result.error}` });
       return;
     }
     if (result.requestId === this.pendingRegistrationRequestId) {
@@ -885,7 +896,7 @@ export class CommitsCore {
       this.sendCommitsRepoStatus("Could not resolve the commits repo path");
       return;
     }
-    const requestId = this.nextGitRequestId++;
+    const requestId = this.gitRequestIds.next();
     this.pendingCloneRequestId = requestId;
     this.sendCommitsRepoStatus("Cloning…");
     this.host.runGit({
@@ -964,7 +975,7 @@ export class CommitsCore {
       ] as const;
       for (const [side, hash, path] of sides) {
         if (pending[side] !== undefined) continue;
-        const requestId = this.nextGitRequestId++;
+        const requestId = this.gitRequestIds.next();
         this.pendingToolDiffs.set(requestId, { diff: pending, side });
         this.host.runGit({ requestId, cwd: repo, args: gitShowArgs(hash, path), timeoutMs: 30_000 });
       }
@@ -1006,7 +1017,7 @@ export class CommitsCore {
 
   /** Hands one framed run to the OS module. */
   private startTool(request: string): void {
-    const requestId = this.nextOsRequestId++;
+    const requestId = this.osRequestIds.next();
     this.pendingOs.set(requestId, { kind: "runTool" });
     this.host.requestRepoOs(requestId, "run-tool", request);
   }
@@ -1014,7 +1025,7 @@ export class CommitsCore {
   /** Reveals ~/.commits/repo in the OS's native file manager. */
   private revealCommitsRepoFolder(): void {
     if (!this.commitsRepoExists || this.commitsRepoPath === null) return;
-    const requestId = this.nextOsRequestId++;
+    const requestId = this.osRequestIds.next();
     this.pendingOs.set(requestId, { kind: "revealCommitsRepoFolder" });
     this.host.requestOs(requestId, "reveal-directory", this.commitsRepoPath);
   }
@@ -1061,11 +1072,8 @@ export class CommitsCore {
     // repository is offered on the chooser rather than opened behind the
     // user's back, so starting the app never silently reattaches to whatever
     // was last in use -- which is the whole point of asking for a path.
-    const launch = this.pendingLaunch ?? this.host.launchRepository();
-    this.pendingLaunch = null;
-    this.launchSequence = launch.sequence ?? 0;
+    const launch = this.launches.start(this.host.launchRequest());
     this.sessionLaunch = launch;
-    this.pendingNavigation = launch;
     if (launch.kind === "repository") {
       // Through addExternal and its normalised path, not by assignment: a
       // repository opened from the command line joins the recent list like
@@ -1086,7 +1094,7 @@ export class CommitsCore {
     // release for its own platform (docs/updating.md).
     this.checkForUpdate();
     const installStatus = this.host.installStatus();
-    this.host.requestLastApplied?.(this.nextUpdateRequestId++);
+    this.host.requestLastApplied(this.updateRequestIds.next());
     if (installStatus.ok) {
       this.installStatusKind = installStatus.installed ? "hidden" : "ready";
       if (installStatus.installed) this.registration = installStatus.registered ? "registered" : "unregistered";
@@ -1105,7 +1113,7 @@ export class CommitsCore {
   /** Runs once at boot; see `bootstrap`. */
   private checkForUpdate(): void {
     if (this.pendingUpdateCheckRequestId !== null) return;
-    const requestId = this.nextUpdateRequestId++;
+    const requestId = this.updateRequestIds.next();
     this.pendingUpdateCheckRequestId = requestId;
     this.host.requestUpdate(requestId, "check");
   }
@@ -1113,7 +1121,7 @@ export class CommitsCore {
   /** Downloads, verifies, and stages the update `checkForUpdate` found. */
   private startUpdate(): void {
     if (this.updateAvailableVersion === null || this.pendingUpdateStageRequestId !== null) return;
-    const requestId = this.nextUpdateRequestId++;
+    const requestId = this.updateRequestIds.next();
     this.pendingUpdateStageRequestId = requestId;
     this.sendUpdateStatus("Downloading update…");
     this.host.requestUpdate(requestId, "stage");
@@ -1134,7 +1142,7 @@ export class CommitsCore {
    * `checkForUpdate`/`startUpdate`, this needs no network at all. */
   private startInstall(): void {
     if (this.installStatusKind !== "ready" || this.pendingInstallRequestId !== null) return;
-    const requestId = this.nextUpdateRequestId++;
+    const requestId = this.updateRequestIds.next();
     this.pendingInstallRequestId = requestId;
     this.sendInstallStatus("Installing…");
     this.host.requestUpdate(requestId, "install");
@@ -1145,10 +1153,10 @@ export class CommitsCore {
   private startRegistration(action: "register" | "unregister"): void {
     const expected = action === "register" ? "unregistered" : "registered";
     if (this.registration !== expected || this.pendingRegistrationRequestId !== null) return;
-    const requestId = this.nextUpdateRequestId++;
+    const requestId = this.updateRequestIds.next();
     this.pendingRegistrationRequestId = requestId;
     this.sendInstallStatus(action === "register" ? "Registering…" : "Unregistering…");
-    this.host.requestUpdate(requestId, action);
+    this.host.requestDesktop(requestId, action);
   }
 
   private sendInstallStatus(message = ""): void {
@@ -1178,7 +1186,7 @@ export class CommitsCore {
   }
 
   private chooseRepository(): void {
-    const requestId = this.nextOsRequestId++;
+    const requestId = this.osRequestIds.next();
     this.pendingOs.set(requestId, { kind: "chooseRepository" });
     this.host.requestOs(requestId, "pick-folder");
   }
@@ -1189,7 +1197,7 @@ export class CommitsCore {
    * look, so this asks it and finishes in `finishFindRepositories`.
    */
   private openFolder(path: string): void {
-    const requestId = this.nextOsRequestId++;
+    const requestId = this.osRequestIds.next();
     this.pendingOs.set(requestId, { kind: "findRepositories", folder: path });
     this.host.requestRepoOs(requestId, "find-repositories", path);
   }
@@ -1264,8 +1272,7 @@ export class CommitsCore {
 
   private selectRepository(path: string, persist = true): void {
     const changed = this.currentRepository !== path;
-    if (changed) this.navigationGeneration++;
-    if (changed) this.awaitingFirstLoad = true;
+    if (changed) this.launches.repositoryChanged();
     this.currentRepository = path;
     if (changed) { this.latestHealth = null; this.refreshHealth(); }
     this.watchCurrentRepository(path);
@@ -1384,7 +1391,7 @@ export class CommitsCore {
     if (this.scanningSubmoduleRoots.has(rootPath)) return;
     this.requestedSubmoduleRoots.add(rootPath);
     this.scanningSubmoduleRoots.add(rootPath);
-    const requestId = this.nextGitRequestId++;
+    const requestId = this.gitRequestIds.next();
     this.pendingSubmoduleDiscovery.set(requestId, rootPath);
     this.host.runGit({
       requestId,
@@ -1477,56 +1484,57 @@ export class CommitsCore {
     if ("status" in message && typeof message.command === "string" && !message.command.startsWith("standalone")) this.refreshHealth();
   }
 
+  /**
+   * Outcomes from Bones' upgrade module. A successful install still needs
+   * the desktop registration, so it waits for receiveDesktopResult.
+   */
   receiveUpgradeResult(result: UpdaterResult & { previous?: string | null }): void {
     if ("previous" in result) {
       if (result.previous && result.previous !== result.version) this.sendInstallStatus(`Updated to version ${result.version}`);
       return;
     }
-    if (result.requestId === this.pendingInstallRequestId && result.ok) {
+    if (result.requestId === this.pendingInstallRequestId) {
+      if (!result.ok) { this.finishInstall(result); return; }
       this.pendingInstallRegistration = result;
-      this.host.requestUpdate(result.requestId, "register");
+      this.host.requestDesktop(result.requestId, "register");
       return;
     }
-    this.receiveUpdaterResult(result);
+    this.finishUpdateRequest(result);
   }
 
+  /** A handoff from a later `commits` run; see {@link LaunchCoordinator}. */
   receiveLaunchRequest(request: LaunchRequest): void {
-    const sequence = request.sequence ?? 0;
-    if (sequence <= this.launchSequence) return;
-    this.launchSequence = sequence;
-    if (!this.bootstrapped || this.loadingCommits > 0 || this.awaitingFirstLoad) { this.pendingLaunch = request; return; }
-    this.applyLaunch(request);
+    this.launches.receive(request);
   }
 
+  /** Opens a launch's repositories and applies its appearance; the coordinator decides on its navigation. */
   private applyLaunch(request: LaunchRequest): void {
-    this.navigationGeneration++;
     if (request.theme || request.themeFileName) {
       this.sessionLaunch = { ...this.sessionLaunch, ...(request.theme ? { theme: request.theme } : {}),
         ...(request.themeFileName ? { themeFileName: request.themeFileName, themeFile: request.themeFile, themeFileError: request.themeFileError } : {}) };
       this.sendSessionAppearance();
     }
-    this.pendingNavigation = request;
+    const previous = this.currentRepository;
     if (request.kind === "repository") {
-      const previous = this.currentRepository;
       this.addRepositories(request.paths);
       this.sendRepos();
-      if (previous === this.currentRepository && !this.awaitingFirstLoad && this.loadingCommits === 0) {
-        this.pendingNavigation = null;
-        this.navigate(request);
-      }
+    } else if (request.kind === "rejected") {
+      this.notice(request.reason);
     }
-    else if (request.kind === "rejected") this.notice(request.reason);
-    else if (this.currentRepository) { this.pendingNavigation = null; this.navigate(request); }
+    this.launches.launchApplied(request, {
+      repositoryChanged: previous !== this.currentRepository,
+      hasRepository: this.currentRepository !== null,
+    });
   }
 
   private sendSessionAppearance(): void { this.send({ command: "standaloneSessionAppearance", ...this.sessionLaunch }); }
-  private sendSources(): void { this.send({ command: "standaloneSources", sources: this.host.repositorySources?.() ?? [] }); }
+  private sendSources(): void { this.send({ command: "standaloneSources", sources: this.host.repositorySources() }); }
   private notice(message: string): void { this.send({ command: "standaloneNotice", message }); }
   private refreshHealth(): void { if (this.currentRepository) this.health.refresh(this.currentRepository); }
 
   private sendInProgress(): void {
     const health = this.latestHealth;
-    const operation = health?.facts.operation ?? (this.currentRepository ? this.host.repositoryState?.(this.currentRepository).operation : null);
+    const operation = health?.facts.operation ?? (this.currentRepository ? this.host.repositoryState(this.currentRepository).operation : null);
     this.send({ command: "repoInProgress", state: operation && operation !== "bisect" ? {
       type: operation, subject: null, rebaseProgress: null, rebaseContext: null,
       workingTreeStatus: health ? { changed: health.facts.changes, staged: 0, conflicts: health.facts.conflicted, untracked: 0 } : null,
@@ -1537,15 +1545,15 @@ export class CommitsCore {
     const health = this.latestHealth;
     if (!health) return;
     switch (health.verdict.id) {
-      case "dirty": this.navigate({ show: "changes" }); break;
-      case "conflicted": case "in-progress": this.navigate({ show: "conflicts" }); break;
-      case "detached": if (health.head) this.navigate({ commit: health.head }); break;
-      case "diverged": case "behind": case "ahead": case "unpublished": if (health.branch) this.navigate({ branch: health.branch }); break;
+      case "dirty": this.launches.requestNavigation({ show: "changes" }); break;
+      case "conflicted": case "in-progress": this.launches.requestNavigation({ show: "conflicts" }); break;
+      case "detached": if (health.head) this.launches.requestNavigation({ commit: health.head }); break;
+      case "diverged": case "behind": case "ahead": case "unpublished": if (health.branch) this.launches.requestNavigation({ branch: health.branch }); break;
     }
   }
 
+  /** Selects a target in the open repository; only the coordinator calls this, once the graph is settled. */
   private navigate(target: NavigationTarget): void {
-    if (this.loadingCommits > 0 || this.awaitingFirstLoad) { this.pendingNavigation = target; return; }
     applyNavigation(target, {
       selectWorkingTree: () => { this.sendInProgress(); this.send({ command: "standaloneNavigate", hash: "*" }); },
       selectGraph: () => this.send({ command: "standaloneNavigate", hash: null }),
@@ -1556,16 +1564,16 @@ export class CommitsCore {
   private selectNavigationRevision(revision: string, branch: boolean): void {
     const repository = this.currentRepository;
     if (!repository) return;
-    const generation = ++this.navigationGeneration;
-    const requestId = this.nextGitRequestId++;
+    const generation = this.launches.beginNavigationStep();
+    const requestId = this.gitRequestIds.next();
     this.navigationReads.set(requestId, (result) => {
-      if (generation !== this.navigationGeneration || repository !== this.currentRepository) return;
+      if (!this.launches.isCurrent(generation) || repository !== this.currentRepository) return;
       if (result.exitCode !== 0) { this.notice(`Could not select ${branch ? "branch" : "commit"} ${revision}: target does not exist.`); return; }
       const hash = new TextDecoder().decode(result.stdout).trim();
       const configured = this.settings.app.navigationMaxCommits;
       const maxCommits = typeof configured === "number" && Number.isFinite(configured) ? Math.max(1, Math.floor(configured)) : 10000;
       this.graph.loadCommits({ command: "loadCommits", repo: repository, branchName: "", branches: [], maxCommits, showRemoteBranches: true, hard: false }, (response) => {
-        if (generation !== this.navigationGeneration || repository !== this.currentRepository) return;
+        if (!this.launches.isCurrent(generation) || repository !== this.currentRepository) return;
         this.send(response);
         if (response.command === "loadCommits" && response.commits.some((commit) => commit.hash === hash)) this.send({ command: "standaloneNavigate", hash });
         else this.notice(`Could not select ${revision}: outside the loaded history (limit ${maxCommits}).`);

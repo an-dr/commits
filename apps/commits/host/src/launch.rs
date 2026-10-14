@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use crate::launch_request::{parse, LaunchRequest};
+use crate::launch_request::{parse, LaunchArguments};
+use commits_ipc::native::{LaunchContent, LaunchOutcome, LaunchRequest};
 use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use bones_messages::{DecodeMessage, Message};
 
@@ -26,7 +27,7 @@ const REJECTED: u8 = 2;
 /// also means the answer cannot change between the guest asking and acting.
 pub struct LaunchModule {
     outcome: Outcome,
-    request: LaunchRequest,
+    arguments: LaunchArguments,
     theme_file: Option<Result<serde_json::Value, String>>,
     sequence: u32,
     bus: Option<Bus>,
@@ -52,15 +53,15 @@ impl Default for LaunchModule {
 impl LaunchModule {
     /// Resolves the launch once; the parser stays pure and file access stays native.
     fn from_args(args: impl Iterator<Item = String>, working_dir: Option<&Path>) -> Self {
-        let request = parse(&args.collect::<Vec<_>>(), working_dir);
-        let outcome = request
+        let arguments = parse(&args.collect::<Vec<_>>(), working_dir);
+        let outcome = arguments
             .path
             .as_deref()
             .map_or(Outcome::Absent, |path| check(path, working_dir));
-        let theme_file = request.theme_file.as_deref().map(read_theme_file);
+        let theme_file = arguments.theme_file.as_deref().map(read_theme_file);
         Self {
             outcome,
-            request,
+            arguments,
             theme_file,
             sequence: 0,
             bus: None,
@@ -73,29 +74,36 @@ impl LaunchModule {
     }
 
     fn encode(&self) -> Vec<u8> {
-        let mut value = match &self.outcome {
-            Outcome::Absent => serde_json::json!({"kind":"none"}),
-            Outcome::Repositories(paths) => serde_json::json!({"kind":"repository", "paths":paths}),
-            Outcome::Rejected(reason) => serde_json::json!({"kind":"rejected", "reason":reason}),
+        let outcome = match &self.outcome {
+            Outcome::Absent => LaunchOutcome::None,
+            Outcome::Repositories(paths) => LaunchOutcome::Repository {
+                paths: paths
+                    .iter()
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .collect(),
+            },
+            Outcome::Rejected(reason) => LaunchOutcome::Rejected {
+                reason: reason.clone(),
+            },
         };
-        value["show"] = serde_json::json!(self.request.show);
-        value["branch"] = serde_json::json!(self.request.branch);
-        value["commit"] = serde_json::json!(self.request.commit);
-        value["theme"] = serde_json::json!(self.request.theme);
-        if let Some(path) = &self.request.theme_file {
-            value["themeFileName"] = serde_json::json!(path);
-            match self
+        let theme_file = self.theme_file.as_ref();
+        let content = LaunchContent {
+            outcome,
+            show: self.arguments.show.clone(),
+            branch: self.arguments.branch.clone(),
+            commit: self.arguments.commit.clone(),
+            theme: self.arguments.theme.clone(),
+            theme_file_name: self
+                .arguments
                 .theme_file
                 .as_ref()
-                .expect("a theme path has a read result")
-            {
-                Ok(file) => value["themeFile"] = file.clone(),
-                Err(error) => value["themeFileError"] = serde_json::json!(error),
-            }
-        }
-        commits_ipc::native::LaunchRequest {
+                .map(|path| path.to_string_lossy().into_owned()),
+            theme_file: theme_file.and_then(|read| read.as_ref().ok().cloned()),
+            theme_file_error: theme_file.and_then(|read| read.as_ref().err().cloned()),
+        };
+        LaunchRequest {
             sequence: self.sequence,
-            json: value.to_string(),
+            json: content.to_json(),
         }
         .encode()
         .unwrap()
@@ -177,7 +185,7 @@ impl Handler for LaunchModule {
             handoff.args.into_iter().map(str::to_string),
             Some(Path::new(handoff.cwd)),
         );
-        self.request = next.request;
+        self.arguments = next.arguments;
         self.theme_file = next.theme_file;
         self.outcome = next.outcome;
         self.sequence = self.sequence.saturating_add(1);
@@ -203,18 +211,14 @@ impl Module for LaunchModule {
         Ok(())
     }
 
-    /// The shared launch encoding answers startup; a nonempty payload queries
-    /// a repository's native path and operation facts for the health reader.
-    fn respond(&mut self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
+    /// Answers the component's startup question in the encoding later
+    /// handoffs share on `launch/request`.
+    fn respond(&mut self, sender: &str, _payload: &[u8]) -> Option<Vec<u8>> {
         if sender != OWNER {
             return Some(encode(
                 REJECTED,
                 "the launch argument is private to the commits component",
             ));
-        }
-        if !payload.is_empty() {
-            let path = std::str::from_utf8(payload).ok()?;
-            return serde_json::to_vec(&repository_state(Path::new(path))).ok();
         }
         Some(self.encode())
     }
@@ -234,41 +238,6 @@ fn read_theme_file(path: &Path) -> Result<serde_json::Value, String> {
     serde_json::from_slice(&bytes).map_err(|error| error.to_string())
 }
 
-/// Launch-path checks and operation markers are read natively, including linked worktrees.
-fn repository_state(path: &Path) -> serde_json::Value {
-    let marker = path.join(".git");
-    let metadata = if marker.is_dir() {
-        Some(marker)
-    } else {
-        std::fs::read_to_string(&marker)
-            .ok()
-            .and_then(|text| {
-                text.trim().strip_prefix("gitdir:").map(|value| {
-                    let target = PathBuf::from(value.trim());
-                    if target.is_absolute() {
-                        target
-                    } else {
-                        path.join(target)
-                    }
-                })
-            })
-            .filter(|target| target.is_dir())
-    };
-    let operation = metadata.as_ref().and_then(|git| {
-        [
-            ("rebase-merge", "rebase"),
-            ("rebase-apply", "rebase"),
-            ("MERGE_HEAD", "merge"),
-            ("CHERRY_PICK_HEAD", "cherry-pick"),
-            ("REVERT_HEAD", "revert"),
-            ("BISECT_LOG", "bisect"),
-        ]
-        .into_iter()
-        .find(|(marker, _)| git.join(marker).exists())
-        .map(|(_, operation)| operation)
-    });
-    serde_json::json!({ "exists": path.is_dir(), "isRepo": metadata.is_some(), "operation": operation })
-}
 
 fn encode(kind: u8, text: &str) -> Vec<u8> {
     let mut response = Vec::with_capacity(text.len() + 1);
@@ -279,11 +248,11 @@ fn encode(kind: u8, text: &str) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{LaunchModule, Module, NONE, REJECTED, REPOSITORY};
+    use super::{LaunchModule, LaunchRequest, Module, NONE, REJECTED, REPOSITORY};
     use std::path::Path;
 
     fn decode(response: &[u8]) -> (u8, String) {
-        let request = commits_ipc::native::LaunchRequest::decode(response).unwrap();
+        let request = LaunchRequest::decode(response).unwrap();
         let value: serde_json::Value = serde_json::from_str(&request.json).unwrap();
         match value["kind"].as_str().unwrap() {
             "repository" => (
@@ -491,7 +460,7 @@ mod tests {
             payload,
         });
         let request =
-            commits_ipc::native::LaunchRequest::decode(&module.respond("commits", &[]).unwrap())
+            LaunchRequest::decode(&module.respond("commits", &[]).unwrap())
                 .unwrap();
         assert_eq!(request.sequence, 1);
         let value: serde_json::Value = serde_json::from_str(&request.json).unwrap();
@@ -499,21 +468,6 @@ mod tests {
         assert_eq!(value["kind"], "repository");
     }
 
-    #[test]
-    fn detects_bisect_and_linked_worktree_operation_markers() {
-        let directory = tempfile::tempdir().unwrap();
-        let worktree = directory.path().join("worktree");
-        let git = directory.path().join("metadata");
-        std::fs::create_dir_all(&worktree).unwrap();
-        std::fs::create_dir_all(&git).unwrap();
-        std::fs::write(worktree.join(".git"), "gitdir: ../metadata").unwrap();
-        std::fs::write(git.join("BISECT_LOG"), "bisect").unwrap();
-        assert_eq!(super::repository_state(&worktree)["operation"], "bisect");
-        assert_eq!(
-            super::repository_state(&directory.path().join("missing"))["exists"],
-            false
-        );
-    }
 
     #[test]
     fn reads_the_theme_once_and_rejects_oversized_files() {
@@ -527,7 +481,7 @@ mod tests {
         let mut module = LaunchModule::from_args(args.into_iter(), None);
         std::fs::write(&file, "malformed").unwrap();
         let response =
-            commits_ipc::native::LaunchRequest::decode(&module.respond("commits", &[]).unwrap())
+            LaunchRequest::decode(&module.respond("commits", &[]).unwrap())
                 .unwrap();
         let value: serde_json::Value = serde_json::from_str(&response.json).unwrap();
         assert_eq!(value["themeFile"]["version"], 1);

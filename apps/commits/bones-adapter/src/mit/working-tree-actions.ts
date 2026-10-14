@@ -1,4 +1,5 @@
 import type { GitResult, GitRun } from "@commits/ipc/native";
+import { RequestIds } from "../request-ids";
 
 interface GitHost {
   runGit(request: GitRun): void;
@@ -46,7 +47,7 @@ function failureText(result: GitResult): string {
  * message, because these commands fail for reasons the user has to act on.
  */
 export class WorkingTreeActions {
-  private nextRequestId = 40_000;
+  private readonly requestIds = new RequestIds("workingTree");
   private readonly pending = new Map<number, (result: GitResult) => void>();
 
   /**
@@ -436,7 +437,7 @@ export class WorkingTreeActions {
   }
 
   private send(repo: string, args: string[], deliver: (status: string | null) => void, timeoutMs = 30_000): void {
-    const requestId = this.nextRequestId++;
+    const requestId = this.requestIds.next();
     this.pending.set(requestId, (result) => {
       this.onMutated(repo);
       deliver(

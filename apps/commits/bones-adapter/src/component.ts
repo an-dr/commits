@@ -68,7 +68,7 @@ function onMessage(
     } else if (topic === "upgrader/result") {
       core.receiveUpgradeResult(decodeUpgradeResult(payload));
     } else if (topic === "desktop/result") {
-      core.receiveUpdaterResult(decodeDesktopResult(payload));
+      core.receiveDesktopResult(decodeDesktopResult(payload));
     } else if (topic === "os/prompt") {
       core.receivePrompt(new TextDecoder().decode(payload));
     } else if (topic === "repo/full-refresh" || topic === "repo/lightweight-refresh") {

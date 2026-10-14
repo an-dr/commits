@@ -1,3 +1,6 @@
+import type { DesktopAction, GitRun, LaunchRequest, OsAction, RepoOsAction, UpdaterAction } from "@commits/ipc/native";
+import type { HealthFacts } from "../health/verdict";
+
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type PageSource =
   | { readonly kind: "html"; readonly value: string }
@@ -18,20 +21,6 @@ export interface CommitsRepoStatus {
   readonly parentPath: string;
   readonly error: string;
 }
-
-/**
- * What `commits <path>` asked for, as the host resolved it.
- *
- * Three cases rather than a nullable path: "started with no argument" and
- * "started with an argument I refused" lead to the same screen but not the
- * same message, and only the host can tell them apart.
- *
- * `paths` holds every repository the host found at or below the argument --
- * one for a plain checkout, several when the argument is a folder of clones
- * or a checkout with unrelated repositories inside it. The first is the one
- * to open.
- */
-export type LaunchRepository = import("@commits/ipc/native").LaunchRequest;
 
 export interface InstallStatus {
   readonly ok: boolean;
@@ -72,16 +61,23 @@ export interface HostPort {
   saveSettings(value: Uint8Array<ArrayBufferLike>): SettingsIoResult;
   /** Whether the commits project's own clone (`~/.commits/repo`) exists, and its resolved path. */
   commitsRepoStatus(): CommitsRepoStatus;
-  /** The repository named on the command line, already resolved and checked by the host. */
-  launchRepository(): LaunchRepository;
-  repositorySources?(): readonly RepositorySource[];
-  repositoryState?(path: string): import("../health/facts").RepositoryState;
+  /**
+   * What the command line asked for, as the host resolved it: the repository
+   * outcome (none, the repositories found at or below the path with the first
+   * to open, or why the path was refused) plus navigation and appearance
+   * options. Startup and later handoffs use this same shape.
+   */
+  launchRequest(): LaunchRequest;
+  /** Repository lists other programs offer through source files; read-only, last good parse per file. */
+  repositorySources(): readonly RepositorySource[];
+  /** Whether a path exists, is a repository, and which Git operation is in progress there, read natively. */
+  repositoryState(path: string): RepositoryState;
   /** Raw bytes persisted by bones in this component's file-backed save slot. */
   loadSavedState(): Uint8Array<ArrayBufferLike>;
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void;
-  runGit(request: import("@commits/ipc/native").GitRun): void;
+  runGit(request: GitRun): void;
   respondPrompt(id: string, value: string): void;
-  requestOs(requestId: number, action: import("@commits/ipc/native").OsAction, value?: string): void;
+  requestOs(requestId: number, action: OsAction, value?: string): void;
   /**
    * Asks the git-aware endpoint, whose actions all need a repository.
    *
@@ -91,7 +87,7 @@ export interface HostPort {
    */
   requestRepoOs(
     requestId: number,
-    action: import("@commits/ipc/native").RepoOsAction,
+    action: RepoOsAction,
     value?: string,
   ): void;
 
@@ -102,13 +98,35 @@ export interface HostPort {
    */
   watchRepository(requestId: number, action: "start" | "stop", repository: string): void;
   /** Checks a manifest for a newer version, stages its verified asset, or stages the running build itself. */
-  requestUpdate(requestId: number, action: import("@commits/ipc/native").UpdaterAction): void;
+  requestUpdate(requestId: number, action: UpdaterAction): void;
+  /** Registers or unregisters the installed entry point through Bones' desktop module. */
+  requestDesktop(requestId: number, action: DesktopAction): void;
   /** Whether this running build is the one installed at the canonical location. */
   installStatus(): InstallStatus;
-  requestLastApplied?(requestId: number): void;
+  /** Asks Bones' upgrade module which version last ran, answered on `upgrader/result`. */
+  requestLastApplied(requestId: number): void;
   sendPageMessage(panel: string, message: unknown): void;
   subscribe(topic: string): void;
 }
 
-export interface RepositorySource { readonly name: string; readonly repositories: readonly SourceRepository[] }
-export interface SourceRepository { readonly name: string; readonly path: string; readonly group?: string | null; readonly favorite?: boolean; readonly available: boolean }
+/** One source file's repositories; see docs/repository-sources.md. */
+export interface RepositorySource {
+  readonly name: string;
+  readonly repositories: readonly SourceRepository[];
+}
+
+export interface SourceRepository {
+  readonly name: string;
+  readonly path: string;
+  readonly group?: string | null;
+  readonly favorite?: boolean;
+  /** False when the folder is missing, so the selector shows it but cannot open it. */
+  readonly available: boolean;
+}
+
+/** Native facts about a path that Git itself cannot report for a missing folder. */
+export interface RepositoryState {
+  readonly exists: boolean;
+  readonly isRepo: boolean;
+  readonly operation: HealthFacts["operation"];
+}

@@ -1,12 +1,8 @@
 import type { GitResult } from "@commits/ipc/native";
 import type { HostPort } from "../host/host-port";
 import { verdictOf, type HealthFacts, type Verdict } from "./verdict";
+import { RequestIds } from "../request-ids";
 
-export interface RepositoryState {
-  exists: boolean;
-  isRepo: boolean;
-  operation: HealthFacts["operation"];
-}
 export interface RepositoryHealth {
   repository: string;
   facts: HealthFacts;
@@ -29,17 +25,17 @@ export function parseStatus(status: string): Pick<HealthFacts, "ahead" | "behind
 
 /** Correlates the three reads and discards responses for repositories left behind. */
 export class HealthReader {
-  private nextId = 900_000;
+  private readonly requestIds = new RequestIds("health");
   private generation = 0;
   private pending = new Map<number, (result: GitResult) => void>();
   constructor(private readonly host: Pick<HostPort, "runGit" | "repositoryState">, private readonly deliver: (health: RepositoryHealth) => void) {}
   refresh(repository: string): void {
     const generation = ++this.generation;
-    const state = this.host.repositoryState?.(repository) ?? { exists: true, isRepo: true, operation: null };
+    const state = this.host.repositoryState(repository);
     const results: Record<string, GitResult> = {};
     const commands = { status: ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"], head: ["rev-parse", "--verify", "HEAD"], remote: ["remote"] };
     for (const [key, args] of Object.entries(commands)) {
-      const requestId = this.nextId++;
+      const requestId = this.requestIds.next();
       this.pending.set(requestId, (result) => {
         if (generation !== this.generation) return;
         results[key] = result;

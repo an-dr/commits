@@ -1,8 +1,11 @@
 //! Pure argument parsing shared by startup and subsequent launches.
 use std::path::{Path, PathBuf};
 
+/// Every flag `parse` accepts; `usage.txt` and docs/command-line.md must name each.
+pub const FLAGS: [&str; 5] = ["--show", "--branch", "--commit", "--theme", "--theme-file"];
+
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct LaunchRequest {
+pub struct LaunchArguments {
     pub path: Option<String>,
     pub show: Option<String>,
     pub branch: Option<String>,
@@ -11,8 +14,8 @@ pub struct LaunchRequest {
     pub theme_file: Option<PathBuf>,
 }
 
-pub fn parse(args: &[String], cwd: Option<&Path>) -> LaunchRequest {
-    let mut request = LaunchRequest::default();
+pub fn parse(args: &[String], cwd: Option<&Path>) -> LaunchArguments {
+    let mut request = LaunchArguments::default();
     let mut index = 0;
     while index < args.len() {
         let argument = &args[index];
@@ -28,10 +31,7 @@ pub fn parse(args: &[String], cwd: Option<&Path>) -> LaunchRequest {
             .map_or((argument.as_str(), None), |(name, value)| {
                 (name, Some(value))
             });
-        if !matches!(
-            name,
-            "--show" | "--branch" | "--commit" | "--theme" | "--theme-file"
-        ) {
+        if !FLAGS.contains(&name) {
             continue;
         }
         let value = match inline {
@@ -71,6 +71,17 @@ pub fn parse(args: &[String], cwd: Option<&Path>) -> LaunchRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn usage_and_docs_name_every_accepted_flag() {
+        let usage = include_str!("usage.txt");
+        let docs = include_str!("../../../../docs/command-line.md");
+        for flag in FLAGS {
+            assert!(usage.contains(&format!("[{flag} ")), "usage.txt lacks {flag}");
+        }
+        let synopsis = usage.lines().next().unwrap();
+        assert!(docs.contains(synopsis), "docs/command-line.md synopsis differs from usage.txt");
+    }
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| value.to_string()).collect()
     }
@@ -114,7 +125,7 @@ mod tests {
         );
         assert_eq!(
             request,
-            LaunchRequest {
+            LaunchArguments {
                 path: Some("repo".into()),
                 ..Default::default()
             }

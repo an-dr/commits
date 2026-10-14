@@ -741,6 +741,7 @@ name = "commits-ipc"
 version = "0.1.0"
 dependencies = [
  "bones-messages",
+ "serde",
  "serde_json",
 ]
 

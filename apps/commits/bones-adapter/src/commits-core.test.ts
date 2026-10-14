@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { GitResult, GitRun, NativeResult, OsAction, RepoOsAction, UpdaterAction } from "@commits/ipc/native";
+import type { DesktopAction, GitResult, GitRun, LaunchRequest, NativeResult, OsAction, RepoOsAction, UpdaterAction } from "@commits/ipc/native";
 import { CommitsCore } from "./commits-core";
-import type { CommitsRepoStatus, HostPort, InstallStatus, LaunchRepository, LogLevel, PageSource, SettingsIoResult } from "./host/host-port";
+import { isInBand } from "./request-ids";
+import type { CommitsRepoStatus, HostPort, InstallStatus, LogLevel, PageSource, RepositorySource, RepositoryState, SettingsIoResult } from "./host/host-port";
 
 class StubHost implements HostPort {
   readonly closed: string[] = [];
@@ -12,7 +13,7 @@ class StubHost implements HostPort {
   readonly osRequests: unknown[] = [];
   readonly gitRequests: GitRun[] = [];
   readonly healthRequests: GitRun[] = [];
-  readonly updateRequests: Array<{ requestId: number; action: UpdaterAction }> = [];
+  readonly updateRequests: Array<{ requestId: number; action: UpdaterAction | DesktopAction }> = [];
   readonly watchRequests: Array<{ requestId: number; action: "start" | "stop"; repository: string }> = [];
   /** How many git requests a helper has already answered, so it can resume. */
   answeredGitRequests = 0;
@@ -25,7 +26,7 @@ class StubHost implements HostPort {
   commitsRepoStatusValue: CommitsRepoStatus =
     { ok: true, exists: false, path: "C:/commits/repo", parentPath: "C:/commits", error: "" };
   installStatusValue: InstallStatus = { ok: true, installed: true, registered: false, justUpdated: false, version: "0.2.0", error: "" };
-  launchValue: LaunchRepository = { kind: "none" };
+  launchValue: LaunchRequest = { kind: "none" };
 
   closePanel(panel: string): void { this.closed.push(panel); }
   log(level: LogLevel, message: string): void { this.logs.push([level, message]); }
@@ -40,9 +41,15 @@ class StubHost implements HostPort {
   }
   loadSavedState(): Uint8Array<ArrayBufferLike> { return this.savedState; }
   commitsRepoStatus(): CommitsRepoStatus { return this.commitsRepoStatusValue; }
-  launchRepository(): LaunchRepository { return this.launchValue; }
+  launchRequest(): LaunchRequest { return this.launchValue; }
+  sources: RepositorySource[] = [];
+  repositoryStateValue: RepositoryState = { exists: true, isRepo: true, operation: null };
+  lastAppliedRequests: number[] = [];
+  repositorySources(): readonly RepositorySource[] { return this.sources; }
+  repositoryState(): RepositoryState { return this.repositoryStateValue; }
+  requestLastApplied(requestId: number): void { this.lastAppliedRequests.push(requestId); }
   saveSavedState(value: Uint8Array<ArrayBufferLike>): void { this.savedState = value; }
-  runGit(request: GitRun): void { (request.requestId >= 900_000 ? this.healthRequests : this.gitRequests).push(request); }
+  runGit(request: GitRun): void { (isInBand(request.requestId, "health") ? this.healthRequests : this.gitRequests).push(request); }
   respondPrompt(id: string, value: string): void { this.promptReplies.push(`${id}:${value}`); }
   requestOs(requestId: number, action: OsAction, value?: string): void {
     this.osRequests.push({ requestId, action, value });
@@ -52,7 +59,12 @@ class StubHost implements HostPort {
   requestRepoOs(requestId: number, action: RepoOsAction, value?: string): void {
     this.osRequests.push({ requestId, action, value });
   }
+  // Upgrade and desktop requests share one list: the action names already
+  // say which module was asked.
   requestUpdate(requestId: number, action: UpdaterAction): void {
+    this.updateRequests.push({ requestId, action });
+  }
+  requestDesktop(requestId: number, action: DesktopAction): void {
     this.updateRequests.push({ requestId, action });
   }
   watchRepository(requestId: number, action: "start" | "stop", repository: string): void {
@@ -86,7 +98,7 @@ function bootPastUpdateCheck(core: CommitsCore, host: StubHost): void {
   core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
   const check = host.updateRequests.find((request) => request.action === "check");
   if (check !== undefined) {
-    core.receiveUpdaterResult({ requestId: check.requestId, ok: true, available: false, fresh: false, version: "", error: "" });
+    core.receiveUpgradeResult({ requestId: check.requestId, ok: true, available: false, fresh: false, version: "", error: "" });
   }
   host.updateRequests.length = 0;
 }
@@ -121,7 +133,7 @@ describe("CommitsCore MIT webview host", () => {
     const install = host.updateRequests.at(-1)!;
     core.receiveUpgradeResult({ requestId: install.requestId, ok: true, available: false, fresh: true, version: "", error: "" });
     expect(host.updateRequests.at(-1)).toMatchObject({ requestId: install.requestId, action: "register" });
-    core.receiveUpdaterResult({ requestId: install.requestId, ok: false, available: false, fresh: false, version: "", error: "denied" });
+    core.receiveDesktopResult({ requestId: install.requestId, ok: false, error: "denied" });
     expect(host.sent.some(([, value]) => (value as { message?: string }).message?.includes("registration failed: denied"))).toBe(true);
   });
   it("applies a new deep link when the repository is already open", () => {
@@ -678,7 +690,7 @@ describe("CommitsCore MIT webview host", () => {
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
 
-    core.receiveUpdaterResult({
+    core.receiveUpgradeResult({
       requestId: host.updateRequests[0].requestId,
       ok: true,
       available: true,
@@ -705,7 +717,7 @@ describe("CommitsCore MIT webview host", () => {
     }));
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
-    core.receiveUpdaterResult({
+    core.receiveUpgradeResult({
       requestId: host.updateRequests[0].requestId,
       ok: true,
       available: true,
@@ -718,10 +730,10 @@ describe("CommitsCore MIT webview host", () => {
 
     expect(host.updateRequests).toHaveLength(2);
     expect(host.updateRequests[1]).toEqual({
-      requestId: 70_001, action: "stage",
+      requestId: expect.any(Number), action: "stage",
     });
 
-    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: true, fresh: false, version: "9.9.9", error: "" });
+    core.receiveUpgradeResult({ requestId: host.updateRequests[1].requestId, ok: true, available: true, fresh: false, version: "9.9.9", error: "" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneUpdateStatus",
@@ -774,12 +786,13 @@ describe("CommitsCore MIT webview host", () => {
 
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
-    expect(host.updateRequests).toEqual([{ requestId: 70_001, action: "install" }]);
+    expect(host.updateRequests.map(({ action }) => action)).toEqual(["install"]);
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "ready", registration: "none", version: "0.2.0", message: "Installing…",
     }]);
 
-    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: true, fresh: false, version: "", error: "" });
+    core.receiveUpgradeResult({ requestId: host.updateRequests[0].requestId, ok: true, available: true, fresh: false, version: "", error: "" });
+    core.receiveDesktopResult({ requestId: host.updateRequests[0].requestId, ok: true, error: "" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus",
@@ -797,7 +810,8 @@ describe("CommitsCore MIT webview host", () => {
     bootPastUpdateCheck(core, host);
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
-    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: true, fresh: true, version: "", error: "" });
+    core.receiveUpgradeResult({ requestId: host.updateRequests[0].requestId, ok: true, available: true, fresh: true, version: "", error: "" });
+    core.receiveDesktopResult({ requestId: host.updateRequests[0].requestId, ok: true, error: "" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus",
@@ -815,16 +829,15 @@ describe("CommitsCore MIT webview host", () => {
     bootPastUpdateCheck(core, host);
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
-    core.receiveUpdaterResult({
-      requestId: 70_001, ok: true, available: true, fresh: true, version: "", error: "could not register with the system: denied",
-    });
+    core.receiveUpgradeResult({ requestId: host.updateRequests[0].requestId, ok: true, available: true, fresh: true, version: "", error: "" });
+    core.receiveDesktopResult({ requestId: host.updateRequests[0].requestId, ok: false, error: "denied" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus",
       status: "done",
       registration: "none",
       version: "0.2.0",
-      message: "Installed to ~/.commits/app, but could not register with the system: denied — launch commits.exe to use it.",
+      message: "Installed to ~/.commits/app, but registration failed: denied — launch commits.exe to use it.",
     }]);
   });
 
@@ -850,9 +863,9 @@ describe("CommitsCore MIT webview host", () => {
 
     core.receivePageJson(JSON.stringify({ command: "standaloneRegister" }));
     core.receivePageJson(JSON.stringify({ command: "standaloneRegister" }));
-    expect(host.updateRequests).toEqual([{ requestId: 70_001, action: "register" }]);
+    expect(host.updateRequests.map(({ action }) => action)).toEqual(["register"]);
 
-    core.receiveUpdaterResult({ requestId: 70_001, ok: true, available: false, fresh: false, version: "", error: "" });
+    core.receiveDesktopResult({ requestId: host.updateRequests[0].requestId, ok: true, error: "" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "hidden", registration: "registered", version: "0.2.0", message: "Registered with the system.",
@@ -866,14 +879,14 @@ describe("CommitsCore MIT webview host", () => {
     bootPastUpdateCheck(core, host);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneUnregister" }));
-    core.receiveUpdaterResult({ requestId: 70_001, ok: false, available: false, fresh: false, version: "", error: "access denied" });
+    core.receiveDesktopResult({ requestId: host.updateRequests[0].requestId, ok: false, error: "access denied" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "hidden", registration: "registered", version: "0.2.0", message: "Unregister failed: access denied",
     }]);
 
     core.receivePageJson(JSON.stringify({ command: "standaloneUnregister" }));
-    core.receiveUpdaterResult({ requestId: 70_002, ok: true, available: false, fresh: false, version: "", error: "" });
+    core.receiveDesktopResult({ requestId: host.updateRequests[1].requestId, ok: true, error: "" });
 
     expect(host.updateRequests.map((request) => request.action)).toEqual(["unregister", "unregister"]);
     expect(host.sent).toContainEqual(["main", {
@@ -902,7 +915,7 @@ describe("CommitsCore MIT webview host", () => {
     bootPastUpdateCheck(core, host);
     core.receivePageJson(JSON.stringify({ command: "standaloneInstall" }));
 
-    core.receiveUpdaterResult({ requestId: 70_001, ok: false, available: false, fresh: false, version: "", error: "disk full" });
+    core.receiveUpgradeResult({ requestId: host.updateRequests[0].requestId, ok: false, available: false, fresh: false, version: "", error: "disk full" });
 
     expect(host.sent).toContainEqual(["main", {
       command: "standaloneInstallStatus", status: "ready", registration: "none", version: "0.2.0", message: "Install failed: disk full",

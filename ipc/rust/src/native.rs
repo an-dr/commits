@@ -1,6 +1,49 @@
 use bones_messages::codec::{DecodeError, EncodeError, Reader, Writer};
 
-/// Launch outcome and validated options, identical at startup and handoff.
+/// The JSON carried inside a [`LaunchRequest`]: what the command line asked
+/// for, after the host validated it. `ipc/ts/native.ts` declares the same
+/// shape as `LaunchRequest`; the launch fixtures hold the two together.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchContent {
+    #[serde(flatten)]
+    pub outcome: LaunchOutcome,
+    pub show: Option<String>,
+    pub branch: Option<String>,
+    pub commit: Option<String>,
+    pub theme: Option<String>,
+    /// Present only when `--theme-file` was given; then exactly one of
+    /// `theme_file` and `theme_file_error` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_file_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_file: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_file_error: Option<String>,
+}
+
+/// Which repositories the launch opens, or why it opens none.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum LaunchOutcome {
+    None,
+    /// Every repository found at or below the path; the first is opened.
+    Repository { paths: Vec<String> },
+    Rejected { reason: String },
+}
+
+impl LaunchContent {
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).expect("launch content is plain JSON")
+    }
+
+    pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+}
+
+/// Launch outcome and validated options, identical at startup and handoff:
+/// a sequence number, then [`LaunchContent`] as JSON.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchRequest {
     pub sequence: u32,
