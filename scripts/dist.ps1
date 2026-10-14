@@ -11,7 +11,7 @@ dist/app is assembled already in the shape an install uses: commits.exe (the
 launcher) at the root, everything else -- host executables, page.html, and
 the WASM components/ -- in a version folder named after
 apps/commits/host/Cargo.toml's own version. That keeps '.\dist\app\commits.exe'
-(docs/phase-0-1.md) working directly out of a fresh build, and lets
+working directly out of a fresh build, and lets
 install.ps1 install/push dist/app's contents largely as-is instead of having
 to re-derive the version and re-split files itself.
 

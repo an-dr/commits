@@ -1,6 +1,6 @@
 # Repository health
 
-Commits owns this contract and the [conformance vectors](repository-health.vectors.json). Other applications can implement it independently and run the vectors against their own verdict function.
+Commits owns this contract and the [conformance vectors](../apps/commits/bones-adapter/src/health/repository-health.vectors.json). Other applications can implement it independently and run the vectors against their own verdict function.
 
 ## Facts
 

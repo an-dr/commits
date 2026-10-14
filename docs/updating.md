@@ -49,7 +49,7 @@ The [command-line contract](command-line.md) owns all flags, path handling and s
 
 ## Publishing a release
 
-Bump `apps/commits/host/Cargo.toml` and `UPGRADER_LAUNCHER_VERSION` in `.cargo/config.toml` together. After the bumped commit is on `main`, push the matching tag:
+Bump `apps/commits/host/Cargo.toml` and `UPGRADER_LAUNCHER_VERSION` in `.cargo/config.toml` together, and move the [changelog](../CHANGELOG.md)'s Unreleased entries under the new version and date in the same commit. After that commit is on `main`, push the matching tag:
 
 ```sh
 git tag v1.9.0

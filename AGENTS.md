@@ -2,26 +2,16 @@
 
 ## Bump the app version on every integration
 
-`apps/commits/host/Cargo.toml`'s `[package] version` is the standalone app's
-own version. It is baked in at compile time (`CARGO_PKG_VERSION`), compared
-against a hosted manifest by the self-updater
-(`bones_versioning::is_newer`, see [`docs/updating.md`](docs/updating.md)),
-and shown in the app's About menu.
+`apps/commits/host/Cargo.toml`'s `[package] version` is the standalone app's own version. It is baked in at compile time (`CARGO_PKG_VERSION`), compared against a hosted manifest by the self-updater (`bones_versioning::is_newer`, see [`docs/updating.md`](docs/updating.md)), and shown in the app's About menu.
 
-Bump it as part of every integration into `main` that changes user-facing
-behavior. An integration that doesn't bump it means the running app can
-never tell a later release apart from itself, so `check` will keep
-reporting "up to date" no matter what actually shipped.
+Bump it as part of every integration into `main` that changes user-facing behavior. An integration that doesn't bump it means the running app can never tell a later release apart from itself, so `check` will keep reporting "up to date" no matter what actually shipped.
 
-Bump `UPGRADER_LAUNCHER_VERSION` in [`.cargo/config.toml`](.cargo/config.toml)
-to the same value in the same commit. That is the version the launcher
-reports for itself, and `commits --version` prints both so a launcher left
-behind by an install is visible at a glance — which only works while a
-matched pair really does report matching numbers.
+Bump `UPGRADER_LAUNCHER_VERSION` in [`.cargo/config.toml`](.cargo/config.toml) to the same value in the same commit. That is the version the launcher reports for itself, and `commits --version` prints both so a launcher left behind by an install is visible at a glance — which only works while a matched pair really does report matching numbers.
+
+## Keep the changelog
+
+Record every user-facing change under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md), in the Keep a Changelog categories, in the same commit as the change. The version bump moves those entries under the new version and date and adds its comparison link. Release notes live nowhere else; do not add files under `docs/` for them.
 
 ## Release by tag
 
-A release is published by pushing a `v<version>` tag that matches
-`apps/commits/host/Cargo.toml`, after the bumped commit is on `main`; see
-[`docs/updating.md`](docs/updating.md#publishing-a-release). Installed apps
-only ever see what a tag published, so a bump without a tag ships nothing.
+A release is published by pushing a `v<version>` tag that matches `apps/commits/host/Cargo.toml`, after the bumped commit is on `main`; see [`docs/updating.md`](docs/updating.md#publishing-a-release). Installed apps only ever see what a tag published, so a bump without a tag ships nothing.

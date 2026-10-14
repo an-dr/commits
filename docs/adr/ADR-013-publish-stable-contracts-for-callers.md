@@ -15,7 +15,7 @@ Commits owns and publishes four caller contracts, each documented in `docs/` and
 | Contract | Document | Held by |
 | --- | --- | --- |
 | Command line and single-window handoff | [command-line.md](../command-line.md) | parser tests and the usage test |
-| Repository health facts, rules and verdicts | [repository-health.md](../repository-health.md) | [conformance vectors](../repository-health.vectors.json) |
+| Repository health facts, rules and verdicts | [repository-health.md](../repository-health.md) | [conformance vectors](../../apps/commits/bones-adapter/src/health/repository-health.vectors.json) |
 | Repository source files | [repository-sources.md](../repository-sources.md) | source module tests |
 | Session theme files | [themes.md](../themes.md) | theme file tests |
 

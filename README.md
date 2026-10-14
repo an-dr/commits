@@ -38,7 +38,7 @@ Adjust appearance, desktop behavior, and external tools through [settings](docs/
 
 ## Documentation
 
-The [documentation index](docs/index.md) links to architecture decisions, configuration, build and release details, and troubleshooting. The [roadmap](ROADMAP.md) records product direction.
+The [documentation index](docs/index.md) links to architecture decisions, configuration, build and release details, and troubleshooting. The [changelog](CHANGELOG.md) lists what each version changed, and the [roadmap](ROADMAP.md) records product direction.
 
 ### Repository map
 

@@ -1,32 +1,32 @@
 # Documentation
 
-New to the project? Start with the [README](../README.md) to try the app, then the [contribution guide](../CONTRIBUTING.md) to build it and submit a change.
+New to the project? Start with the [README](../README.md) to try the app, then the [contribution guide](../CONTRIBUTING.md) to build it and submit a change. What changed in each version is in the [changelog](../CHANGELOG.md).
 
 ## Using Commits
 
-- [Command line](command-line.md) — paths, single-instance handoff, navigation and session appearance.
-- [Repository health](repository-health.md) — verdict rules and [conformance vectors](repository-health.vectors.json).
-- [Repository sources](repository-sources.md) — caller-provided repository lists in the selector.
-- [Session themes](themes.md) — the caller-provided palette format.
 - [Settings](settings.md) — persisted options, appearance, and external tools.
-- [Troubleshooting](troubleshooting.md) — first checks and diagnostic logs when the app does not start correctly.
 - [Desktop integration](desktop-integration.md) — application registration and folder actions.
-- [Self-updating](updating.md) — installation, release manifests, update, and rollback.
+- [Self-updating](updating.md) — installation, release manifests, update, recovery, and publishing a release.
 - [Syntax highlighting](syntax-highlighting.md) — languages and limits in the diff panel.
+- [Troubleshooting](troubleshooting.md) — first checks and diagnostic logs when the app does not start correctly.
+
+## Driving Commits from another program
+
+- [Command line](command-line.md) — paths, single-window handoff, navigation, and session appearance.
+- [Session themes](themes.md) — the palette file format.
+- [Repository sources](repository-sources.md) — repository lists shown in the selector.
+- [Repository health](repository-health.md) — verdict rules and their conformance vectors.
+
+These contracts are kept stable as recorded in [ADR-013](adr/ADR-013-publish-stable-contracts-for-callers.md).
 
 ## Building and contributing
 
+- [Architecture](architecture.md) — layers, boundaries, native endpoints, and repository layout.
+- [Shared core](shared-core.md) — what `packages/core` is and where it differs from upstream.
 - [Continuous integration](ci.md) — Docker builds, local CI runs, and Windows cross-compilation.
-- [Repository layout](../ROADMAP.md#repository-layout-target) — intended boundaries and product direction.
 - [Architecture decisions](adr/) — settled decisions about the core, host, engine, settings, and licensing.
+- [Technical debt](techdebt.md) — known limitations and their tracking entries.
+- [Roadmap](../ROADMAP.md) — what comes next.
 - [Third-party notices](../THIRD_PARTY_NOTICES.md) — upstream lineage and licenses.
 
-## Background and investigations
-
-- [Phase 0–1](phase-0-1.md), [Phase 2–3](phase-2-3.md), and [Phase 4](phase-4.md) — implementation records and verification evidence.
-- [Shared core](shared-core.md) and [webview transition](mit-webview-transition.md) — shared code boundary and transition plan.
-- [Linux startup investigation](linux-startup-investigation.md) — diagnosis of earlier startup and responsiveness faults.
-- [Settings design](design/settings.md) — extension-compatible and desktop settings boundary.
-- [Technical debt](techdebt.md) — tracked limitations and follow-up work.
-
-The [`vendor/bones` documentation](../vendor/bones/README.md) remains the authority for engine protocols and runtime behavior. Product-specific decisions live here.
+The [`vendor/bones` documentation](../vendor/bones/README.md) is the authority for engine protocols and runtime behavior.

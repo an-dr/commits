@@ -1,12 +1,5 @@
 # Native host
 
-The desktop process. It embeds Bones as a library, enables the web module,
-registers the native capability modules, and serves the page file to the guest.
-Extension, save, and page paths resolve beside the executable. User settings
-are the exception: the trusted settings module owns
-`~/.commits/settings.json` and replaces it atomically for the `commits`
-component.
+The desktop process. It embeds Bones as a library, configures its services (web panels, single instance, upgrade, desktop registration, the development control channel), registers the Commits native modules, and serves the page to the guest. Components and the page resolve beside the executable; saved state and the log resolve to the install-wide location so they survive updates. User settings are the exception: the trusted settings module owns `~/.commits/settings.json` and replaces it atomically for the `commits` component.
 
-Code belongs here when it needs the operating system or owns process lifetime.
-Capabilities general enough for another host belong in `crates/`; anything the
-WebAssembly guest must run belongs in `bones-adapter`.
+Code belongs here when it needs the operating system or owns process lifetime. Modules that need a repository and could stand alone belong in `crates/`; capabilities that need no repository belong in Bones ([ADR-012](../../../docs/adr/ADR-012-generic-capabilities-belong-upstream.md)); anything the WebAssembly guest must run belongs in `bones-adapter`. The endpoints are listed in [docs/architecture.md](../../../docs/architecture.md#native-endpoints).

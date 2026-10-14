@@ -10,7 +10,7 @@ Get-Content .\dist\app\commits.log
 
 For an extracted release, look in the folder containing `commits-app.exe` or `commits-app`. An error mentioning `components/commits.wasm` means the WebAssembly component did not load. Relaunch on an idle machine; if the problem repeats, [open an issue](https://github.com/an-dr/commits/issues) with your operating system, app version, reproduction steps, and the relevant log lines. Remove private paths and credentials before sharing a log.
 
-The host allows 30 seconds for the component to load. The [technical debt record](techdebt.md) and [Linux startup investigation](linux-startup-investigation.md) explain the known startup cases and their history.
+The host allows 30 seconds for the component to load. The [technical debt record](techdebt.md) lists the known startup cases.
 
 ## A repository does not open
 

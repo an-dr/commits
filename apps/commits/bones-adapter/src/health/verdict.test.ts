@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { verdictOf, VERDICTS, type HealthFacts } from "./verdict";
-const vectors = JSON.parse(readFileSync(new URL("../../../../../docs/repository-health.vectors.json", import.meta.url), "utf8")) as {
+const vectors = JSON.parse(readFileSync(new URL("./repository-health.vectors.json", import.meta.url), "utf8")) as {
   verdicts: typeof VERDICTS; cases: { name: string; facts: HealthFacts; verdict: string }[];
 };
 describe("repository health conformance", () => {
