@@ -94,7 +94,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(settings::SettingsModule::default())
         .module(commits_repo::CommitsRepoModule::default())
         .module(launch::LaunchModule::default())
-        // Inert unless COMMITS_CONTROL_PORT is set; see `control`.
+        // Bones' development control channel: inert unless COMMITS_CONTROL_PORT
+        // is set. Prompt answers, OS requests and page messages are recorded by
+        // topic only, since their payloads can carry credentials.
         .module(
             bones_kernel::devtools::Devtools::from_env("COMMITS_CONTROL_PORT")
                 .logger(logger.clone())

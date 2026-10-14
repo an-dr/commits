@@ -102,7 +102,7 @@ if ($Part -in @("wasm", "all")) {
 if ($Part -in @("host", "all")) {
     # One package, three binaries: the app, the launcher that starts it, and
     # the askpass/editor helpers. The mechanism behind the launcher is
-    # bones-upgrader's; the name is ours, so the binary is declared here.
+    # bones-launcher's; the name is ours, so the binary is declared here.
     if ($Target -eq "") {
         cargo build --release -p commits-app
         $binDir = Join-Path $root "target/release"

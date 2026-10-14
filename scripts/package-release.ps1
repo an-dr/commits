@@ -15,7 +15,8 @@ must be published together.
 
 .PARAMETER Platform
 The build type: windows-x64, windows-arm64 or linux-x64. It must match the
-app's own compile-time platform (apps/commits/host/src/release.rs), since
+app's own compile-time platform (PLATFORM in Bones' upgrade module,
+vendor/bones/crates/bones-kernel/bones-module-upgrade/src/release_source.rs), since
 that is the manifest name the app asks for.
 
 .PARAMETER Tag

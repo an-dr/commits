@@ -198,7 +198,8 @@ stands -- the cost is background work now, not a frozen window.
 ## Tools built along the way
 
 **The control channel**
-([`apps/commits/host/src/control.rs`](../apps/commits/host/src/control.rs)).
+(`apps/commits/host/src/control.rs` at commit bce1bdd; since 1.9.0 the same
+`COMMITS_CONTROL_PORT` channel is Bones' `devtools` module).
 The interface is a webview, and a webview under Xwayland cannot be clicked by
 synthetic X input — `XTestFakeButtonEvent` moves the pointer the compositor
 draws, not the one the Wayland surface receives, which was verified by

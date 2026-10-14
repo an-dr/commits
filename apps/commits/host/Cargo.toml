@@ -20,7 +20,7 @@ name = "commits-editor"
 path = "src/bin/commits-editor.rs"
 
 # The permanent entry point, placed at the install root as `commits.exe` by
-# dist.ps1 and by an install. The mechanism is `bones-upgrader`'s; the name
+# dist.ps1 and by an install. The mechanism is `bones-launcher`'s; the name
 # is ours, which is why the binary is declared here -- users see it.
 [[bin]]
 name = "commits-launcher"
