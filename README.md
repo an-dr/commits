@@ -4,7 +4,7 @@ A standalone desktop Git client for exploring and working with repositories on W
 
 [![Build](https://github.com/an-dr/commits/actions/workflows/build.yml/badge.svg)](https://github.com/an-dr/commits/actions/workflows/build.yml) [![Latest release](https://img.shields.io/github/v/release/an-dr/commits)](https://github.com/an-dr/commits/releases/latest) [![MIT license](https://img.shields.io/github/license/an-dr/commits)](LICENSE)
 
-![Commits showing a branch list, commit graph, and changed-file tree](docs/README/screenshot.png)
+![Commits browsing the VS Code repository with branches, a commit graph, and changed files](docs/README/screenshot.jpg)
 
 ## Why Commits
 
