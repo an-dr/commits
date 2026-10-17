@@ -4,6 +4,8 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-10-17
+
 ### Fixed
 
 - Selecting an untracked file shows its whole contents as added lines instead of "This file has no contents to show".
@@ -175,7 +177,8 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 - The first standalone build: the shared repository graph and commit table in a Bones window, native Git, file-backed settings and state, repository discovery, and credential prompts.
 
-[Unreleased]: https://github.com/an-dr/commits/compare/v1.9.1...HEAD
+[Unreleased]: https://github.com/an-dr/commits/compare/v1.9.2...HEAD
+[1.9.2]: https://github.com/an-dr/commits/compare/v1.9.1...v1.9.2
 
 [1.9.1]: https://github.com/an-dr/commits/compare/v1.9.0...v1.9.1
 
