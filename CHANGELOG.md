@@ -179,13 +179,8 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 [Unreleased]: https://github.com/an-dr/commits/compare/v1.9.2...HEAD
 [1.9.2]: https://github.com/an-dr/commits/compare/v1.9.1...v1.9.2
-
 [1.9.1]: https://github.com/an-dr/commits/compare/v1.9.0...v1.9.1
-
 [1.9.0]: https://github.com/an-dr/commits/compare/v1.8.1...v1.9.0
-
 [1.8.1]: https://github.com/an-dr/commits/compare/v1.8.0...v1.8.1
-
 [1.8.0]: https://github.com/an-dr/commits/compare/v1.0.0...v1.8.0
-
 [1.0.0]: https://github.com/an-dr/commits/releases/tag/v1.0.0
