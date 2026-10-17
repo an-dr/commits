@@ -67,6 +67,31 @@ function Get-AppVersion([string]$RepoRoot) {
     throw "Could not read the app version from $cargoToml"
 }
 
+# ring and other C dependencies compile with whatever clang or cl is on PATH,
+# and only the Visual Studio developer environment (INCLUDE, LIB) tells them
+# where the MSVC and Windows SDK headers live. Without it a plain shell fails
+# deep inside cargo with "'assert.h' file not found", so the environment is
+# loaded here from the installed Visual Studio, the same thing a Developer
+# PowerShell does.
+function Import-MsvcEnvironment {
+    if ($env:INCLUDE) { return }
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    $vs = if (Test-Path -LiteralPath $vswhere) {
+        & $vswhere -latest -products * -property installationPath | Select-Object -First 1
+    }
+    $vcvars = if ($vs) { Join-Path $vs "VC\Auxiliary\Build\vcvarsall.bat" }
+    if (-not $vcvars -or -not (Test-Path -LiteralPath $vcvars)) {
+        throw "The Visual Studio C++ build tools were not found. Install them as CONTRIBUTING.md#native-windows-build describes, or run this from a Developer PowerShell."
+    }
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
+    Write-Host "Loading the MSVC $arch environment from $vs"
+    $lines = cmd /c "`"$vcvars`" $arch >nul && set"
+    if ($LASTEXITCODE -ne 0) { throw "vcvarsall.bat $arch failed; check the Visual Studio C++ workload for $arch" }
+    foreach ($line in $lines) {
+        if ($line -match '^([^=]+)=(.*)$') { Set-Item -Path "env:$($Matches[1])" -Value $Matches[2] }
+    }
+}
+
 $version = Get-AppVersion -RepoRoot $root
 $versionDirFull = Join-Path $outputFull $version
 $componentsDirFull = Join-Path $versionDirFull "components"
@@ -104,6 +129,7 @@ if ($Part -in @("host", "all")) {
     # the askpass/editor helpers. The mechanism behind the launcher is
     # bones-launcher's; the name is ours, so the binary is declared here.
     if ($Target -eq "") {
+        if ($isWindowsPlatform) { Import-MsvcEnvironment }
         cargo build --release -p commits-app
         $binDir = Join-Path $root "target/release"
     } elseif ($isWindowsPlatform) {

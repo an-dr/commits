@@ -60,6 +60,8 @@ npm run dist
 .\dist\app\commits.exe
 ```
 
+`npm run dist` loads the Visual Studio developer environment itself when the shell does not have one, so a plain PowerShell works; it stops with a pointer back here when the C++ build tools are missing. `npm run build:host` calls cargo directly and needs a Developer PowerShell.
+
 The first native build compiles the Bones engine and can take a while. Windows ARM64 builds bootstrap a repository-local `wizer` on the first run. For a partial rebuild, use `npm run dist:web`, `npm run dist:wasm`, or `npm run dist:host` according to the part you changed.
 
 ## Understand the repository
