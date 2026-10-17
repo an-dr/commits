@@ -14,7 +14,7 @@ Describe what you expected, what happened, your operating system, and the steps 
 
 ## Build from source
 
-Clone with the Bones submodule:
+Clone with the bones submodule:
 
 ```sh
 git clone --recurse-submodules https://github.com/an-dr/commits.git
@@ -62,20 +62,20 @@ npm run dist
 
 `npm run dist` loads the Visual Studio developer environment itself when the shell does not have one, so a plain PowerShell works; it stops with a pointer back here when the C++ build tools are missing. `npm run build:host` calls cargo directly and needs a Developer PowerShell.
 
-The first native build compiles the Bones engine and can take a while. Windows ARM64 builds bootstrap a repository-local `wizer` on the first run. For a partial rebuild, use `npm run dist:web`, `npm run dist:wasm`, or `npm run dist:host` according to the part you changed.
+The first native build compiles the bones engine and can take a while. Windows ARM64 builds bootstrap a repository-local `wizer` on the first run. For a partial rebuild, use `npm run dist:web`, `npm run dist:wasm`, or `npm run dist:host` according to the part you changed.
 
 ## Understand the repository
 
 | Area | What belongs there |
 | --- | --- |
 | [`apps/commits/host`](apps/commits/host/README.md) | Native process, operating system integration, and app lifetime |
-| [`apps/commits/bones-adapter`](apps/commits/bones-adapter/README.md) | WebAssembly guest and Bones bridge |
+| [`apps/commits/bones-adapter`](apps/commits/bones-adapter/README.md) | WebAssembly guest and bones bridge |
 | [`apps/commits/web`](apps/commits/web/README.md) | Desktop webview and styles |
 | [`packages/`](packages/README.md) | Shared core and webview shell |
 | [`crates/`](crates/README.md) | Reusable native capabilities |
 | [`docs/`](docs/index.md) | Architecture decisions and feature documentation |
 
-The [roadmap](ROADMAP.md) gives product direction. Please treat [`vendor/bones`](vendor/bones/README.md) as upstream code: changes to general engine behavior belong in the Bones project, as described in [ADR-003](docs/adr/ADR-003-treat-vendored-bones-as-read-only-upstream.md).
+The [roadmap](ROADMAP.md) gives product direction. Please treat [`vendor/bones`](vendor/bones/README.md) as upstream code: changes to general engine behavior belong in the bones project, as described in [ADR-003](docs/adr/ADR-003-treat-vendored-bones-as-read-only-upstream.md).
 
 ## Check your change
 

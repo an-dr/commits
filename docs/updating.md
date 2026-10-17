@@ -21,7 +21,7 @@ Commits uses Bones’ upgrade module to check its release manifest, download and
 
 Linux executable names omit `.exe`. The launcher at the install root is the stable entry point used by desktop registration. Every version carries its own `commits-launcher` payload; the app refreshes the entry point from it on startup. `state` is shared across installed versions. `COMMITS_INSTALL_DIR` redirects the installation to a scratch folder.
 
-Versions use strict SemVer precedence; build metadata alone does not make an update newer. A second installation of the same version uses a `version~instance` folder instead of overwriting the existing build. Bones retains the current and previous versions.
+Versions use strict SemVer precedence; build metadata alone does not make an update newer. A second installation of the same version uses a `version~instance` folder instead of overwriting the existing build. bones retains the current and previous versions.
 
 ## Release source
 
@@ -35,13 +35,13 @@ The default source is the latest GitHub release of `an-dr/commits`. Its platform
 }
 ```
 
-The ZIP contains the version's executables, `page.html`, `components/`, and the launcher payload named `commits-launcher`, never the installed entry-point name `commits`. Publishing scripts always include a SHA-256 checksum. The Bones module owns HTTPS and the 256 MiB download limit, independent of the generic `os` fetch cap. Extracted Linux executables regain execute permission.
+The ZIP contains the version's executables, `page.html`, `components/`, and the launcher payload named `commits-launcher`, never the installed entry-point name `commits`. Publishing scripts always include a SHA-256 checksum. The bones module owns HTTPS and the 256 MiB download limit, independent of the generic `os` fetch cap. Extracted Linux executables regain execute permission.
 
 ## App menu
 
 Check finds a newer manifest and offers Update. Update downloads and stages it, then offers Restart; the launcher selects the new folder on the next run. Install and register copies an unpacked build into the canonical install, then registers its entry point through Bones’ separate desktop module. Registration failure leaves the installed files intact and reports the failure. The installed app can retry Register with system. Unregister removes desktop integration and keeps installed files.
 
-The app asks Bones for the version previously recorded under the `upgrader` persistence key. A changed version produces the one-time Updated notice. First runs and development builds do not claim they were updated.
+The app asks bones for the version previously recorded under the `upgrader` persistence key. A changed version produces the one-time Updated notice. First runs and development builds do not claim they were updated.
 
 ## Recovery and command line
 

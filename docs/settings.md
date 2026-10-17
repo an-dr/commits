@@ -81,7 +81,7 @@ The settings editor gives external tools their own section: one card per tool, e
 
 ## Migration and safety
 
-The old version 1 `commitLimit` becomes `an-dr-com-mit-s.initialLoadCommits`, and its `theme` becomes `app.mode`. `includeRemotes` has no MIT manifest equivalent and is not copied into `core`. Repository and view state remain in the Bones component save slot rather than this user-facing file.
+The old version 1 `commitLimit` becomes `an-dr-com-mit-s.initialLoadCommits`, and its `theme` becomes `app.mode`. `includeRemotes` has no MIT manifest equivalent and is not copied into `core`. Repository and view state remain in the bones component save slot rather than this user-facing file.
 
 The trusted native host fixes the path, accepts requests only from the `commits` component, writes a same-directory temporary file, flushes it, and atomically replaces `settings.json`. The sandboxed component validates JSON but never receives general filesystem access.
 

@@ -1,6 +1,6 @@
 # Architecture
 
-Commits is a desktop Git client built on the [Bones](../vendor/bones/README.md) engine. Its product logic is the `an-dr-commits` VS Code extension's core, compiled from TypeScript to a WebAssembly component that Bones loads; its interface is that extension's web view, shown in a Bones web panel. The same core is meant to serve both the desktop app and the extension, so only a thin host port differs between them.
+Commits is a desktop Git client built on the [bones](../vendor/bones/README.md) engine. Its product logic is the `an-dr-commits` VS Code extension's core, compiled from TypeScript to a WebAssembly component that bones loads; its interface is that extension's web view, shown in a bones web panel. The same core is meant to serve both the desktop app and the extension, so only a thin host port differs between them.
 
 ## Layers
 
@@ -18,7 +18,7 @@ flowchart TB
   subgraph host["Native host (Rust)"]
     modules["Commits modules<br/>git, watcher, repo-os, launch, settings, sources, ..."]
   end
-  subgraph engine["Bones kernel"]
+  subgraph engine["bones kernel"]
     services["web panels, instance, upgrade, desktop,<br/>devtools, watch, launch, os"]
   end
   integration <-->|"page messages"| core
@@ -26,7 +26,7 @@ flowchart TB
   modules --> services
 ```
 
-Dependencies point inward. The page and the native host both talk to the component through messages; the component reaches native work only through `HostPort`, whose Bones implementation is `BonesHostPort`.
+Dependencies point inward. The page and the native host both talk to the component through messages; the component reaches native work only through `HostPort`, whose bones implementation is `BonesHostPort`.
 
 ## Boundaries
 
@@ -34,10 +34,10 @@ Dependencies point inward. The page and the native host both talk to the compone
 | --- | --- | --- |
 | Running `git` | native `git` module | A WebAssembly guest cannot spawn processes |
 | Parsing Git output, repository behaviour | component | It is the ported product logic, shared with the extension |
-| Watching repository files | native `watcher` module over Bones watch | Needs OS watch APIs and threads |
-| Clipboard, URLs, file pickers, HTTPS | Bones `os` module | Generic desktop surface; nothing about it needs a repository ([ADR-012](adr/ADR-012-generic-capabilities-belong-upstream.md)) |
+| Watching repository files | native `watcher` module over bones watch | Needs OS watch APIs and threads |
+| Clipboard, URLs, file pickers, HTTPS | bones `os` module | Generic desktop surface; nothing about it needs a repository ([ADR-012](adr/ADR-012-generic-capabilities-belong-upstream.md)) |
 | Repository-scoped reads, scans, external tools, askpass | native `repo-os` module | Only meaningful inside a repository |
-| Updates, desktop registration, single instance, control channel | Bones services, configured by the host | Generic, so owned upstream |
+| Updates, desktop registration, single instance, control channel | bones services, configured by the host | Generic, so owned upstream |
 | Graph, table, diffs, dialogs | shared web view | Reused from the extension unchanged except where [shared core](shared-core.md) says |
 | Health button, source sections, notices, session themes | `apps/commits/web` | Standalone-only; extends the shared view through a declared markup contract |
 
@@ -74,7 +74,7 @@ The shared package's uses of `simple-git` and Node's `fs`, `path`, and `child_pr
 
 ```text
 apps/commits/
-  host/            Rust composition root: Bones plus the Commits modules
+  host/            Rust composition root: bones plus the Commits modules
   bones-adapter/   TypeScript component, built to commits.wasm
   web/             TypeScript page around the shared web view
   scripts/         page, bundle, and component builds

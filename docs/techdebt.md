@@ -11,5 +11,5 @@
 ## Resolved
 
 - BUG-001: startup evaluated the shared graph module before settings created its `viewState`, leaving only the static shell. `viewState` is now initialized before that module is imported, and `apps/commits/web/src/startup-order.test.ts` holds the order.
-- BUG-004: Linux watch setup reported non-mutating access events as changes. Bones' watcher now drops them before they reach Commits.
-- BUG-006: desktop registration moved to Bones’ desktop module; the local crate is removed. BUG-005 remains open because the current Bones release excludes the page-serving fix.
+- BUG-004: Linux watch setup reported non-mutating access events as changes. bones' watcher now drops them before they reach Commits.
+- BUG-006: desktop registration moved to Bones’ desktop module; the local crate is removed. BUG-005 remains open because the current bones release excludes the page-serving fix.

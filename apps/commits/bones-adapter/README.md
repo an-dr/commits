@@ -1,12 +1,12 @@
-# Bones adapter
+# bones adapter
 
-The WebAssembly guest: the glue that lets the shared product core run on Bones.
-It translates between the Bones ABI and the host-independent contracts the
+The WebAssembly guest: the glue that lets the shared product core run on bones.
+It translates between the bones ABI and the host-independent contracts the
 shared packages define.
 
 This directory is adaptation, not product logic. Behavior that the VS Code
 extension would also want belongs in `packages/`, reached here through the
-`@an-dr/commits-core` alias. Only `host/bones-host-port.ts` imports the Bones
+`@an-dr/commits-core` alias. Only `host/bones-host-port.ts` imports the bones
 ABI, so everything else stays testable without a running engine.
 
 The page is requested from the host at run time rather than compiled in, so

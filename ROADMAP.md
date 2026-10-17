@@ -41,4 +41,4 @@ Its workspace, TypeScript path alias, test alias, and esbuild resolver then poin
 
 - Git operations `git` itself cannot perform, such as custom merge algorithms or in-app conflict resolution beyond invoking a merge tool.
 - Hosting-provider integrations beyond the existing pull-request URL templates.
-- Bones' renderer, egui, audio, or game-core paths; Commits uses only the web panel.
+- bones' renderer, egui, audio, or game-core paths; Commits uses only the web panel.

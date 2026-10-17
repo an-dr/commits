@@ -43,7 +43,7 @@ WebView2 is needed to display the app on Windows. To check its installation:
 
 ### Clear an old nested submodule
 
-Clones made before the Bones 1.0 pin can retain a nested `agents` submodule that is no longer part of the checkout. If `git submodule update` reports `unable to rmdir agents: Directory not empty`, run these commands from the repository root:
+Clones made before the bones 1.0 pin can retain a nested `agents` submodule that is no longer part of the checkout. If `git submodule update` reports `unable to rmdir agents: Directory not empty`, run these commands from the repository root:
 
 ```powershell
 Remove-Item -Recurse -Force vendor\bones\agents -ErrorAction SilentlyContinue

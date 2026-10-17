@@ -5,7 +5,7 @@ extension, which consumes this repository as a submodule and resolves these
 exact paths.
 
 A file belongs here when it must run unchanged under both the VS Code extension
-host and the standalone app. Anything that knows about Bones, WebAssembly, the
+host and the standalone app. Anything that knows about bones, WebAssembly, the
 native modules, or the desktop window belongs under `apps/` instead.
 
 The whole repository is MIT-licensed, so this directory is no longer a license

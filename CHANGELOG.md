@@ -30,7 +30,7 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 ### Changed
 
-- Commits now runs on the Bones 2 kernel, which provides updates, desktop registration, single-instance handling, the development control channel, and folder watching.
+- Commits now runs on the bones 2 kernel, which provides updates, desktop registration, single-instance handling, the development control channel, and folder watching.
 - Command-line navigation searches at most 2,000 commits, the graph's own load limit, and its notice names that limit.
 - Saving a light or dark preset in Settings replaces a palette supplied with `--theme-file`.
 
@@ -84,7 +84,7 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 ### Changed
 
-- Clipboard, browser, file pickers, HTTPS fetch, self-update, and the wire codec come from Bones instead of local copies.
+- Clipboard, browser, file pickers, HTTPS fetch, self-update, and the wire codec come from bones instead of local copies.
 
 ## 1.4.0 - 2026-08-23
 
@@ -175,7 +175,7 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 ### Added
 
-- The first standalone build: the shared repository graph and commit table in a Bones window, native Git, file-backed settings and state, repository discovery, and credential prompts.
+- The first standalone build: the shared repository graph and commit table in a bones window, native Git, file-backed settings and state, repository discovery, and credential prompts.
 
 [Unreleased]: https://github.com/an-dr/commits/compare/v1.9.2...HEAD
 [1.9.2]: https://github.com/an-dr/commits/compare/v1.9.1...v1.9.2

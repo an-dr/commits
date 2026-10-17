@@ -1,7 +1,7 @@
 # Standalone page
 
 The browser side of the application: what boots the shared webview inside a
-Bones panel, supplies the standalone theme, and bridges page messages to the
+bones panel, supplies the standalone theme, and bridges page messages to the
 host.
 
 Code belongs here when it is standalone-specific presentation or transport. The

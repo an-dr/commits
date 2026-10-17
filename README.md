@@ -1,8 +1,8 @@
 # Commits
 
-A standalone desktop Git client for exploring and working with repositories on Windows and Linux. Commits brings the Git Graph interface to a native app powered by [Bones](vendor/bones/README.md).
+A standalone desktop Git client for exploring and working with repositories on Windows and Linux. Commits brings the Git Graph interface to a native app powered by [bones](vendor/bones/README.md).
 
-[![Build](https://github.com/an-dr/commits/actions/workflows/build.yml/badge.svg)](https://github.com/an-dr/commits/actions/workflows/build.yml) [![Latest release](https://img.shields.io/github/v/release/an-dr/commits)](https://github.com/an-dr/commits/releases/latest) [![MIT license](https://img.shields.io/github/license/an-dr/commits)](LICENSE)
+[![Build](https://github.com/an-dr/commits/actions/workflows/build.yml/badge.svg)](https://github.com/an-dr/commits/actions/workflows/build.yml) [![Latest release](https://img.shields.io/github/v/release/an-dr/commits)](https://github.com/an-dr/commits/releases/latest) [![MIT license](https://img.shields.io/github/license/an-dr/commits)](LICENSE) [![Powered by bones](https://img.shields.io/badge/powered%20by-bones-e8e2d4?labelColor=2b2b2b)](https://github.com/an-dr/bones) [![AI Level 3](https://ai-level.dev/badge/standard/3.svg)](https://ai-level.dev/level-3)
 
 ![Commits browsing the VS Code repository with branches, a commit graph, and changed files](docs/README/screenshot.jpg)
 
