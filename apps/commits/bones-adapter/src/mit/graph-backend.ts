@@ -90,6 +90,28 @@ const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
  */
 const UNCOMPARABLE_REVISIONS = "These two rows cannot be compared in the standalone host yet.";
 
+/** A unified diff adding every line of a file that Git has no record of. */
+function additionDiff(path: string, content: string): string {
+  if (content === "") {
+    return "";
+  }
+  const lines = content.split("\n");
+  const endsWithNewline = lines[lines.length - 1] === "";
+  if (endsWithNewline) {
+    lines.pop();
+  }
+  return [
+    `diff --git a/${path} b/${path}`,
+    "new file mode 100644",
+    "--- /dev/null",
+    `+++ b/${path}`,
+    `@@ -0,0 +1,${lines.length} @@`,
+    ...lines.map((line) => `+${line}`),
+    ...(endsWithNewline ? [] : ["\\ No newline at end of file"]),
+    "",
+  ].join("\n");
+}
+
 /** Panel input for a file that cannot be read; the panel reports it as unloadable. */
 const UNREADABLE_FULL_DIFF = {
   command: "fullDiffContent",
@@ -518,7 +540,10 @@ export class MitGraphBackend {
       const answer = (newContent: string | null) =>
         deliver({
           command: "fullDiffContent",
-          diff,
+          // Git diffs the index, which holds nothing for an untracked file.
+          diff: !staged && request.type === "A" && diff === "" && newContent !== null
+            ? additionDiff(path, newContent)
+            : diff,
           oldContent: oldBlob.content,
           newContent,
           oldExists: oldBlob.exists,

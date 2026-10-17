@@ -4,6 +4,10 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Fixed
+
+- Selecting an untracked file shows its whole contents as added lines instead of "This file has no contents to show".
+
 ## [1.9.1] - 2026-10-15
 
 ### Fixed

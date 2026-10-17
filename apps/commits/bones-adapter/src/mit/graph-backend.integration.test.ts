@@ -220,6 +220,24 @@ describe("MitGraphBackend read queries integration", () => {
     expect(unstagedSide.diff).toContain("+on disk");
   });
 
+  it("shows an untracked file as entirely added", () => {
+    write(repo, "fresh.txt", "one\ntwo\n");
+
+    const response = driveWithFileReads({
+      command: "fullDiffContent",
+      repo,
+      fromHash: "*",
+      toHash: "*",
+      oldFilePath: "fresh.txt",
+      newFilePath: "fresh.txt",
+      type: "A",
+      staged: false,
+    });
+
+    expect(response.newContent).toBe("one\ntwo\n");
+    expect(response.diff).toContain("@@ -0,0 +1,2 @@\n+one\n+two\n");
+  });
+
   it("answers a revision it cannot diff without asking Git", () => {
     const response = loadFullDiff({
       command: "fullDiffContent",
