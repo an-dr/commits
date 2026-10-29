@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "commits-control": {
+      "type": "stdio",
+      "command": "bones-cli",
+      "args": ["mcp"],
+      "env": {
+        "BONES_DEVTOOLS_PORT": "8643"
+      }
+    }
+  }
+}

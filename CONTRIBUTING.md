@@ -41,7 +41,7 @@ Running that build on the host requires GTK 3, WebKitGTK 4.1, AppIndicator, libr
 
 ### Native Linux build
 
-A native build needs Node.js, Rust, PowerShell 7, CMake, Ninja, `pkg-config`, a C/C++ toolchain, and the GTK 3 and WebKitGTK 4.1 development libraries. The [CI image](ci/Dockerfile) is the exact Ubuntu 24.04 dependency list. After installing them, run `npm install` and `pwsh scripts/dist.ps1` from the repository root; the launcher is `./dist/app/commits`.
+A native build needs Node.js, Rust, CMake, Ninja, `pkg-config`, a C/C++ toolchain, and the GTK 3 and WebKitGTK 4.1 development libraries. The [CI image](ci/Dockerfile) is the exact Ubuntu 24.04 dependency list. After installing them, run `npm install` and `cargo xtask dist` from the repository root; the launcher is `./dist/app/commits`. `cargo xtask doctor` checks the tool prerequisites without installing them.
 
 ### Native Windows build
 
@@ -52,6 +52,8 @@ winget install --id Rustlang.Rustup -e
 winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--quiet --wait --norestart --nocache --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 ```
 
+On Windows ARM64, also add `--add Microsoft.VisualStudio.Component.VC.Tools.ARM64` to the override; `cargo xtask` looks for the C++ tools that match the machine.
+
 After installing the other prerequisites, open a new PowerShell session in the repository root:
 
 ```powershell
@@ -61,6 +63,8 @@ npm run dist
 ```
 
 `npm run dist` loads the Visual Studio developer environment itself when the shell does not have one, so a plain PowerShell works; it stops with a pointer back here when the C++ build tools are missing. `npm run build:host` calls cargo directly and needs a Developer PowerShell.
+
+The `dist` commands call the repository's [Rust task runner](xtask/README.md). PowerShell remains only for the optional Windows `npm run install:app` helper; building and packaging do not require it. The helper calls `cargo xtask dist` when no built app exists, selects the current Cargo app version from `dist/app` when older builds remain, and uses Bones-compatible `version~instance` folders for repeated installations. A custom `-Source` directory must contain exactly one version folder.
 
 The first native build compiles the bones engine and can take a while. Windows ARM64 builds bootstrap a repository-local `wizer` on the first run. For a partial rebuild, use `npm run dist:web`, `npm run dist:wasm`, or `npm run dist:host` according to the part you changed.
 
@@ -85,10 +89,28 @@ Run the checks relevant to your files before opening a pull request. Build the W
 npm run check
 npm test
 npm run build:wasm
-cargo test --workspace
+cargo xtask test
 ```
 
+`cargo xtask test` runs `cargo test --workspace`; arguments such as `-p commits-app` replace `--workspace` and go to `cargo test`. On Windows it first loads the Visual Studio C++ environment, which native dependencies need to compile outside a Developer shell.
+
 For a full local build and verification, run `npm run verify`. On Linux, `scripts/ci-docker.sh linux-x64` is the supported way to run the full build and checks with CI's dependencies. A documentation-only change needs its links, commands, and claims checked against the files they describe; a full native build is not needed for prose alone.
+
+## Debugging with an agent
+
+The [control channel](docs/control-channel.md) lets an AI agent inspect the running app over MCP. The repository's [`.mcp.json`](.mcp.json) registers `commits-control`, the MCP server of bones' `bones-user` agent plugin, pointed at port 8643. It needs `bones-cli`, built from the pinned engine so the two always match:
+
+```sh
+cargo install --locked --path vendor/bones/crates/bones-cli
+```
+
+Start the app with `COMMITS_CONTROL_PORT=8643`, then use the server's tools:
+
+- `messages` and `logs` show the bus traffic and warnings behind a symptom;
+- `extensions` and `reload` check whether the `commits` component is loaded and load a new build of it;
+- `publish` and `send` reproduce a message the page or a native endpoint would send.
+
+Its `launch`, `frame`, `screenshot`, `pause`, and `step` tools target bones' own projects and canvas renderer; Commits has neither, so start the app yourself. Run `cargo xtask doctor` to check that `bones-cli` is installed. Rebuild it after a bones update.
 
 ## Send a pull request
 
