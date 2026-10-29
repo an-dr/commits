@@ -4,7 +4,9 @@ This directory defines message formats crossing a process or component boundary:
 
 Both language bindings live together. Rust generates the byte fixtures in `fixtures/`, TypeScript asserts against those bytes, and changes that break one side fail the other's tests. Types used on only one side stay with that side's code.
 
-Rust's framing primitives come from `bones-messages`. The TypeScript codec remains local because bones ships no TypeScript; conformance fixtures hold it to the same framing.
+Rust's framing primitives come from `bones-messages`. The TypeScript codec remains local because bones ships no TypeScript package. Two sets of fixtures hold it to the same framing: this directory's own for the app's endpoints, and bones' conformance vectors (`vendor/bones/wit/vectors/vectors.txt`) for every `web`, `desktop`, `os`, and `upgrader` message, checked by `ts/bones-vectors.test.ts`. A vector bones adds for one of those surfaces fails that test until it is checked or recorded as one Commits never sends.
+
+The codec's tag numbers and the shapes of those messages come from `ts/bones-messages.ts`, generated from bones' wire format specification (`vendor/bones/wit/wire-format.json`) by `cargo xtask wire-types`. Regenerate it after updating bones; `cargo xtask test` fails while the committed file is stale, and a renumbered action or a renamed field then shows up as a type error in the codec.
 
 ## Launch requests
 

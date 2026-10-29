@@ -1,3 +1,4 @@
+import { DesktopRequestAction, DesktopResultTag, OsRequestAction, UpgraderRequestAction, UpgraderResultTag } from "./bones-messages";
 import { Reader, Writer } from "./codec";
 
 export interface LaunchOptions {
@@ -27,19 +28,13 @@ export function decodeLaunchRequest(bytes: Uint8Array): LaunchRequest {
   return { ...value, sequence };
 }
 
-/** Tags of Bones' `upgrader::Action`; part of the wire format. */
-const UPGRADER_ACTION_TAGS = { check: 0, stage: 1, install: 2, lastApplied: 3 } as const;
-
-/** Tags of Bones' `desktop::Action`; part of the wire format. */
-const DESKTOP_ACTION_TAGS = { register: 0, unregister: 1 } as const;
-
 /** `lastApplied` asks which version ran before this one, for the Updated notice. */
 export function encodeUpgraderRequest(requestId: number, action: UpdaterAction | "lastApplied"): Uint8Array {
-  return new Writer().u32(requestId).u8(UPGRADER_ACTION_TAGS[action]).finish();
+  return new Writer().u32(requestId).u8(UpgraderRequestAction[action]).finish();
 }
 
 export function encodeDesktopRequest(requestId: number, action: DesktopAction): Uint8Array {
-  return new Writer().u32(requestId).u8(DESKTOP_ACTION_TAGS[action]).finish();
+  return new Writer().u32(requestId).u8(DesktopRequestAction[action]).finish();
 }
 
 /** Bones owns the update and desktop vocabularies; normalize outcomes for the app menu. */
@@ -47,14 +42,14 @@ export function decodeUpgradeResult(bytes: Uint8Array): UpdaterResult & { previo
   const reader = new Reader(bytes);
   const requestId = reader.u32();
   const tag = reader.u8();
-  const result: UpdaterResult & { previous?: string | null } = { requestId, ok: tag !== 5, available: tag === 0, fresh: false, version: "", error: "" };
+  const result: UpdaterResult & { previous?: string | null } = { requestId, ok: tag !== UpgraderResultTag.failed, available: tag === UpgraderResultTag.available, fresh: false, version: "", error: "" };
   const rest = (): string => reader.stringRest();
   switch (tag) {
-    case 0: case 2: result.version = rest(); return result;
-    case 1: reader.finish(); return result;
-    case 3: result.fresh = reader.u8() !== 0; reader.finish(); return result;
-    case 4: { const present = reader.u8() !== 0; const previous = reader.string(); result.previous = present ? previous : null; result.version = rest(); return result; }
-    case 5: result.error = rest(); return result;
+    case UpgraderResultTag.available: case UpgraderResultTag.staged: result.version = rest(); return result;
+    case UpgraderResultTag.upToDate: reader.finish(); return result;
+    case UpgraderResultTag.installed: result.fresh = reader.u8() !== 0; reader.finish(); return result;
+    case UpgraderResultTag.lastApplied: { const present = reader.u8() !== 0; const previous = reader.string(); result.previous = present ? previous : null; result.version = rest(); return result; }
+    case UpgraderResultTag.failed: result.error = rest(); return result;
     default: throw new Error("unknown upgrade result");
   }
 }
@@ -63,8 +58,8 @@ export function decodeDesktopResult(bytes: Uint8Array): DesktopResult {
   const reader = new Reader(bytes);
   const requestId = reader.u32();
   const tag = reader.u8();
-  if (tag === 0) { reader.u8(); reader.finish(); return { requestId, ok: true, error: "" }; }
-  if (tag !== 1) throw new Error("unknown desktop result");
+  if (tag === DesktopResultTag.registered) { reader.u8(); reader.finish(); return { requestId, ok: true, error: "" }; }
+  if (tag !== DesktopResultTag.failed) throw new Error("unknown desktop result");
   return { requestId, ok: false, error: new TextDecoder().decode(bytes.slice(5)) };
 }
 
@@ -177,13 +172,13 @@ export function encodeOsRequest(
   value = "",
 ): Uint8Array {
   const tag: Record<OsAction, number> = {
-    "clipboard-read": 0,
-    "clipboard-write": 1,
-    "open-url": 2,
-    "pick-file": 3,
-    "pick-folder": 4,
-    "reveal-directory": 5,
-    "fetch-url": 6,
+    "clipboard-read": OsRequestAction.readClipboard,
+    "clipboard-write": OsRequestAction.writeClipboard,
+    "open-url": OsRequestAction.openUrl,
+    "pick-file": OsRequestAction.pickFile,
+    "pick-folder": OsRequestAction.pickFolder,
+    "reveal-directory": OsRequestAction.openDirectory,
+    "fetch-url": OsRequestAction.fetchUrl,
   };
   return new Writer().u32(requestId).u8(tag[action]).string(value).finish();
 }

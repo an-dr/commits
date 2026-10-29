@@ -1,43 +1,33 @@
+import { WebSendSourceKind, WebSendTag, type WebPageMessage, type WebPanelFailed, type WebPanelOpened } from "./bones-messages";
 import { Reader, Writer } from "./codec";
 
 export type PanelSource =
   | { readonly kind: "html"; readonly value: string }
   | { readonly kind: "url"; readonly value: string };
 
-export interface PageMessage {
-  readonly owner: string;
-  readonly panel: string;
-  readonly json: string;
-}
-
-export interface PanelLifecycle {
-  readonly owner: string;
-  readonly panel: string;
-}
-
-export interface PanelFailed extends PanelLifecycle {
-  readonly reason: string;
-}
+export type PageMessage = WebPageMessage;
+export type PanelLifecycle = WebPanelOpened;
+export type PanelFailed = WebPanelFailed;
 
 export function encodeOpenPanel(
   panel: string,
   source: PanelSource,
 ): Uint8Array {
   return new Writer()
-    .u8(0)
+    .u8(WebSendTag.open)
     .string(panel)
-    .u8(source.kind === "html" ? 0 : 1)
+    .u8(source.kind === "html" ? WebSendSourceKind.inlineHtml : WebSendSourceKind.url)
     .raw(new TextEncoder().encode(source.value))
     .finish();
 }
 
 export function encodeClosePanel(panel: string): Uint8Array {
-  return new Writer().u8(1).raw(new TextEncoder().encode(panel)).finish();
+  return new Writer().u8(WebSendTag.close).raw(new TextEncoder().encode(panel)).finish();
 }
 
 export function encodeNavigate(panel: string, url: string): Uint8Array {
   return new Writer()
-    .u8(2)
+    .u8(WebSendTag.navigate)
     .string(panel)
     .raw(new TextEncoder().encode(url))
     .finish();
@@ -45,7 +35,7 @@ export function encodeNavigate(panel: string, url: string): Uint8Array {
 
 export function encodeSendJson(panel: string, json: string): Uint8Array {
   return new Writer()
-    .u8(3)
+    .u8(WebSendTag.sendJson)
     .string(panel)
     .raw(new TextEncoder().encode(json))
     .finish();
