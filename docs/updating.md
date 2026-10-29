@@ -56,7 +56,7 @@ git tag v1.9.0
 git push origin main v1.9.0
 ```
 
-The [build workflow](../.github/workflows/build.yml) builds Linux x64, Windows x64 and Windows ARM64. [Package release](../scripts/package-release.ps1) publishes `commits-<version>-<platform>.zip` and `commits-<platform>.json` for each platform: six assets total. It refuses a tag that does not match the app version. Other pushes retain build artifacts without publishing a release.
+The [build workflow](../.github/workflows/build.yml) builds Linux x64, Windows x64 and Windows ARM64. [`cargo xtask package-release`](../xtask/README.md) produces `commits-<version>-<platform>.zip` and `commits-<platform>.json` for each platform: six assets total. It refuses a tag that does not match the app version. The ZIP contains the version folder's payload at its root, omits runtime state and logs, and preserves Linux executable permissions. Other pushes retain build artifacts without publishing a release.
 
 ## Checking behavior locally
 

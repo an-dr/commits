@@ -9,9 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       clang-19 lld-19 llvm-19 \
       libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
       libasound2-dev libxss-dev libssl-dev \
- && curl -fsSL https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb -o /tmp/ms.deb \
- && dpkg -i /tmp/ms.deb && rm /tmp/ms.deb \
- && apt-get update && apt-get install -y --no-install-recommends powershell \
  && rm -rf /var/lib/apt/lists/*
 
 # 22.12 exits silently inside componentize-js on Windows ARM64; 22.23.2 is

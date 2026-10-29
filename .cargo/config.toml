@@ -1,9 +1,14 @@
+[alias]
+# Its own target directory: `cargo xtask test` rebuilds the workspace, and
+# Windows will not let Cargo replace the xtask executable that is running it.
+xtask = "run --quiet -p xtask --target-dir target/xtask --"
+
 [env]
 CMAKE_GENERATOR = "Ninja"
 
 # The application supplies installation identity to Bones explicitly in
 # host/src/installation.rs. The launcher's version stamp moves with the app.
-UPGRADER_LAUNCHER_VERSION = "1.9.2"
+UPGRADER_LAUNCHER_VERSION = "1.10.0"
 
 # Registered at github.com/settings/applications, with "Enable Device Flow"
 # turned on. Safe to commit: the device flow needs no client secret, only
