@@ -1,10 +1,6 @@
 # Continuous integration
 
-Every platform builds inside one Docker image, [`ci/Dockerfile`](../ci/Dockerfile),
-so a build on this machine and a build on GitHub Actions run the same tools
-in the same versions. The image is Ubuntu 24.04 with Node, PowerShell, Rust,
-the GTK/WebKit libraries the Linux app links, and a cross-compiler for both
-Windows targets.
+Every platform builds inside one Docker image, [`ci/Dockerfile`](../ci/Dockerfile), so a build on this machine and a build on GitHub Actions run the same tools in the same versions. The image is Ubuntu 24.04 with Node, Rust, the GTK/WebKit libraries the Linux app links, and a cross-compiler for both Windows targets. Build orchestration uses Cargo and does not require PowerShell.
 
 ## Running a build locally
 
@@ -12,13 +8,7 @@ Windows targets.
 scripts/ci-docker.sh linux-x64        # or windows-x64, windows-arm64
 ```
 
-It builds the image, then runs
-[`scripts/ci-build.ps1`](../scripts/ci-build.ps1) in a container with the
-repository mounted at `/work`, as your own user so every file it writes stays
-yours. `ci-build.ps1` is the whole job: it installs the npm packages, builds
-the page and the wasm components, builds the host executables, runs the
-checks and tests (Linux only, see below), assembles `dist/app`, and packages
-the release zip and manifest into `release/`.
+It builds the image, then runs [`cargo xtask ci --platform <platform>`](../xtask/README.md) in a container with the repository mounted at `/work`, as your own user so every file it writes stays yours. The task installs the npm packages, builds the page and the wasm components, builds the host executables, runs the checks and tests (Linux only, see below), assembles `dist/app`, and packages the release ZIP and manifest into `release/`.
 
 A second argument names a release tag, exactly as CI passes it:
 

@@ -16,15 +16,15 @@
     "check:settings-compat": "node apps/commits/scripts/check-settings-compat.mjs",
     "check:ui-theme": "node apps/commits/scripts/check-ui-theme.mjs",
     "clean": "node scripts/clean.mjs",
-    "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1",
-    "dist:host": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part host",
-    "dist:wasm": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part wasm",
-    "dist:web": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dist.ps1 -Part web",
+    "dist": "cargo xtask dist",
+    "dist:host": "cargo xtask dist --part host",
+    "dist:wasm": "cargo xtask dist --part wasm",
+    "dist:web": "cargo xtask dist --part web",
     "generate:tabler-icons": "node apps/commits/scripts/generate-tabler-icons.mjs",
     "install:app": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1",
     "postinstall": "node scripts/patch-wizer-package.mjs",
     "test": "vitest run",
-    "verify": "npm run build && npm run check && npm test && cargo test --workspace"
+    "verify": "npm run build && npm run check && npm test && cargo xtask test"
   },
   "devDependencies": {
     "@bytecodealliance/componentize-js": "0.19.3",

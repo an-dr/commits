@@ -4,9 +4,9 @@ Installs the standalone app to ~/.commits/app, or pushes a new version
 folder there if it is already installed.
 
 .DESCRIPTION
-dist.ps1 already assembles -Source in the shape an install uses: commits.exe
+cargo xtask dist assembles -Source in the shape an install uses: commits.exe
 at its root and a single version folder holding everything else, including
-its own components/ (see dist.ps1's own doc comment). A fresh install copies
+its own components/ (see xtask/README.md). A fresh install copies
 that shape as-is into ~/.commits/app. It only copies files and never touches
 the operating system: shortcuts, the application list, and "Open in Commits"
 are the installed app's own "Register with system" menu entry (see
@@ -61,13 +61,22 @@ function Copy-AppFiles([string]$From, [string]$To) {
     }
 }
 
-# The single version folder dist.ps1 assembled under $Source -- its own
+# The version folder cargo xtask dist assembled under $Source -- its own
 # components/ travels with it, and $Source's commits.exe is already in the
 # shape an install uses and can be copied as-is.
 function Get-SourceVersionDir([string]$Source) {
     $versionDirs = @(Get-ChildItem -LiteralPath $Source -Directory -Force | Where-Object {
         $_.Name -match '^[0-9]+(\.[0-9]+)*(-[0-9a-f]+)?$'
     })
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $defaultSource = [IO.Path]::GetFullPath((Join-Path $repoRoot "dist/app"))
+    if ([IO.Path]::GetFullPath($Source) -eq $defaultSource) {
+        $metadataJson = cargo metadata --no-deps --format-version 1 --manifest-path (Join-Path $repoRoot "Cargo.toml")
+        if ($LASTEXITCODE -ne 0) { throw "Could not read the current app version from Cargo" }
+        $metadata = $metadataJson | ConvertFrom-Json
+        $appVersion = ($metadata.packages | Where-Object { $_.name -eq "commits-app" }).version
+        $versionDirs = @($versionDirs | Where-Object { $_.Name -eq $appVersion })
+    }
     if ($versionDirs.Count -ne 1) {
         throw "$Source must contain exactly one version folder (found $($versionDirs.Count)); rebuild with 'npm run dist'."
     }
@@ -76,16 +85,17 @@ function Get-SourceVersionDir([string]$Source) {
 
 # Pushes $Source's version folder (components/ and all) into $InstallDir,
 # disambiguating a version-string collision (typically a dev build that
-# never bumps its version) with a short content hash, and pruning anything
+# never bumps its version) with a fresh Bones-compatible instance, and pruning anything
 # beyond the current and previous version -- mirroring
 # Bones’ upgrade module copy/extract operations (Rust) exactly.
 function Install-VersionFolder([string]$Source, [string]$InstallDir) {
     $sourceVersionDir = Get-SourceVersionDir -Source $Source
     $versionDir = Join-Path $InstallDir $sourceVersionDir.Name
     if (Test-Path -LiteralPath $versionDir) {
-        $mainExe = Join-Path $sourceVersionDir.FullName "commits-app.exe"
-        $hash = (Get-FileHash -LiteralPath $mainExe -Algorithm SHA256).Hash.Substring(0, 8).ToLowerInvariant()
-        $versionDir = Join-Path $InstallDir "$($sourceVersionDir.Name)-$hash"
+        do {
+            $instance = [Guid]::NewGuid().ToString("N")
+            $versionDir = Join-Path $InstallDir "$($sourceVersionDir.Name)~$instance"
+        } while (Test-Path -LiteralPath $versionDir)
     }
     Copy-AppFiles -From $sourceVersionDir.FullName -To $versionDir
 
@@ -100,10 +110,17 @@ function Install-VersionFolder([string]$Source, [string]$InstallDir) {
 # never mistaken for a version folder.
 function Remove-OldVersions([string]$InstallDir) {
     Get-ChildItem -LiteralPath $InstallDir -Directory -Force |
-        Where-Object { $_.Name -match '^[0-9]+(\.[0-9]+)*(-[0-9a-f]+)?$' } |
+        Where-Object { $_.Name -match '^[0-9]+(\.[0-9]+)*([-~][0-9a-f]+)?$' } |
         Sort-Object LastWriteTime -Descending |
         Select-Object -Skip 2 |
-        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }
+        ForEach-Object {
+            $installRoot = [IO.Path]::GetFullPath($InstallDir).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+            $candidate = [IO.Path]::GetFullPath($_.FullName)
+            if (-not $candidate.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase) -or ($_.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                throw "Refusing to prune a version outside $installRoot or a linked directory"
+            }
+            Remove-Item -LiteralPath $candidate -Recurse -Force
+        }
 }
 
 if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
@@ -111,8 +128,11 @@ if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
         throw "No built app at $Source."
     }
     Write-Host "No built app at $Source; building it first."
-    & (Join-Path $PSScriptRoot "dist.ps1")
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Push-Location (Split-Path -Parent $PSScriptRoot)
+    try {
+        cargo xtask dist
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    } finally { Pop-Location }
 }
 if (-not (Test-Path -LiteralPath (Join-Path $Source $launcherName))) {
     throw "$Source does not contain $launcherName. Run 'npm run dist' (or drop -SkipBuild) and try again."

@@ -12,7 +12,7 @@ describe("languageForPath", () => {
   it.each([
     ["src/main.rs", "rust"],
     ["a/b/app.PY", "python"],
-    ["scripts/dist.ps1", "powershell"],
+    ["scripts/install.ps1", "powershell"],
     ["build.bat", "dos"],
     ["web/index.tsx", "typescript"],
     ["include/vec.hpp", "cpp"],
