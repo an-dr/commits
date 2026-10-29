@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 /** Resolves a repository-relative path to an absolute one. */
 const at = (path: string): string => fileURLToPath(new URL(path, import.meta.url));
@@ -25,5 +25,10 @@ export default defineConfig({
       { find: /^@commits\/adapter\/(.*)$/, replacement: at("./apps/commits/bones-adapter/src/$1") },
       { find: /^@commits\/ipc\/(.*)$/, replacement: at("./ipc/ts/$1") },
     ],
+  },
+  test: {
+    // The bones submodule carries its own examples and their tests; they
+    // belong to the engine's suite, not to this one.
+    exclude: [...configDefaults.exclude, "vendor/**"],
   },
 });

@@ -13,7 +13,7 @@ fn main() -> wasmtime::Result<()> {
     let path = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "dist/extensions/commits.wasm".to_string());
-    let engine = bones_kernel_infra::wasm_extensions::host::new_engine()?;
+    let engine = bones_module_wasm::host::new_engine()?;
 
     let started = Instant::now();
     let component = Component::from_file(&engine, &path)?;

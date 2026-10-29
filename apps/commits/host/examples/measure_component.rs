@@ -1,10 +1,11 @@
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bones_kernel::bus::{BudgetLimits, Bus, EndpointBudget, Envelope, Handler, Registry, Respond};
+use bones_kernel::exit::ExitRequest;
 use bones_kernel::logging::Logger;
-use bones_kernel_infra::wasm_extensions::host::{new_engine, DisplayInfo, ExtensionTimeouts, Host};
+use bones_module_wasm::host::{new_engine, DisplayInfo, ExtensionTimeouts, Host};
+use bones_module_wasm::Permissions;
 use bones_messages::web::PageMessage;
 use bones_messages::{EncodeMessage, Message};
 
@@ -40,12 +41,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         bus,
         registry,
         Logger::default(),
-        Arc::new(AtomicBool::new(false)),
+        ExitRequest::new(),
         DisplayInfo::default(),
         EndpointBudget::new(BudgetLimits::default()),
         // Generous on purpose: this run exists to measure the cold start, so
         // the budget must not cap the number it is trying to report.
         MEASUREMENT_TIMEOUTS,
+        Permissions::default(),
     )?;
     let cold_start = started.elapsed();
 
