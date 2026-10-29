@@ -24,6 +24,7 @@ These contracts are kept stable as recorded in [ADR-013](adr/ADR-013-publish-sta
 - [Architecture](architecture.md) — layers, boundaries, native endpoints, and repository layout.
 - [Shared core](shared-core.md) — what `packages/core` is and where it differs from upstream.
 - [Continuous integration](ci.md) — Docker builds, local CI runs, and Windows cross-compilation.
+- [Control channel](control-channel.md) — driving and inspecting a running app over the local devtools port.
 - [Architecture decisions](adr/) — settled decisions about the core, host, engine, settings, and licensing.
 - [Technical debt](techdebt.md) — known limitations and their tracking entries.
 - [Roadmap](../ROADMAP.md) — what comes next.

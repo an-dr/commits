@@ -16,6 +16,11 @@ mod splash;
 
 use std::sync::mpsc::Receiver;
 
+/// Opens bones' loopback devtools channel when it holds a port number.
+const CONTROL_PORT_VARIABLE: &str = "COMMITS_CONTROL_PORT";
+/// The channel's bus endpoint, which sends its runtime extension commands.
+const CONTROL_ENDPOINT: &str = "devtools";
+
 fn main() {
     if let Err(error) = run() {
         eprintln!("fatal: {error}");
@@ -38,13 +43,37 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         bones_kernel::instance::Claim::Primary(primary) => primary,
     };
     let (logger, failures) = diagnostics::install();
+    // Teed before any module takes a copy, so the control channel's `/logs`
+    // sees every line `commits.log` does. Without the port nothing is kept.
+    let control_logs = bones_module_devtools::Devtools::requested(CONTROL_PORT_VARIABLE)
+        .then(bones_module_devtools::LogHistory::new);
+    let logger = match &control_logs {
+        Some(history) => logger.tee(std::sync::Arc::new(history.clone())),
+        None => logger,
+    };
     let page = page::PageModule::new(logger.clone());
     let splash = splash::SplashModule::new(logger.clone());
     let git = commits_git::GitModule::default().with_logger(logger.clone());
     let watcher = commits_watcher::WatcherModule::default().with_logger(logger.clone());
     watch_startup_failure(failures);
     refresh_launcher(&logger);
-    bones_kernel::Kernel::new()
+    let mut control = bones_kernel::devtools::Devtools::from_env(CONTROL_PORT_VARIABLE)
+        .logger(logger.clone())
+        // Prompt answers, OS requests and page messages are recorded by topic
+        // only, since their payloads can carry credentials.
+        .redacting(|envelope| {
+            envelope.topic == "os/prompt-response"
+                || envelope.topic == "repo-os/request"
+                || envelope.topic == "web/page-message"
+        });
+    let mut kernel = bones_kernel::Kernel::new();
+    if let Some(history) = control_logs {
+        control = control.log_history(history);
+        // Lets `/extensions` reload the component in a running app. Only
+        // with the channel open: runtime control stays off in normal use.
+        kernel = kernel.extension_controller(CONTROL_ENDPOINT);
+    }
+    kernel
         .logger(logger.clone())
         // `commits.wasm` is ~12 MB carrying an embedded JavaScript engine, so
         // `instantiate` + `init` needs far more than the engine's one second
@@ -62,7 +91,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .extension_call_timeout(std::time::Duration::from_secs(20))
         // Components are versioned along with the rest of the app -- plain
         // exe-relative resolution already means "inside my own version
-        // folder", exactly where dist.ps1/install.ps1 place them. State is
+        // folder", where cargo xtask dist and install.ps1 place them. State is
         // different: it must survive an update, so it resolves to the
         // shared, install-wide location one level up (see
         // UpgradeModule::shared_path) rather than being
@@ -95,17 +124,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         .module(commits_repo::CommitsRepoModule::default())
         .module(launch::LaunchModule::default())
         // Bones' development control channel: inert unless COMMITS_CONTROL_PORT
-        // is set. Prompt answers, OS requests and page messages are recorded by
-        // topic only, since their payloads can carry credentials.
-        .module(
-            bones_kernel::devtools::Devtools::from_env("COMMITS_CONTROL_PORT")
-                .logger(logger.clone())
-                .redacting(|envelope| {
-                    envelope.topic == "os/prompt-response"
-                        || envelope.topic == "repo-os/request"
-                        || envelope.topic == "web/page-message"
-                }),
-        )
+        // is set (see docs/control-channel.md).
+        .module(control)
         .module(installation::InstallationModule)
         .module(sources::SourcesModule::default())
         .module(repository_state::RepositoryStateModule)
