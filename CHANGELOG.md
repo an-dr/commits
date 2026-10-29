@@ -4,6 +4,17 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-30
+
+### Changed
+
+- Commits uses bones 3.1.0 with its now opt-in WebAssembly extension host enabled; the extension ABI is unchanged, so the existing components load as before.
+- Native build assembly, CI and release packaging use `cargo xtask`; npm frontend builds and the Windows installation helper remain available.
+
+### Fixed
+
+- Repeated source installations use Bones-compatible `version~instance` folders and leave previous build files intact.
+
 ## [1.9.2] - 2026-10-17
 
 ### Fixed
@@ -177,7 +188,8 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 - The first standalone build: the shared repository graph and commit table in a bones window, native Git, file-backed settings and state, repository discovery, and credential prompts.
 
-[Unreleased]: https://github.com/an-dr/commits/compare/v1.9.2...HEAD
+[Unreleased]: https://github.com/an-dr/commits/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/an-dr/commits/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/an-dr/commits/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/an-dr/commits/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/an-dr/commits/compare/v1.8.1...v1.9.0

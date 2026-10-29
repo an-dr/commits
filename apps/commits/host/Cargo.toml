@@ -3,7 +3,7 @@ name = "commits-app"
 # The standalone app's own version: compared against a hosted manifest by
 # the self-updater (bones_versioning::is_newer) and shown in the About menu.
 # Bump on every integration into main -- see AGENTS.md.
-version = "1.9.2"
+version = "1.10.0"
 edition = "2021"
 license = "MIT"
 
@@ -20,7 +20,7 @@ name = "commits-editor"
 path = "src/bin/commits-editor.rs"
 
 # The permanent entry point, placed at the install root as `commits.exe` by
-# dist.ps1 and by an install. The mechanism is `bones-launcher`'s; the name
+# cargo xtask dist and by an install. The mechanism is `bones-launcher`'s; the name
 # is ours, which is why the binary is declared here -- users see it.
 [[bin]]
 name = "commits-launcher"
@@ -36,11 +36,14 @@ serde_json = "1.0"
 # features off because this app draws its interface in a web panel -- it
 # needs `web` (which pulls in the window and the presentation stack) but
 # never the audio or game-core native modules.
-bones-kernel = { path = "../../../vendor/bones/crates/bones-kernel", default-features = false, features = ["web", "os", "instance", "desktop", "upgrade", "devtools"] }
+bones-kernel = { path = "../../../vendor/bones/crates/bones-kernel", default-features = false, features = ["wasm", "web", "os", "instance", "desktop", "upgrade", "devtools"] }
 bones-messages = { path = "../../../vendor/bones/crates/bones-messages" }
 commits-git = { path = "../../../crates/git" }
 commits-ipc = { path = "../../../ipc/rust" }
 bones-module-os = { path = "../../../vendor/bones/crates/bones-kernel/bones-module-os" }
+# `LogHistory` is not re-exported by `bones-kernel`, and the kernel's own
+# `devtools_from_env` cannot redact, so the channel is composed by hand.
+bones-module-devtools = { path = "../../../vendor/bones/crates/bones-kernel/bones-module-devtools" }
 commits-os = { path = "../../../crates/os" }
 bones-launcher = { path = "../../../vendor/bones/crates/bones-launcher" }
 bones-versioning = { path = "../../../vendor/bones/crates/bones-versioning" }
@@ -50,11 +53,13 @@ rfd = "0.15"
 tempfile = "3.27.0"
 
 [dev-dependencies]
-# Loading a component by hand, and the persistence service, are below the
-# facade: `bones-kernel` exposes composition, not the extension host it
-# composes. Only the tests and `measure_component` need that, so the reach
-# past the public surface stays out of what ships.
-bones-kernel-infra = { path = "../../../vendor/bones/crates/bones-kernel/bones-kernel-infra" }
+# Runs a built component on a headless kernel, the supported way to test
+# one (bones ADR-043); `component_load` uses it.
+bones-test = { path = "../../../vendor/bones/crates/bones-test" }
+# The `measure_*` benchmarks time the extension host itself, so they load the
+# component through the host module directly rather than through a kernel.
+# The host is its own module since bones 3.0 (ADR-040).
+bones-module-wasm = { path = "../../../vendor/bones/crates/bones-kernel/bones-module-wasm" }
 # Only for `measure_precompile`, which times compiling the component against
 # loading an already-compiled one.
 wasmtime = { version = "47", features = ["component-model"] }

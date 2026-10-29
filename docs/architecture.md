@@ -2,6 +2,8 @@
 
 Commits is a desktop Git client built on the [bones](../vendor/bones/README.md) engine. Its product logic is the `an-dr-commits` VS Code extension's core, compiled from TypeScript to a WebAssembly component that bones loads; its interface is that extension's web view, shown in a bones web panel. The same core is meant to serve both the desktop app and the extension, so only a thin host port differs between them.
 
+The engine submodule is pinned to bones 3.1.0. Its extension ABI remains `bones:extension` 1.0.0, so the existing WebAssembly components need no ABI migration. Since bones 3.0 the extension host is an opt-in module (bones ADR-040): the app enables it with the `bones-kernel` `wasm` feature, the component-load test runs the built components on a headless kernel through `bones-test`, and only the `measure_*` benchmarks, which time the host itself, load a component through `bones-module-wasm` directly.
+
 ## Layers
 
 ```mermaid
