@@ -4,7 +4,7 @@ Where Commits goes next. What exists today is described in [docs/architecture.md
 
 ## Goal
 
-One core, two hosts. The repository and graph logic shared in `packages/` should serve both this desktop app and the `an-dr-commits` VS Code extension, so a fix lands once and reaches both.
+One core, two hosts. The repository and graph logic shared in `packages/` should serve both this desktop app and VSCode Commits, so a fix lands once and reaches both.
 
 ## Next: the extension adopts the shared core
 

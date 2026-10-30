@@ -11,20 +11,17 @@ const LOAD_TIMEOUT: Duration = Duration::from_secs(30);
 const CALL_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[test]
-fn generated_components_load_and_initialize_in_bones() {
+fn generated_component_loads_and_initializes_in_bones() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-
-    for name in ["hello", "commits"] {
-        let saves = tempfile::tempdir().unwrap();
-        let kernel = Kernel::new()
-            .saves_dir(saves.path())
-            .extension_load_timeout(LOAD_TIMEOUT)
-            .extension_call_timeout(CALL_TIMEOUT)
-            // Endpoints the component sends to during `init`.
-            .module(Stub::new("web"))
-            .module(Stub::new("page").reply(b"http://127.0.0.1:32123/page.html".to_vec()));
-        let app = App::with_kernel(kernel, root.join(format!("dist/extensions/{name}.wasm")))
-            .unwrap_or_else(|error| panic!("{name} did not load: {error}"));
-        assert!(app.is_running(), "{name} was quarantined:\n{}", app.logs().join("\n"));
-    }
+    let saves = tempfile::tempdir().unwrap();
+    let kernel = Kernel::new()
+        .saves_dir(saves.path())
+        .extension_load_timeout(LOAD_TIMEOUT)
+        .extension_call_timeout(CALL_TIMEOUT)
+        // Endpoints the component sends to during `init`.
+        .module(Stub::new("web"))
+        .module(Stub::new("page").reply(b"http://127.0.0.1:32123/page.html".to_vec()));
+    let app = App::with_kernel(kernel, root.join("dist/extensions/commits.wasm"))
+        .unwrap_or_else(|error| panic!("commits did not load: {error}"));
+    assert!(app.is_running(), "commits was quarantined:\n{}", app.logs().join("\n"));
 }

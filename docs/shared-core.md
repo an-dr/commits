@@ -1,4 +1,6 @@
-# Shared MIT commits core
+# Shared core
+
+`packages/core` and `packages/webview-shell` come from VSCode Commits, the Commits extension for VS Code, whose repository is `an-dr-com-mit-s`. Older documents and ADRs call this code "MIT" because it was the MIT-licensed part of a GPL repository; since [ADR-011](adr/ADR-011-relicense-the-repository-to-mit.md) the whole repository is MIT, so the label no longer marks anything.
 
 ## Source and license boundary
 

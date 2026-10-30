@@ -8,9 +8,9 @@ describe("standalone settings bridge", () => {
       ...DEFAULT_SETTINGS,
       core: {
         ...DEFAULT_SETTINGS.core,
-        "an-dr-com-mit-s.uiDensity": "Compact",
-        "an-dr-com-mit-s.keyboardShortcut.refresh": "UNASSIGNED",
-        "an-dr-com-mit-s.initialLoadCommits": 900,
+        "commits.uiDensity": "Compact",
+        "commits.keyboardShortcut.refresh": "UNASSIGNED",
+        "commits.initialLoadCommits": 900,
       },
     });
 

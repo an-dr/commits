@@ -7,9 +7,9 @@ import type { LaunchRequest } from "@commits/ipc/native";
 import { gravatarUrl } from "./gravatar";
 import type { HostPort } from "./host/host-port";
 import { CommitsCoreWorkspacePort } from "./host/commits-core-workspace-port";
-import { MAX_LOADED_COMMITS, MitGraphBackend } from "./mit/graph-backend";
-import { buildToolRun, gitShowArgs } from "./mit/external-tools";
-import { WorkingTreeActions } from "./mit/working-tree-actions";
+import { MAX_LOADED_COMMITS, GitGraphBackend } from "./git/graph-backend";
+import { buildToolRun, gitShowArgs } from "./git/external-tools";
+import { WorkingTreeActions } from "./git/working-tree-actions";
 import { RepositoryManager } from "./read/repository-manager";
 import { parseSubmoduleEntries } from "./read/submodule-status";
 import {
@@ -21,8 +21,10 @@ import {
 import { DEFAULT_SETTINGS, parseSettings, validateSettings, type SettingsDocument } from "./read/settings";
 import { RequestIds } from "./request-ids";
 import { LaunchCoordinator } from "./launch-coordinator";
+import { PANEL_NAME } from "./panel";
+import { PendingRequests } from "./pending-requests";
+import { Installation } from "./installation";
 
-const PANEL = "main";
 
 /** The commits project's own repository, cloned locally for Commits Repo menu actions. */
 const COMMITS_REPO_REMOTE_URL = "https://github.com/an-dr/commits.git";
@@ -69,21 +71,27 @@ interface PendingToolDiff {
   failed: boolean;
 }
 
-/** Bones owner of the unchanged MIT webview's host protocol. */
+type PendingGit =
+  /** The clone of the commits project's own repository; one at a time. */
+  | { readonly kind: "clone" }
+  | { readonly kind: "submoduleDiscovery"; readonly root: string }
+  /** One side of an external-tool diff, read with `git show`. */
+  | { readonly kind: "toolDiff"; readonly diff: PendingToolDiff; readonly side: "left" | "right" };
+
+/** Bones owner of the shared webview's host protocol. */
 export class CommitsCore {
   private readonly health: HealthReader;
   private latestHealth: RepositoryHealth | null = null;
   private readonly launches: LaunchCoordinator;
   private readonly navigationReads = new Map<number, (result: GitResult) => void>();
   private sessionLaunch: LaunchRequest = { kind: "none" };
-  private pendingInstallRegistration: UpdaterResult | null = null;
   private readonly repositories: RepositoryManager;
   private readonly persistent: PersistentExtensionState;
-  private readonly graph: MitGraphBackend;
+  private readonly graph: GitGraphBackend;
   private readonly workingTreeActions: WorkingTreeActions;
-  private readonly pendingOs = new Map<number, PendingOs>();
-  /** Diffs waiting on `git show`, by the id of each side's Git request. */
-  private readonly pendingToolDiffs = new Map<number, { diff: PendingToolDiff; side: "left" | "right" }>();
+  private readonly pendingOs = new PendingRequests<PendingOs>();
+  private readonly pendingGit = new PendingRequests<PendingGit>();
+  private readonly installation: Installation;
   private state: PersistentState = DEFAULT_PERSISTENT_STATE;
   private settings: SettingsDocument = DEFAULT_SETTINGS;
   private settingsError = "";
@@ -97,40 +105,14 @@ export class CommitsCore {
   private commitsRepoPath: string | null = null;
   private commitsRepoParentPath: string | null = null;
   private commitsRepoExists = false;
-  private pendingCloneRequestId: number | null = null;
-  private pendingUpdateCheckRequestId: number | null = null;
-  private pendingUpdateStageRequestId: number | null = null;
-  private pendingInstallRequestId: number | null = null;
-  private pendingRegistrationRequestId: number | null = null;
-  /** Set once `check` finds a version newer than this build's own. */
-  private updateAvailableVersion: string | null = null;
-  /**
-   * Drives the Install menu entry: `hidden` (this run is already installed;
-   * the default, so the entry stays hidden until `bootstrap` proves
-   * otherwise rather than flashing on for every boot), `ready` (not
-   * installed, nothing staged), `staged` (an existing launcher will apply
-   * this on its next start), or `done` (placed directly at the install
-   * location -- already fully installed, nothing left to apply).
-   */
-  private installStatusKind: "hidden" | "ready" | "staged" | "done" = "hidden";
-  /**
-   * Drives the Register/Unregister menu entry: `none` until `bootstrap`
-   * proves this run is the installed one, since only the installed entry
-   * point is ever registered.
-   */
-  private registration: "none" | "registered" | "unregistered" = "none";
-  /** This build's own version, shown in the About menu. */
-  private appVersion = "";
   private bootstrapped = false;
   private readonly osRequestIds = new RequestIds("os");
   private readonly gitRequestIds = new RequestIds("git");
-  private readonly updateRequestIds = new RequestIds("update");
   /** Nested submodules discovered per repository root, keyed by root path. */
   private readonly submodules = new Map<string, readonly SubmoduleView[]>();
   /** Root paths a submodule discovery has already been issued for, so a
    *  repeated `sendRepos` never re-queries the same root. */
   private readonly requestedSubmoduleRoots = new Set<string>();
-  private readonly pendingSubmoduleDiscovery = new Map<number, string>();
   /** Roots with a discovery in flight, so the refresh the view asks for on
    *  every reread never stacks a second scan on top of the running one. */
   private readonly scanningSubmoduleRoots = new Set<string>();
@@ -154,9 +136,10 @@ export class CommitsCore {
       load: () => host.loadSavedState(),
       save: (value: Uint8Array<ArrayBufferLike>) => host.saveSavedState(value),
     };
+    this.installation = new Installation(host, (message) => this.send(message));
     this.repositories = new RepositoryManager(new CommitsCoreWorkspacePort(host));
     this.persistent = new PersistentExtensionState(storage);
-    this.graph = new MitGraphBackend(host, (repo, path, deliver) =>
+    this.graph = new GitGraphBackend(host, (repo, path, deliver) =>
       this.readWorkingTreeFile(repo, path, deliver),
     );
     // An action this app ran is the one change the watcher cannot be relied on
@@ -176,7 +159,7 @@ export class CommitsCore {
     deliver: (content: string | null) => void,
   ): void {
     const requestId = this.osRequestIds.next();
-    this.pendingOs.set(requestId, { kind: "readFile", deliver });
+    this.pendingOs.add(requestId, { kind: "readFile", deliver });
     this.host.requestRepoOs(requestId, "read-file", encodeFileRead(repo, path));
   }
 
@@ -193,12 +176,12 @@ export class CommitsCore {
     this.host.subscribe("repo/lightweight-refresh");
     // Fetched here rather than at construction so the request reaches a running
     // host instead of the build-time snapshot taken while componentizing.
-    this.host.openPanel(PANEL, this.host.loadPageSource());
-    this.host.log("info", "MIT commits graph panel requested");
+    this.host.openPanel(PANEL_NAME, this.host.loadPageSource());
+    this.host.log("info", "commits graph panel requested");
   }
 
   stop(): void {
-    this.host.closePanel(PANEL);
+    this.host.closePanel(PANEL_NAME);
   }
 
   receivePageJson(json: string): void {
@@ -260,16 +243,16 @@ export class CommitsCore {
         this.revealCommitsRepoFolder();
         return;
       case "standaloneStartUpdate":
-        this.startUpdate();
+        this.installation.startUpdate();
         return;
       case "standaloneInstall":
-        this.startInstall();
+        this.installation.startInstall();
         return;
       case "standaloneRegister":
-        this.startRegistration("register");
+        this.installation.startRegistration("register");
         return;
       case "standaloneUnregister":
-        this.startRegistration("unregister");
+        this.installation.startRegistration("unregister");
         return;
       case "loadRepos":
         this.sendRepos();
@@ -651,14 +634,14 @@ export class CommitsCore {
       case "copyToClipboard":
         if (typeof value.data === "string" && typeof value.type === "string") {
           const requestId = this.osRequestIds.next();
-          this.pendingOs.set(requestId, { kind: "copy", type: value.type });
+          this.pendingOs.add(requestId, { kind: "copy", type: value.type });
           this.host.requestOs(requestId, "clipboard-write", value.data);
         }
         return;
       case "openExternalUrl":
         if (typeof value.url === "string") {
           const requestId = this.osRequestIds.next();
-          this.pendingOs.set(requestId, { kind: "openExternalUrl" });
+          this.pendingOs.add(requestId, { kind: "openExternalUrl" });
           this.host.requestOs(requestId, "open-url", value.url);
         }
         return;
@@ -668,26 +651,25 @@ export class CommitsCore {
       case "fetchAvatar":
         if (typeof value.email === "string" && value.email) {
           const requestId = this.osRequestIds.next();
-          this.pendingOs.set(requestId, { kind: "fetchAvatar", email: value.email });
+          this.pendingOs.add(requestId, { kind: "fetchAvatar", email: value.email });
           this.host.requestOs(requestId, "fetch-url", gravatarUrl(value.email));
         }
         return;
       case "githubSignIn": {
         const promptId = asString(value.id);
         const requestId = this.osRequestIds.next();
-        this.pendingOs.set(requestId, { kind: "githubDeviceCode", promptId });
+        this.pendingOs.add(requestId, { kind: "githubDeviceCode", promptId });
         this.host.requestRepoOs(requestId, "start-github-device-code");
         return;
       }
       default:
-        this.host.log("debug", `ignored unsupported MIT view command: ${value.command}`);
+        this.host.log("debug", `ignored unsupported view command: ${value.command}`);
     }
   }
 
   receiveOsResult(result: NativeResult): void {
-    const pending = this.pendingOs.get(result.requestId);
+    const pending = this.pendingOs.take(result.requestId);
     if (pending === undefined) return;
-    this.pendingOs.delete(result.requestId);
     if (pending.kind === "readFile") {
       if (result.error) this.host.log("warn", result.error);
       pending.deliver(result.accepted ? result.value : null);
@@ -724,7 +706,7 @@ export class CommitsCore {
       const [userCode, verificationUri, deviceCode, interval, expiresIn] = result.value.split("\n");
       this.send({ command: "githubSignIn", promptId: pending.promptId, signInStatus: "code", userCode, verificationUri });
       const pollId = this.osRequestIds.next();
-      this.pendingOs.set(pollId, { kind: "githubToken", promptId: pending.promptId });
+      this.pendingOs.add(pollId, { kind: "githubToken", promptId: pending.promptId });
       this.host.requestRepoOs(pollId, "poll-github-token", `${deviceCode}\n${interval}\n${expiresIn}`);
     } else if (pending.kind === "githubToken") {
       if (!result.accepted || !result.value) {
@@ -735,7 +717,7 @@ export class CommitsCore {
         return;
       }
       const storeId = this.osRequestIds.next();
-      this.pendingOs.set(storeId, { kind: "githubTokenStored" });
+      this.pendingOs.add(storeId, { kind: "githubTokenStored" });
       this.host.requestRepoOs(storeId, "store-github-token", result.value);
       // The username-phase askpass process is still waiting on this same
       // prompt; the password phase moments later reads the keychain itself.
@@ -749,23 +731,10 @@ export class CommitsCore {
   }
 
   receiveGitResult(result: GitResult): void {
-    if (result.requestId === this.pendingCloneRequestId) {
-      this.pendingCloneRequestId = null;
-      this.finishCloneCommitsRepo(result);
-      return;
-    }
-    const submoduleRoot = this.pendingSubmoduleDiscovery.get(result.requestId);
-    if (submoduleRoot !== undefined) {
-      this.pendingSubmoduleDiscovery.delete(result.requestId);
-      this.finishSubmoduleDiscovery(submoduleRoot, result);
-      return;
-    }
-    const toolDiff = this.pendingToolDiffs.get(result.requestId);
-    if (toolDiff !== undefined) {
-      this.pendingToolDiffs.delete(result.requestId);
-      this.finishToolDiffSide(toolDiff, result);
-      return;
-    }
+    const pending = this.pendingGit.take(result.requestId);
+    if (pending?.kind === "clone") { this.finishCloneCommitsRepo(result); return; }
+    if (pending?.kind === "submoduleDiscovery") { this.finishSubmoduleDiscovery(pending.root, result); return; }
+    if (pending?.kind === "toolDiff") { this.finishToolDiffSide(pending, result); return; }
     if (this.health.receive(result)) return;
     const navigationRead = this.navigationReads.get(result.requestId);
     if (navigationRead) { this.navigationReads.delete(result.requestId); navigationRead(result); return; }
@@ -773,71 +742,8 @@ export class CommitsCore {
     this.workingTreeActions.receive(result);
   }
 
-  /** Check and stage outcomes from Bones' upgrade module. */
-  private finishUpdateRequest(result: UpdaterResult): void {
-    if (result.requestId === this.pendingUpdateCheckRequestId) {
-      this.pendingUpdateCheckRequestId = null;
-      if (result.ok && result.available) {
-        this.updateAvailableVersion = result.version;
-        this.sendUpdateStatus(`Update ${result.version} available`);
-      } else if (!result.ok) {
-        this.host.log("warn", `update check failed: ${result.error}`);
-      }
-      return;
-    }
-    if (result.requestId === this.pendingUpdateStageRequestId) {
-      this.pendingUpdateStageRequestId = null;
-      if (result.ok) {
-        this.sendUpdateStatus(`Update ${result.version} ready — restart to apply`, true);
-      } else {
-        // The available update is still there to retry; only the attempt failed.
-        this.sendUpdateStatus(`Update failed: ${result.error || "unknown error"}`);
-      }
-    }
-  }
-
-  /**
-   * Reports a finished install. Bones installs the files and the desktop
-   * module registers them; `error` set on an ok result means the files were
-   * installed but registration failed, which the installed app's own
-   * Register retries.
-   */
-  private finishInstall(result: UpdaterResult): void {
-    this.pendingInstallRequestId = null;
-    const registered = result.error ? `, but ${result.error}` : " and registered";
-    if (result.ok && result.fresh) {
-      this.installStatusKind = "done";
-      this.sendInstallStatus(`Installed to ~/.commits/app${registered} — launch commits.exe to use it.`);
-    } else if (result.ok) {
-      this.installStatusKind = "staged";
-      this.sendInstallStatus(`Installed${registered} — restart commits.exe to apply.`);
-    } else {
-      this.installStatusKind = "ready";
-      this.sendInstallStatus(`Install failed: ${result.error || "unknown error"}`);
-    }
-  }
-
-  /**
-   * Outcomes from Bones' desktop module: either the registration that
-   * completes an install, or a Register/Unregister the user asked for.
-   */
   receiveDesktopResult(result: DesktopResult): void {
-    if (result.requestId === this.pendingInstallRequestId && this.pendingInstallRegistration !== null) {
-      const installed = this.pendingInstallRegistration;
-      this.pendingInstallRegistration = null;
-      this.finishInstall({ ...installed, error: result.ok ? "" : `registration failed: ${result.error}` });
-      return;
-    }
-    if (result.requestId === this.pendingRegistrationRequestId) {
-      this.pendingRegistrationRequestId = null;
-      const registering = this.registration === "unregistered";
-      if (result.ok) {
-        this.registration = registering ? "registered" : "unregistered";
-        this.sendInstallStatus(registering ? "Registered with the system." : "Unregistered from the system — files kept in ~/.commits/app.");
-      } else {
-        this.sendInstallStatus(`${registering ? "Register" : "Unregister"} failed: ${result.error || "unknown error"}`);
-      }
-    }
+    this.installation.receiveDesktopResult(result);
   }
 
   receivePrompt(payload: string): void {
@@ -885,7 +791,7 @@ export class CommitsCore {
     // A clone already in flight must not be started twice: a repeat click
     // before the GitResult returns would otherwise spawn a second `git
     // clone` into the same not-yet-populated destination.
-    if (this.pendingCloneRequestId !== null) {
+    if (this.pendingGit.has("clone")) {
       return;
     }
     if (this.commitsRepoExists) {
@@ -897,7 +803,7 @@ export class CommitsCore {
       return;
     }
     const requestId = this.gitRequestIds.next();
-    this.pendingCloneRequestId = requestId;
+    this.pendingGit.add(requestId, { kind: "clone" });
     this.sendCommitsRepoStatus("Cloning…");
     this.host.runGit({
       requestId,
@@ -976,7 +882,7 @@ export class CommitsCore {
       for (const [side, hash, path] of sides) {
         if (pending[side] !== undefined) continue;
         const requestId = this.gitRequestIds.next();
-        this.pendingToolDiffs.set(requestId, { diff: pending, side });
+        this.pendingGit.add(requestId, { kind: "toolDiff", diff: pending, side });
         this.host.runGit({ requestId, cwd: repo, args: gitShowArgs(hash, path), timeoutMs: 30_000 });
       }
       this.startToolIfDiffComplete(pending);
@@ -1018,7 +924,7 @@ export class CommitsCore {
   /** Hands one framed run to the OS module. */
   private startTool(request: string): void {
     const requestId = this.osRequestIds.next();
-    this.pendingOs.set(requestId, { kind: "runTool" });
+    this.pendingOs.add(requestId, { kind: "runTool" });
     this.host.requestRepoOs(requestId, "run-tool", request);
   }
 
@@ -1026,7 +932,7 @@ export class CommitsCore {
   private revealCommitsRepoFolder(): void {
     if (!this.commitsRepoExists || this.commitsRepoPath === null) return;
     const requestId = this.osRequestIds.next();
-    this.pendingOs.set(requestId, { kind: "revealCommitsRepoFolder" });
+    this.pendingOs.add(requestId, { kind: "revealCommitsRepoFolder" });
     this.host.requestOs(requestId, "reveal-directory", this.commitsRepoPath);
   }
 
@@ -1092,83 +998,7 @@ export class CommitsCore {
     if (this.repositories.all().length > 0) this.currentRepository ??= this.repositories.all()[0].path;
     // The startup request's navigation waits for the opened repository's first load.
     this.launches.launchApplied(launch, { repository: this.currentRepository, repositoryChanged: true });
-    // An empty URL is not "off": the host then reads the latest GitHub
-    // release for its own platform (docs/updating.md).
-    this.checkForUpdate();
-    const installStatus = this.host.installStatus();
-    this.host.requestLastApplied(this.updateRequestIds.next());
-    if (installStatus.ok) {
-      this.installStatusKind = installStatus.installed ? "hidden" : "ready";
-      if (installStatus.installed) this.registration = installStatus.registered ? "registered" : "unregistered";
-      this.appVersion = installStatus.version;
-    } else {
-      this.host.log("warn", `could not resolve install status: ${installStatus.error}`);
-    }
-    // Fires once, the first start after an Update or Install actually took
-    // effect -- installStatus.justUpdated is already one-shot on the host
-    // side, regardless of which of the two produced the new version.
-    this.sendInstallStatus(
-      installStatus.ok && installStatus.justUpdated ? `Updated to version ${installStatus.version}` : "",
-    );
-  }
-
-  /** Runs once at boot; see `bootstrap`. */
-  private checkForUpdate(): void {
-    if (this.pendingUpdateCheckRequestId !== null) return;
-    const requestId = this.updateRequestIds.next();
-    this.pendingUpdateCheckRequestId = requestId;
-    this.host.requestUpdate(requestId, "check");
-  }
-
-  /** Downloads, verifies, and stages the update `checkForUpdate` found. */
-  private startUpdate(): void {
-    if (this.updateAvailableVersion === null || this.pendingUpdateStageRequestId !== null) return;
-    const requestId = this.updateRequestIds.next();
-    this.pendingUpdateStageRequestId = requestId;
-    this.sendUpdateStatus("Downloading update…");
-    this.host.requestUpdate(requestId, "stage");
-  }
-
-  private sendUpdateStatus(message: string, ready = false): void {
-    this.send({
-      command: "standaloneUpdateStatus",
-      available: this.updateAvailableVersion !== null,
-      version: this.updateAvailableVersion ?? "",
-      ready,
-      message,
-    });
-  }
-
-  /** Stages this running build for the next launcher run, regardless of
-   * whether self-update via a hosted manifest is configured -- unlike
-   * `checkForUpdate`/`startUpdate`, this needs no network at all. */
-  private startInstall(): void {
-    if (this.installStatusKind !== "ready" || this.pendingInstallRequestId !== null) return;
-    const requestId = this.updateRequestIds.next();
-    this.pendingInstallRequestId = requestId;
-    this.sendInstallStatus("Installing…");
-    this.host.requestUpdate(requestId, "install");
-  }
-
-  /** Registers or unregisters the installed app; only an installed run
-   * offers either, and only the one its current state calls for. */
-  private startRegistration(action: "register" | "unregister"): void {
-    const expected = action === "register" ? "unregistered" : "registered";
-    if (this.registration !== expected || this.pendingRegistrationRequestId !== null) return;
-    const requestId = this.updateRequestIds.next();
-    this.pendingRegistrationRequestId = requestId;
-    this.sendInstallStatus(action === "register" ? "Registering…" : "Unregistering…");
-    this.host.requestDesktop(requestId, action);
-  }
-
-  private sendInstallStatus(message = ""): void {
-    this.send({
-      command: "standaloneInstallStatus",
-      status: this.installStatusKind,
-      registration: this.registration,
-      version: this.appVersion,
-      message,
-    });
+    this.installation.start();
   }
 
   private saveSettings(requestId: unknown, candidate: unknown): void {
@@ -1189,7 +1019,7 @@ export class CommitsCore {
 
   private chooseRepository(): void {
     const requestId = this.osRequestIds.next();
-    this.pendingOs.set(requestId, { kind: "chooseRepository" });
+    this.pendingOs.add(requestId, { kind: "chooseRepository" });
     this.host.requestOs(requestId, "pick-folder");
   }
 
@@ -1200,7 +1030,7 @@ export class CommitsCore {
    */
   private openFolder(path: string): void {
     const requestId = this.osRequestIds.next();
-    this.pendingOs.set(requestId, { kind: "findRepositories", folder: path });
+    this.pendingOs.add(requestId, { kind: "findRepositories", folder: path });
     this.host.requestRepoOs(requestId, "find-repositories", path);
   }
 
@@ -1394,7 +1224,7 @@ export class CommitsCore {
     this.requestedSubmoduleRoots.add(rootPath);
     this.scanningSubmoduleRoots.add(rootPath);
     const requestId = this.gitRequestIds.next();
-    this.pendingSubmoduleDiscovery.set(requestId, rootPath);
+    this.pendingGit.add(requestId, { kind: "submoduleDiscovery", root: rootPath });
     this.host.runGit({
       requestId,
       cwd: rootPath,
@@ -1482,26 +1312,12 @@ export class CommitsCore {
   }
 
   private send(message: ResponseMessage | Record<string, unknown>): void {
-    this.host.sendPageMessage(PANEL, message);
+    this.host.sendPageMessage(PANEL_NAME, message);
     if ("status" in message && typeof message.command === "string" && !message.command.startsWith("standalone")) this.refreshHealth();
   }
 
-  /**
-   * Outcomes from Bones' upgrade module. A successful install still needs
-   * the desktop registration, so it waits for receiveDesktopResult.
-   */
   receiveUpgradeResult(result: UpdaterResult & { previous?: string | null }): void {
-    if ("previous" in result) {
-      if (result.previous && result.previous !== result.version) this.sendInstallStatus(`Updated to version ${result.version}`);
-      return;
-    }
-    if (result.requestId === this.pendingInstallRequestId) {
-      if (!result.ok) { this.finishInstall(result); return; }
-      this.pendingInstallRegistration = result;
-      this.host.requestDesktop(result.requestId, "register");
-      return;
-    }
-    this.finishUpdateRequest(result);
+    this.installation.receiveUpgradeResult(result);
   }
 
   /** A handoff from a later `commits` run; see {@link LaunchCoordinator}. */

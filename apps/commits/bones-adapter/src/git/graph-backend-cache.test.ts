@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { QueryResponse } from "@an-dr/commits-core/backend/types";
 import type { GitResult, GitRun } from "@commits/ipc/native";
-import { MitGraphBackend } from "./graph-backend";
+import { GitGraphBackend } from "./graph-backend";
 
 type LoadCommits = Extract<QueryResponse, { command: "loadCommits" }>;
 
@@ -22,7 +22,7 @@ class GitDouble {
    *  the uncommitted changes from. */
   refs = "aaa HEAD\naaa refs/heads/main\n";
 
-  constructor(private readonly backend: () => MitGraphBackend) {}
+  constructor(private readonly backend: () => GitGraphBackend) {}
 
   runGit(request: GitRun): void {
     this.commands.push(request.args);
@@ -54,14 +54,14 @@ class GitDouble {
 const logLine = (hash: string, message: string): string =>
   `${hash}\u001f\u001f${"Dev"}\u001fdev@example.test\u001f1700000000\u001f${message}\n`;
 
-function makeBackend(): { backend: MitGraphBackend; git: GitDouble } {
-  let backend: MitGraphBackend;
+function makeBackend(): { backend: GitGraphBackend; git: GitDouble } {
+  let backend: GitGraphBackend;
   const git = new GitDouble(() => backend);
-  backend = new MitGraphBackend({ runGit: (request) => git.runGit(request) });
+  backend = new GitGraphBackend({ runGit: (request) => git.runGit(request) });
   return { backend, git };
 }
 
-const load = (backend: MitGraphBackend, repo = "C:/repo"): LoadCommits => {
+const load = (backend: GitGraphBackend, repo = "C:/repo"): LoadCommits => {
   let response: LoadCommits | undefined;
   backend.loadCommits(
     {
@@ -80,7 +80,7 @@ const load = (backend: MitGraphBackend, repo = "C:/repo"): LoadCommits => {
   return response!;
 };
 
-describe("MitGraphBackend history cache", () => {
+describe("GitGraphBackend history cache", () => {
   it("reads the log once for repeated requests of the same history", () => {
     const { backend, git } = makeBackend();
     git.log = logLine("aaa", "first");

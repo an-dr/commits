@@ -14,7 +14,9 @@ import { SettingsEditor } from "./settings-editor";
 import { createAppearanceController } from "./themes";
 import { wireIntegration } from "./integration";
 
-const STATE_KEY = "commits.mit-webview.state";
+const STATE_KEY = "commits.webview.state";
+/** Where the view state lived before; read once so an upgrade keeps it. */
+const LEGACY_STATE_KEY = "commits.mit-webview.state";
 
 type StandaloneMessage =
   | {
@@ -717,7 +719,7 @@ function post(message: RequestMessage | StandaloneMessage): void {
 
 function readState(): WebViewState | null {
   try {
-    const value = localStorage.getItem(STATE_KEY);
+    const value = localStorage.getItem(STATE_KEY) ?? localStorage.getItem(LEGACY_STATE_KEY);
     return value === null ? null : (JSON.parse(value) as WebViewState);
   } catch {
     return null;

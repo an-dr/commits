@@ -123,7 +123,7 @@ const UNREADABLE_FULL_DIFF = {
 } as const;
 
 /**
- * Adapts the MIT view's read queries to the correlated native Bones Git
+ * Adapts the shared view's read queries to the correlated native Bones Git
  * service. It deliberately does not import simple-git or any Node API.
  */
 /**
@@ -148,7 +148,7 @@ interface CachedHistory {
  */
 export const MAX_LOADED_COMMITS = 2_000;
 
-export class MitGraphBackend {
+export class GitGraphBackend {
   private readonly requestIds = new RequestIds("graph");
   private readonly pending = new Map<number, (result: GitResult) => void>();
   /**

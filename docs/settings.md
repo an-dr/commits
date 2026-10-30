@@ -8,11 +8,12 @@ The document separates portable extension settings from desktop appearance:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "core": {
-    "an-dr-com-mit-s.autoCenterCommitDetailsView": true,
-    "an-dr-com-mit-s.initialLoadCommits": 300,
-    "an-dr-com-mit-s.graphStyle": "rounded"
+    "commits.autoCenterCommitDetailsView": true,
+    "commits.initialLoadCommits": 300,
+    "commits.graphStyle": "rounded",
+    "commits-vsc.showStatusBarItem": true
   },
   "app": {
     "mode": "system",
@@ -24,7 +25,7 @@ The document separates portable extension settings from desktop appearance:
 }
 ```
 
-`core` contains all 40 keys from the MIT extension's `contributes.configuration` manifest. Keys are fully qualified and their defaults, enums, arrays, and object values match `an-dr-com-mit-s`, so an entry can be copied directly between `core` and VS Code's user `settings.json`. Known invalid values fall back independently; they do not reset the rest of the document. Unknown keys in `core` and `app` survive an editor save so newer schema additions remain forward-compatible.
+`core` contains all 40 settings from VSCode Commits' `contributes.configuration` manifest, with the same defaults, enums, arrays, and object values. A setting both apps read is named `commits.<name>`; one only VSCode Commits reads is named `commits-vsc.<name>` and is kept so the document stays complete. VSCode Commits still publishes these settings as `an-dr-com-mit-s.<name>`, so an entry copied to or from VS Code's user `settings.json` needs its prefix changed until the extension adopts the same names ([ADR-014](adr/ADR-014-name-core-settings-after-commits.md)). Known invalid values fall back independently; they do not reset the rest of the document. Unknown keys in `core` and `app` survive an editor save so newer schema additions remain forward-compatible.
 
 The desktop graph currently applies the shared webview settings: graph colours/style, commit-loading counts, date format, author visuals, density, columns, branch-panel layout, refresh shortcut, current-branch behavior, and dialog behavior. Settings for VS Code-only surfaces—SCM buttons, status bar, inline blame, tab icon, logging, repository search, and date selection in the extension host—are stored compatibly but have no standalone surface yet. `dateFormat`'s "Date Only" and "Relative" options are one such case in practice: the value still round-trips through `core`, but neither the Dev column's visible text nor its tooltip depends on it any more. The column always shows the fixed today-or-ISO-date format below, since a column of constant width cannot also show a variable-length string like a relative age.
 
@@ -32,7 +33,7 @@ The desktop graph currently applies the shared webview settings: graph colours/s
 
 `app.mode` is `system`, `light`, or `dark`. System mode follows operating-system changes live. `lightTheme` and `darkTheme` are always stored separately, so switching modes never discards either choice.
 
-`app.timeFormat` is `system`, `12h`, or `24h`, and controls the hour cycle used by the compact commit-date column: `system` resolves the 12/24-hour convention from the display locale (`Intl.DateTimeFormat`'s default), while `12h`/`24h` force one regardless of locale. This is a desktop-only display preference with no equivalent in the MIT extension's settings, which is why it lives in `app` rather than `core`.
+`app.timeFormat` is `system`, `12h`, or `24h`, and controls the hour cycle used by the compact commit-date column: `system` resolves the 12/24-hour convention from the display locale (`Intl.DateTimeFormat`'s default), while `12h`/`24h` force one regardless of locale. This is a desktop-only display preference with no equivalent in VSCode Commits' settings, which is why it lives in `app` rather than `core`.
 
 | Light presets | Dark presets |
 | --- | --- |
@@ -81,14 +82,14 @@ The settings editor gives external tools their own section: one card per tool, e
 
 ## Migration and safety
 
-The old version 1 `commitLimit` becomes `an-dr-com-mit-s.initialLoadCommits`, and its `theme` becomes `app.mode`. `includeRemotes` has no MIT manifest equivalent and is not copied into `core`. Repository and view state remain in the bones component save slot rather than this user-facing file.
+A version 2 document is read as version 3 by renaming its `an-dr-com-mit-s.` keys: VS Code-only settings to `commits-vsc.`, every other key, unknown ones included, to `commits.`. The next save writes version 3. The old version 1 `commitLimit` becomes `commits.initialLoadCommits`, and its `theme` becomes `app.mode`. `includeRemotes` has no equivalent in VSCode Commits' manifest and is not copied into `core`. Repository and view state remain in the bones component save slot rather than this user-facing file.
 
 The trusted native host fixes the path, accepts requests only from the `commits` component, writes a same-directory temporary file, flushes it, and atomically replaces `settings.json`. The sandboxed component validates JSON but never receives general filesystem access.
 
-Run the catalog checker against an extension installation after updating the MIT reference:
+Run the catalog checker against a VSCode Commits installation after updating the extension reference. It matches settings by name, so it accepts the extension's current `an-dr-com-mit-s.` prefix as well as `commits.` and `commits-vsc.`:
 
 ```powershell
-npm run check:settings-compat -- C:\path\to\an-dr-com-mit-s
+npm run check:settings-compat -- $HOME\.vscode\extensions\an-dr.an-dr-com-mit-s-<version>
 ```
 
 ## Command-line history search

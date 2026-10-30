@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { QueryResponse } from "@an-dr/commits-core/backend/types";
 import type { GitResult, GitRun } from "@commits/ipc/native";
-import { MitGraphBackend } from "./graph-backend";
+import { GitGraphBackend } from "./graph-backend";
 
 type FullDiffResponse = Extract<QueryResponse, { command: "fullDiffContent" }>;
 
@@ -16,7 +16,7 @@ type FullDiffResponse = Extract<QueryResponse, { command: "fullDiffContent" }>;
  * The repository is built here rather than reusing this checkout so every case
  * the panel can be asked for exists and is identical on every machine.
  */
-describe("MitGraphBackend read queries integration", () => {
+describe("GitGraphBackend read queries integration", () => {
   let repo: string;
   let root: string;
   let second: string;
@@ -262,10 +262,10 @@ describe("MitGraphBackend read queries integration", () => {
 
 /** Drives one query to completion, running every request it schedules. */
 function drive(
-  start: (backend: MitGraphBackend, deliver: (response: QueryResponse) => void) => void,
+  start: (backend: GitGraphBackend, deliver: (response: QueryResponse) => void) => void,
 ): QueryResponse {
   const requests: GitRun[] = [];
-  const backend = new MitGraphBackend({ runGit: (scheduled) => requests.push(scheduled) });
+  const backend = new GitGraphBackend({ runGit: (scheduled) => requests.push(scheduled) });
   const responses: QueryResponse[] = [];
   start(backend, (response) => responses.push(response));
 
@@ -277,7 +277,7 @@ function drive(
   return responses[0];
 }
 
-function loadFullDiff(request: Parameters<MitGraphBackend["loadFullDiff"]>[0]): FullDiffResponse {
+function loadFullDiff(request: Parameters<GitGraphBackend["loadFullDiff"]>[0]): FullDiffResponse {
   return drive((backend, deliver) => backend.loadFullDiff(request, deliver)) as FullDiffResponse;
 }
 
@@ -286,10 +286,10 @@ function loadFullDiff(request: Parameters<MitGraphBackend["loadFullDiff"]>[0]): 
  * host capability that reads it in the running app.
  */
 function driveWithFileReads(
-  request: Parameters<MitGraphBackend["loadFullDiff"]>[0]
+  request: Parameters<GitGraphBackend["loadFullDiff"]>[0]
 ): FullDiffResponse {
   const requests: GitRun[] = [];
-  const backend = new MitGraphBackend(
+  const backend = new GitGraphBackend(
     { runGit: (scheduled) => requests.push(scheduled) },
     (root, path, deliver) => {
       try {

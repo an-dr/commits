@@ -1,5 +1,6 @@
 import { BonesHostPort } from "./host/bones-host-port";
 import { CommitsCore } from "./commits-core";
+import { isOwnPanel } from "./panel";
 import {
   decodePageMessage,
   decodePanelClosed,
@@ -15,8 +16,6 @@ import {
   decodeWatchEvent,
 } from "@commits/ipc/native";
 
-const OWNER = "commits";
-const PANEL = "main";
 const host = new BonesHostPort();
 const core = new CommitsCore(host);
 
@@ -38,22 +37,22 @@ function onMessage(
   try {
     if (topic === "web/page-message") {
       const message = decodePageMessage(payload);
-      if (message.owner === OWNER && message.panel === PANEL) {
+      if (isOwnPanel(message)) {
         core.receivePageJson(message.json);
       }
     } else if (topic === "web/panel-opened") {
       const event = decodePanelOpened(payload);
-      if (event.owner === OWNER && event.panel === PANEL) {
+      if (isOwnPanel(event)) {
         core.panelOpened();
       }
     } else if (topic === "web/panel-closed") {
       const event = decodePanelClosed(payload);
-      if (event.owner === OWNER && event.panel === PANEL) {
+      if (isOwnPanel(event)) {
         core.panelClosed();
       }
     } else if (topic === "web/panel-failed") {
       const event = decodePanelFailed(payload);
-      if (event.owner === OWNER && event.panel === PANEL) {
+      if (isOwnPanel(event)) {
         core.panelFailed(event.reason);
       }
     } else if (topic === "os/result" || topic === "repo-os/result") {

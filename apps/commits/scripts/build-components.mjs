@@ -45,7 +45,6 @@ process.on("unhandledRejection", (error) => {
   process.exit(1);
 });
 await buildComponent("apps/commits/bones-adapter/src/component.ts", "dist/extensions/commits.wasm", wizerPath);
-await buildComponent("apps/commits/bones-adapter/src/hello.ts", "dist/extensions/hello.wasm", wizerPath);
 
 async function resolveWizerPath() {
   if (platform !== "win32" || arch !== "arm64") {

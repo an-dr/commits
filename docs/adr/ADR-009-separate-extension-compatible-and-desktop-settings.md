@@ -1,5 +1,7 @@
 # ADR-009: Separate extension-compatible and desktop settings
 
+> Core keys are no longer the extension's own: they are named after Commits as of [ADR-014](ADR-014-name-core-settings-after-commits.md). The `core`/`app` split and the single document stand.
+
 ## Problem
 
 The standalone app needs the same configuration values as the MIT VS Code

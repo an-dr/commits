@@ -4,10 +4,17 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-30
+
 ### Changed
 
 - A file with an unresolved merge conflict is marked C (Conflicted) in the working-tree list instead of passing for a modified file.
 - Commits uses bones with required startup extensions: when the commits component cannot load, startup stops with a dialog giving the reason instead of opening a blank window.
+- Core settings are named `commits.<name>`, or `commits-vsc.<name>` for settings only VSCode Commits reads, instead of `an-dr-com-mit-s.<name>`; an existing `settings.json` is migrated when it is read.
+
+### Removed
+
+- The placeholder `hello` component no longer ships in releases or loads at startup.
 
 ## [1.10.0] - 2026-10-30
 
@@ -193,7 +200,8 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 - The first standalone build: the shared repository graph and commit table in a bones window, native Git, file-backed settings and state, repository discovery, and credential prompts.
 
-[Unreleased]: https://github.com/an-dr/commits/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/an-dr/commits/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/an-dr/commits/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/an-dr/commits/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/an-dr/commits/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/an-dr/commits/compare/v1.9.0...v1.9.1

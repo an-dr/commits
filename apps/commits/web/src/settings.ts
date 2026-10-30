@@ -8,7 +8,7 @@ import {
 /** Converts validated extension-compatible settings into shared view state. */
 export function createViewState(settings: SettingsDocument = DEFAULT_SETTINGS): GitGraphViewState {
   const core = settings.core;
-  const value = <T>(key: string): T => core[`an-dr-com-mit-s.${key}`] as T;
+  const value = <T>(key: string): T => core[`commits.${key}`] as T;
   const shortcut = value<string>("keyboardShortcut.refresh");
   return {
     autoCenterCommitDetailsView: value("autoCenterCommitDetailsView"),
