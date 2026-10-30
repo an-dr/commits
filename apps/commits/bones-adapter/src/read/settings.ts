@@ -1,4 +1,9 @@
-const PREFIX = "an-dr-com-mit-s.";
+/** Prefix of a core setting both hosts read. */
+const SHARED_PREFIX = "commits.";
+/** Prefix of a core setting only VSCode Commits reads; the standalone app keeps it. */
+const VSCODE_PREFIX = "commits-vsc.";
+/** The prefix every core key carried in a version 2 document. */
+const LEGACY_PREFIX = "an-dr-com-mit-s.";
 const COLOUR = /^\s*(#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|rgba?\s*\(\d{1,3},\s*\d{1,3},\s*\d{1,3}\))\s*$/;
 
 type SettingKind = "boolean" | "number" | "string" | "colours" | "columns";
@@ -14,9 +19,9 @@ export type SettingSection =
   | "Blame"
   | "Branches";
 
-/** One setting declared by the VS Code extension's manifest. */
+/** One setting declared by VSCode Commits' manifest. */
 export interface CoreSettingDefinition {
-  readonly key: `${typeof PREFIX}${string}`;
+  readonly key: `${typeof SHARED_PREFIX | typeof VSCODE_PREFIX}${string}`;
   readonly kind: SettingKind;
   readonly section: SettingSection;
   readonly description: string;
@@ -27,7 +32,7 @@ export interface CoreSettingDefinition {
   readonly standalone: boolean;
 }
 
-// Keys meaningful only to the VS Code extension: its own status bar item,
+// Keys meaningful only to VSCode Commits, and so named under VSCODE_PREFIX: its own status bar item,
 // inline editor blame, its SCM view's toolbar buttons, and its Node backend's
 // repo-search/date-type/uncommitted-changes handling (packages/core/src/backend,
 // which the standalone app never invokes -- see docs/shared-core.md). Verified
@@ -67,7 +72,7 @@ const setting = (
   defaultValue: SettingValue,
   options?: readonly SettingValue[],
 ): CoreSettingDefinition => ({
-  key: `${PREFIX}${key}`,
+  key: `${VSCODE_ONLY_KEYS.has(key) ? VSCODE_PREFIX : SHARED_PREFIX}${key}`,
   kind,
   section,
   description,
@@ -76,7 +81,7 @@ const setting = (
   standalone: !VSCODE_ONLY_KEYS.has(key),
 });
 
-/** Complete configuration catalog from an-dr-com-mit-s/package.json. */
+/** Complete configuration catalog from VSCode Commits' package.json. */
 export const CORE_SETTING_DEFINITIONS: readonly CoreSettingDefinition[] = [
   setting("autoCenterCommitDetailsView", "boolean", "General", "Keeps the selected commit's details centered in view when the graph scrolls.", true),
   setting("scmButtons.fetch", "boolean", "Toolbar", "Shows the Fetch button in the source control toolbar.", true),
@@ -167,7 +172,7 @@ export const MAX_TOOLS = 5;
 export const TOOLS_KEY = "external-tools.tools";
 
 export interface SettingsDocument {
-  readonly version: 2;
+  readonly version: 3;
   readonly core: Readonly<Record<string, unknown>>;
   readonly app: AppSettings;
 }
@@ -216,7 +221,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 };
 
 export const DEFAULT_SETTINGS: SettingsDocument = {
-  version: 2,
+  version: 3,
   core: DEFAULT_CORE_SETTINGS,
   app: DEFAULT_APP_SETTINGS,
 };
@@ -230,16 +235,17 @@ export function parseSettings(json: string): SettingsDocument {
   }
 }
 
-/** Migrates v1 and validates known values while preserving unknown v2 keys. */
+/** Migrates v1 and v2 and validates known values while preserving unknown keys. */
 export function validateSettings(candidate: unknown): SettingsDocument {
   const value = isRecord(candidate) && isRecord(candidate.settings) ? candidate.settings : candidate;
   if (!isRecord(value)) return DEFAULT_SETTINGS;
   if (value.version === 1) return migrateVersionOne(value);
-  if (value.version !== 2 || !isRecord(value.core) || !isRecord(value.app)) return DEFAULT_SETTINGS;
+  if ((value.version !== 2 && value.version !== 3) || !isRecord(value.core) || !isRecord(value.app)) return DEFAULT_SETTINGS;
 
-  const core: Record<string, unknown> = { ...value.core };
+  const stored = value.version === 2 ? renameLegacyKeys(value.core) : value.core;
+  const core: Record<string, unknown> = { ...stored };
   for (const definition of CORE_SETTING_DEFINITIONS) {
-    const candidateValue = value.core[definition.key];
+    const candidateValue = stored[definition.key];
     core[definition.key] = validates(definition, candidateValue)
       ? cloneValue(candidateValue as SettingValue)
       : cloneValue(definition.defaultValue);
@@ -247,7 +253,7 @@ export function validateSettings(candidate: unknown): SettingsDocument {
   const mode = value.app.mode;
   const timeFormat = value.app.timeFormat;
   return {
-    version: 2,
+    version: 3,
     core,
     app: {
       ...value.app,
@@ -294,6 +300,19 @@ export function validateTools(value: unknown): readonly ToolSetting[] {
     .slice(0, MAX_TOOLS);
 }
 
+/**
+ * Moves version 2's core keys off the prefix they shared with VSCode Commits'
+ * old name. A key this catalog does not know is renamed too, as a shared one,
+ * so an unknown key still survives the save as it always has.
+ */
+function renameLegacyKeys(core: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(core).map(([key, value]) => {
+    if (!key.startsWith(LEGACY_PREFIX)) return [key, value];
+    const name = key.slice(LEGACY_PREFIX.length);
+    return [`${VSCODE_ONLY_KEYS.has(name) ? VSCODE_PREFIX : SHARED_PREFIX}${name}`, value];
+  }));
+}
+
 function migrateVersionOne(value: Record<string, unknown>): SettingsDocument {
   const commitLimit = value.commitLimit;
   const theme = value.theme;
@@ -301,7 +320,7 @@ function migrateVersionOne(value: Record<string, unknown>): SettingsDocument {
     ...DEFAULT_SETTINGS,
     core: {
       ...DEFAULT_CORE_SETTINGS,
-      [`${PREFIX}initialLoadCommits`]: typeof commitLimit === "number" && Number.isFinite(commitLimit) ? commitLimit : 300,
+      [`${SHARED_PREFIX}initialLoadCommits`]: typeof commitLimit === "number" && Number.isFinite(commitLimit) ? commitLimit : 300,
     },
     app: {
       ...DEFAULT_APP_SETTINGS,

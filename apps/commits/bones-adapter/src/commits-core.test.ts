@@ -150,7 +150,7 @@ describe("CommitsCore shared webview host", () => {
   });
   it("searches no more history than the graph loads and names that limit", () => {
     const host = new StubHost(); host.launchValue = { kind: "repository", paths: ["C:/A"], sequence: 0 };
-    host.settingsBytes = new TextEncoder().encode(JSON.stringify({ version: 2, core: {}, app: { navigationMaxCommits: 10_000 } }));
+    host.settingsBytes = new TextEncoder().encode(JSON.stringify({ version: 3, core: {}, app: { navigationMaxCommits: 10_000 } }));
     const core = new CommitsCore(host);
     core.receivePageJson(JSON.stringify({ command: "standaloneReady" }));
     const answer = (stdout = ""): void => { for (const request of host.gitRequests.splice(0)) core.receiveGitResult({ requestId: request.requestId, status: "completed", exitCode: 0, stdout: new TextEncoder().encode(stdout), stderr: new Uint8Array() }); };
@@ -687,7 +687,7 @@ describe("CommitsCore shared webview host", () => {
   it("checks for an update at boot when a manifest URL is configured", () => {
     const host = new StubHost();
     host.settingsBytes = new TextEncoder().encode(JSON.stringify({
-      version: 2,
+      version: 3,
       core: {},
       app: { mode: "dark", lightTheme: "paper", darkTheme: "graphite", updateManifestUrl: "https://example.com/manifest.json" },
     }));
@@ -712,7 +712,7 @@ describe("CommitsCore shared webview host", () => {
   it("announces an available update once the check finds a newer version", () => {
     const host = new StubHost();
     host.settingsBytes = new TextEncoder().encode(JSON.stringify({
-      version: 2,
+      version: 3,
       core: {},
       app: { mode: "dark", lightTheme: "paper", darkTheme: "graphite", updateManifestUrl: "https://example.com/manifest.json" },
     }));
@@ -740,7 +740,7 @@ describe("CommitsCore shared webview host", () => {
   it("stages the update on standaloneStartUpdate and reports readiness once staged", () => {
     const host = new StubHost();
     host.settingsBytes = new TextEncoder().encode(JSON.stringify({
-      version: 2,
+      version: 3,
       core: {},
       app: { mode: "dark", lightTheme: "paper", darkTheme: "graphite", updateManifestUrl: "https://example.com/manifest.json" },
     }));
@@ -954,8 +954,8 @@ describe("CommitsCore shared webview host", () => {
   it("loads settings before repository messages and acknowledges atomic saves", () => {
     const host = new StubHost();
     host.settingsBytes = new TextEncoder().encode(JSON.stringify({
-      version: 2,
-      core: { "an-dr-com-mit-s.uiDensity": "Compact" },
+      version: 3,
+      core: { "commits.uiDensity": "Compact" },
       app: { mode: "dark", lightTheme: "paper", darkTheme: "graphite" },
     }));
     const core = new CommitsCore(host);
@@ -969,7 +969,7 @@ describe("CommitsCore shared webview host", () => {
     core.receivePageJson(JSON.stringify({
       command: "standaloneSaveSettings",
       requestId: 7,
-      settings: { version: 2, core: {}, app: { mode: "light" } },
+      settings: { version: 3, core: {}, app: { mode: "light" } },
     }));
     expect(new TextDecoder().decode(host.settingsBytes)).toContain('"mode": "light"');
     expect(host.sent).toContainEqual(["main", expect.objectContaining({
@@ -986,7 +986,7 @@ describe("CommitsCore shared webview host", () => {
     core.receivePageJson(JSON.stringify({
       command: "standaloneSaveSettings",
       requestId: 8,
-      settings: { version: 2, core: {}, app: { mode: "dark" } },
+      settings: { version: 3, core: {}, app: { mode: "dark" } },
     }));
 
     expect(host.sent).toContainEqual(["main", expect.objectContaining({

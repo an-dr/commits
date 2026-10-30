@@ -20,7 +20,7 @@ Startup uses two readiness messages. The page first receives and applies
 settings, then mounts the shared view and announces that repository messages
 can be delivered. This keeps initial graph configuration deterministic.
 
-The settings dialog is generated from the VS Code extension compatibility catalog. Its app
+The settings dialog is generated from the catalog shared with VSCode Commits. Its app
 section selects independent light and dark presets plus system/light/dark mode;
 the appearance controller maps the active preset to the VS Code variables that
 the shared webview consumes.

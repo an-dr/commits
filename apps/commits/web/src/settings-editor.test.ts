@@ -21,7 +21,7 @@ describe("readArgumentLines", () => {
 
 describe("settings editor", () => {
   it("turns exact compatibility keys into readable labels", () => {
-    expect(formatSettingLabel("an-dr-com-mit-s.branchPanel.groupsFirst"))
+    expect(formatSettingLabel("commits.branchPanel.groupsFirst"))
       .toBe("Branch Panel · Groups First");
   });
 });

@@ -13,31 +13,31 @@ import {
 } from "./settings";
 
 describe("settings document", () => {
-  it("contains every setting in the VS Code extension manifest", () => {
+  it("contains every setting in VSCode Commits' manifest", () => {
     expect(CORE_SETTING_DEFINITIONS).toHaveLength(40);
-    expect(CORE_SETTING_DEFINITIONS.map(({ key }) => key)).toContain("an-dr-com-mit-s.keyboardShortcut.refresh");
-    expect(DEFAULT_SETTINGS.core["an-dr-com-mit-s.loadMoreCommits"]).toBe(100);
+    expect(CORE_SETTING_DEFINITIONS.map(({ key }) => key)).toContain("commits.keyboardShortcut.refresh");
+    expect(DEFAULT_SETTINGS.core["commits.loadMoreCommits"]).toBe(100);
   });
 
   it("uses defaults for absent, corrupt, or unsupported documents", () => {
     expect(parseSettings("not json")).toBe(DEFAULT_SETTINGS);
-    expect(validateSettings({ version: 3, core: {}, app: {} })).toBe(DEFAULT_SETTINGS);
+    expect(validateSettings({ version: 4, core: {}, app: {} })).toBe(DEFAULT_SETTINGS);
   });
 
   it("validates known settings independently and preserves future keys", () => {
     const settings = validateSettings({
-      version: 2,
+      version: 3,
       core: {
-        "an-dr-com-mit-s.graphStyle": "invalid",
-        "an-dr-com-mit-s.initialLoadCommits": 500,
-        "an-dr-com-mit-s.futureSetting": { enabled: true },
+        "commits.graphStyle": "invalid",
+        "commits.initialLoadCommits": 500,
+        "commits.futureSetting": { enabled: true },
       },
       app: { mode: "dark", lightTheme: "custom-light", futureSetting: true },
     });
 
-    expect(settings.core["an-dr-com-mit-s.graphStyle"]).toBe("rounded");
-    expect(settings.core["an-dr-com-mit-s.initialLoadCommits"]).toBe(500);
-    expect(settings.core["an-dr-com-mit-s.futureSetting"]).toEqual({ enabled: true });
+    expect(settings.core["commits.graphStyle"]).toBe("rounded");
+    expect(settings.core["commits.initialLoadCommits"]).toBe(500);
+    expect(settings.core["commits.futureSetting"]).toEqual({ enabled: true });
     expect(settings.app).toMatchObject({ mode: "dark", lightTheme: "custom-light", darkTheme: "graphite", futureSetting: true });
   });
 
@@ -45,13 +45,13 @@ describe("settings document", () => {
     expect(DEFAULT_SETTINGS.app[TOOLS_KEY]).toEqual([VS_CODE_TOOL]);
     // A document written before tools existed says nothing about them, so it
     // takes the default rather than losing the feature silently.
-    expect(validateSettings({ version: 2, core: {}, app: {} }).app[TOOLS_KEY]).toEqual([VS_CODE_TOOL]);
+    expect(validateSettings({ version: 3, core: {}, app: {} }).app[TOOLS_KEY]).toEqual([VS_CODE_TOOL]);
   });
 
   it("reads a document written before the key was namespaced", () => {
     const tools = [{ name: "Meld", command: "meld", openArgs: [], diffArgs: ["{left}", "{right}"] }];
 
-    expect(validateSettings({ version: 2, core: {}, app: { tools } }).app[TOOLS_KEY]).toEqual(tools);
+    expect(validateSettings({ version: 3, core: {}, app: { tools } }).app[TOOLS_KEY]).toEqual(tools);
   });
 
   it("keeps at most five tools, however many the file lists", () => {
@@ -62,7 +62,7 @@ describe("settings document", () => {
       diffArgs: [],
     }));
 
-    const kept = validateSettings({ version: 2, core: {}, app: { [TOOLS_KEY]: many } }).app[TOOLS_KEY];
+    const kept = validateSettings({ version: 3, core: {}, app: { [TOOLS_KEY]: many } }).app[TOOLS_KEY];
 
     expect(kept).toHaveLength(MAX_TOOLS);
     expect(kept.map((tool: ToolSetting) => tool.command)).toEqual([
@@ -71,7 +71,7 @@ describe("settings document", () => {
   });
 
   it("leaves an empty list empty, which is how the tool is turned off", () => {
-    expect(validateSettings({ version: 2, core: {}, app: { [TOOLS_KEY]: [] } }).app[TOOLS_KEY]).toEqual([]);
+    expect(validateSettings({ version: 3, core: {}, app: { [TOOLS_KEY]: [] } }).app[TOOLS_KEY]).toEqual([]);
   });
 
   it("recognizes which preset a stored tool is, for the editor's selector", () => {
@@ -105,7 +105,7 @@ describe("settings document", () => {
 
   it("carries configured tools through a document, in the order given", () => {
     const settings = validateSettings({
-      version: 2,
+      version: 3,
       core: {},
       app: {
         tools: [
@@ -118,13 +118,31 @@ describe("settings document", () => {
     expect(settings.app[TOOLS_KEY].map((tool: ToolSetting) => tool.name)).toEqual(["VS Code", "Meld"]);
   });
 
+  it("moves v2 core keys off the legacy prefix, VS Code-only ones under commits-vsc", () => {
+    const migrated = validateSettings({
+      version: 2,
+      core: {
+        "an-dr-com-mit-s.graphStyle": "angular",
+        "an-dr-com-mit-s.showStatusBarItem": false,
+        "an-dr-com-mit-s.futureSetting": 1,
+      },
+      app: {},
+    });
+
+    expect(migrated.version).toBe(3);
+    expect(migrated.core["commits.graphStyle"]).toBe("angular");
+    expect(migrated.core["commits-vsc.showStatusBarItem"]).toBe(false);
+    expect(migrated.core["commits.futureSetting"]).toBe(1);
+    expect(Object.keys(migrated.core).some((key) => key.startsWith("an-dr-com-mit-s."))).toBe(false);
+  });
+
   it("migrates the v1 standalone fields from either root or Bones state", () => {
     const legacy = { version: 1, commitLimit: 750, includeRemotes: false, theme: "light" };
 
     for (const candidate of [legacy, { settings: legacy, state: { recent: [] } }]) {
       const migrated = validateSettings(candidate);
-      expect(migrated.version).toBe(2);
-      expect(migrated.core["an-dr-com-mit-s.initialLoadCommits"]).toBe(750);
+      expect(migrated.version).toBe(3);
+      expect(migrated.core["commits.initialLoadCommits"]).toBe(750);
       expect(migrated.app.mode).toBe("light");
     }
   });

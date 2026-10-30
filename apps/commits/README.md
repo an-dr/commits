@@ -13,5 +13,5 @@ repositories. Settings opens the extension-compatible editor backed by
 `~/.commits/settings.json`; desktop mode and light/dark theme choices occupy a
 separate section of that document.
 
-Everything here may depend on bones. Product logic that should also work in the
-VS Code extension does not belong here; it belongs in `packages/`.
+Everything here may depend on bones. Product logic that should also work in
+VSCode Commits does not belong here; it belongs in `packages/`.

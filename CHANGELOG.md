@@ -8,6 +8,7 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 - A file with an unresolved merge conflict is marked C (Conflicted) in the working-tree list instead of passing for a modified file.
 - Commits uses bones with required startup extensions: when the commits component cannot load, startup stops with a dialog giving the reason instead of opening a blank window.
+- Core settings are named `commits.<name>`, or `commits-vsc.<name>` for settings only VSCode Commits reads, instead of `an-dr-com-mit-s.<name>`; an existing `settings.json` is migrated when it is read.
 
 ### Removed
 

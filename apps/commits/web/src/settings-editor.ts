@@ -16,7 +16,7 @@ type SettingControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
 /** Display order for CoreSettingDefinition.section groups; the app-only Appearance fields render before all of these. */
 const SECTION_ORDER: readonly SettingSection[] = ["General", "Toolbar", "Commits Table", "Graph", "Status Bar", "Blame", "Branches"];
 
-/** Modal editor generated from the VS Code extension compatibility catalog. */
+/** Modal editor generated from the catalog shared with VSCode Commits. */
 export class SettingsEditor {
   private readonly dialog = document.createElement("dialog");
   private readonly controls = new Map<string, SettingControl>();
@@ -86,7 +86,7 @@ export class SettingsEditor {
     const form = document.createElement("form");
     form.className = "standaloneSettingsForm";
     form.innerHTML = `<header><div><h1 id="standaloneSettingsTitle">Settings</h1>
-      <p>Compatible with <code>an-dr-com-mit-s</code></p></div>
+      <p>Compatible with VSCode Commits</p></div>
       <button type="button" class="standaloneSettingsClose" aria-label="Close settings">×</button></header>`;
     const fields = document.createElement("div");
     fields.className = "standaloneSettingsFields";
@@ -484,7 +484,7 @@ function createAppearanceField(
 /** Converts a dotted manifest key into a compact human-readable label. */
 export function formatSettingLabel(key: string): string {
   return key
-    .replace(/^an-dr-com-mit-s\./, "")
+    .replace(/^commits(-vsc)?\./, "")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .split(".")
     .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
