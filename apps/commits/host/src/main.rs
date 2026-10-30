@@ -14,7 +14,6 @@ mod settings;
 mod sources;
 mod splash;
 
-use std::sync::mpsc::Receiver;
 
 /// Opens bones' loopback devtools channel when it holds a port number.
 const CONTROL_PORT_VARIABLE: &str = "COMMITS_CONTROL_PORT";
@@ -24,6 +23,7 @@ const CONTROL_ENDPOINT: &str = "devtools";
 fn main() {
     if let Err(error) = run() {
         eprintln!("fatal: {error}");
+        report_fatal(&error.to_string());
         std::process::exit(1);
     }
 }
@@ -42,11 +42,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         bones_kernel::instance::Claim::HandedOff => return Ok(()),
         bones_kernel::instance::Claim::Primary(primary) => primary,
     };
-    let (logger, failures) = diagnostics::install();
+    let logger = diagnostics::install();
     // Teed before any module takes a copy, so the control channel's `/logs`
     // sees every line `commits.log` does. Without the port nothing is kept.
-    let control_logs = bones_module_devtools::Devtools::requested(CONTROL_PORT_VARIABLE)
-        .then(bones_module_devtools::LogHistory::new);
+    let control_logs = bones_kernel::devtools::Devtools::requested(CONTROL_PORT_VARIABLE)
+        .then(bones_kernel::devtools::LogHistory::new);
     let logger = match &control_logs {
         Some(history) => logger.tee(std::sync::Arc::new(history.clone())),
         None => logger,
@@ -55,7 +55,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let splash = splash::SplashModule::new(logger.clone());
     let git = commits_git::GitModule::default().with_logger(logger.clone());
     let watcher = commits_watcher::WatcherModule::default().with_logger(logger.clone());
-    watch_startup_failure(failures);
     refresh_launcher(&logger);
     let mut control = bones_kernel::devtools::Devtools::from_env(CONTROL_PORT_VARIABLE)
         .logger(logger.clone())
@@ -100,7 +99,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         // "extensions"/"states" defaults -- this app's own vocabulary,
         // distinct from the engine's.
         .extensions_dir("components")
-        .startup_extension("commits")
+        // Required, so a component that does not load fails `run` with the
+        // reason, which `main` shows, instead of leaving a blank window.
+        .required_extension("commits")
         .saves_dir(shared_data_dir("state"))
         .window("commits", 1200, 1000)
         .min_window_size(1200, 800)
@@ -194,52 +195,25 @@ fn refresh_launcher(logger: &bones_kernel::logging::Logger) {
     }
 }
 
-/// Turns a failed startup extension into something the user can act on.
+/// Shows why startup failed. Release builds have no console, so without this
+/// the `eprintln!` in `main` reaches nobody and the app just vanishes.
 ///
-/// The engine treats an extension that cannot attach as non-fatal: it logs the
-/// error and keeps ticking. Nothing then opens the panel, so the window stays
-/// blank with no hint that anything went wrong. The common cause is a busy or
-/// cold machine pushing `instantiate` + `init` past the engine's one second
-/// load budget, which relaunching usually clears -- worth saying out loud,
-/// because a blank window looks like a broken build rather than a retryable
-/// timeout.
-///
-/// Waits on its own thread: the report has to arrive while the engine is still
-/// running its loop, not after it returns.
-fn watch_startup_failure(failures: Receiver<String>) {
-    // Longer than `extension_load_timeout` (30s, set in `run()` below) so a
-    // genuine cold-load failure has time to arrive on `failures` rather than
-    // being cut off by this wait ending first.
-    const STARTUP_GRACE_PERIOD: std::time::Duration = std::time::Duration::from_secs(35);
-    let spawned = std::thread::Builder::new()
-        .name("commits-startup-report".to_string())
-        .spawn(move || {
-            let message = match failures.recv_timeout(STARTUP_GRACE_PERIOD) {
-                // No failure arrived in time: the app started normally and
-                // there is nothing to report.
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => return,
-                // The engine shut down without failing -- the ordinary path,
-                // needing no dialog since the app is exiting anyway.
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
-                Ok(message) => message,
-            };
-            let log = diagnostics::log_path()
-                .map(|path| path.display().to_string())
-                .unwrap_or_else(|| String::from("(could not resolve the log path)"));
-            rfd::MessageDialog::new()
-                .set_level(rfd::MessageLevel::Error)
-                .set_title("commits could not start")
-                .set_description(format!(
-                    "The commits extension did not load, so the window stays blank.\n\n\
-                     This is usually a machine too busy for the engine's one second \
-                     component load budget rather than a broken build. Starting commits \
-                     again normally succeeds.\n\n\
-                     Details were written to:\n{log}\n\n{message}"
-                ))
-                .show();
-            std::process::exit(1);
-        });
-    if let Err(error) = spawned {
-        eprintln!("could not watch for a failed startup extension: {error}");
-    }
+/// The usual cause is the component missing its load budget on a busy or
+/// cold machine, which relaunching clears -- worth saying, because otherwise
+/// it looks like a broken build.
+fn report_fatal(error: &str) {
+    let log = diagnostics::log_path()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| String::from("(could not resolve the log path)"));
+    rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title("commits could not start")
+        .set_description(format!(
+            "{error}\n\n\
+             If this names the commits extension, the machine was usually too \
+             busy to load it in time, and starting commits again normally \
+             succeeds.\n\n\
+             Details were written to:\n{log}"
+        ))
+        .show();
 }

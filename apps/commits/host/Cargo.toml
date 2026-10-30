@@ -41,9 +41,6 @@ bones-messages = { path = "../../../vendor/bones/crates/bones-messages" }
 commits-git = { path = "../../../crates/git" }
 commits-ipc = { path = "../../../ipc/rust" }
 bones-module-os = { path = "../../../vendor/bones/crates/bones-kernel/bones-module-os" }
-# `LogHistory` is not re-exported by `bones-kernel`, and the kernel's own
-# `devtools_from_env` cannot redact, so the channel is composed by hand.
-bones-module-devtools = { path = "../../../vendor/bones/crates/bones-kernel/bones-module-devtools" }
 commits-os = { path = "../../../crates/os" }
 bones-launcher = { path = "../../../vendor/bones/crates/bones-launcher" }
 bones-versioning = { path = "../../../vendor/bones/crates/bones-versioning" }

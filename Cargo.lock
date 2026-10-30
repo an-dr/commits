@@ -742,7 +742,6 @@ dependencies = [
  "bones-kernel",
  "bones-launcher",
  "bones-messages",
- "bones-module-devtools",
  "bones-module-os",
  "bones-module-wasm",
  "bones-test",
