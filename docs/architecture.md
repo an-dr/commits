@@ -67,7 +67,7 @@ Every message format both sides must agree on lives in `ipc/`, with Rust-generat
 The component runs the shared web view without its Node-only Git backend:
 
 - `CommitsCoreWorkspacePort` implements the shared `WorkspacePort` over repository paths the host supplies, and `RepositoryManager` discovers repositories through it.
-- `MitGraphBackend` maps graph reads to bounded native Git requests and returns the shared request and response models.
+- `GitGraphBackend` maps graph reads to bounded native Git requests and returns the shared request and response models.
 - `packages/webview-shell` holds the host-independent page shell, localization, and upstream CSS; the page calls the shared `startCommitsView()` directly.
 
 The shared package's uses of `simple-git` and Node's `fs`, `path`, and `child_process` are not compiled into the component.
@@ -82,7 +82,7 @@ apps/commits/
   scripts/         page, bundle, and component builds
 crates/            native git, watcher, and repo-os modules
 ipc/               wire contract shared by Rust and TypeScript, with fixtures
-packages/          MIT code shared with the VS Code extension
+packages/          code shared with the VS Code extension
 vendor/bones/      upstream engine submodule, read-only
 docs/              human documentation; docs/adr/ holds decisions
 ```

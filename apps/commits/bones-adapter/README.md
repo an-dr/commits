@@ -6,8 +6,14 @@ shared packages define.
 
 This directory is adaptation, not product logic. Behavior that the VS Code
 extension would also want belongs in `packages/`, reached here through the
-`@an-dr/commits-core` alias. Only `host/bones-host-port.ts` imports the bones
-ABI, so everything else stays testable without a running engine.
+`@an-dr/commits-core` alias. The bones ABI is touched in two places only:
+`host/bones-host-port.ts` imports the host API, and `component.ts` exports the
+extension entry points and routes engine messages to `CommitsCore`. Everything
+else stays testable without a running engine.
+
+`git/` turns the shared view's queries and actions into native Git requests,
+`installation.ts` owns update, install, and desktop registration, and
+`shared-core/` holds tests for the local changes to the shared view.
 
 The page is requested from the host at run time rather than compiled in, so
 rebuilding the page does not rebuild this component.

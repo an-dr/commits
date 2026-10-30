@@ -14,6 +14,7 @@ import { SettingsEditor } from "./settings-editor";
 import { createAppearanceController } from "./themes";
 import { wireIntegration } from "./integration";
 
+// Kept under its original name so a saved view state survives upgrades.
 const STATE_KEY = "commits.mit-webview.state";
 
 type StandaloneMessage =

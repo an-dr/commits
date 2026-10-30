@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CommitsCoreWorkspacePort } from "./commits-core-workspace-port";
 
 describe("CommitsCoreWorkspacePort", () => {
-  it("presents bones repository paths through the MIT core contract", () => {
+  it("presents bones repository paths through the shared core contract", () => {
     const repositoryPaths = vi.fn(() => ["C:/code/one", "C:/code/two"]);
     const workspace = new CommitsCoreWorkspacePort({ repositoryPaths });
 

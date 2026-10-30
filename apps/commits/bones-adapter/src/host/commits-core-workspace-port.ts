@@ -3,12 +3,12 @@ import type {
   RootPathsChange,
   WorkspacePort,
 } from "@an-dr/commits-core/host/port";
-import type { HostPort as BonesHostPort } from "./host-port";
+import type { HostPort } from "./host-port";
 
 const NOOP_DISPOSABLE: Disposable = { dispose() {} };
 
 /**
- * Exposes the repository paths supplied by bones through the shared MIT
+ * Exposes the repository paths supplied by bones through the shared
  * core's workspace contract.
  *
  * The current bones ABI supplies a snapshot rather than change events or an
@@ -16,7 +16,7 @@ const NOOP_DISPOSABLE: Disposable = { dispose() {} };
  * native host grows matching capabilities.
  */
 export class CommitsCoreWorkspacePort implements WorkspacePort {
-  constructor(private readonly bones: Pick<BonesHostPort, "repositoryPaths">) {}
+  constructor(private readonly bones: Pick<HostPort, "repositoryPaths">) {}
 
   getRootPaths(): string[] {
     return [...this.bones.repositoryPaths()];

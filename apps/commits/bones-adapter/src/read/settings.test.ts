@@ -13,7 +13,7 @@ import {
 } from "./settings";
 
 describe("settings document", () => {
-  it("contains every setting in the MIT extension manifest", () => {
+  it("contains every setting in the VS Code extension manifest", () => {
     expect(CORE_SETTING_DEFINITIONS).toHaveLength(40);
     expect(CORE_SETTING_DEFINITIONS.map(({ key }) => key)).toContain("an-dr-com-mit-s.keyboardShortcut.refresh");
     expect(DEFAULT_SETTINGS.core["an-dr-com-mit-s.loadMoreCommits"]).toBe(100);

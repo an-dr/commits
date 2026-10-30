@@ -14,7 +14,7 @@ export type SettingSection =
   | "Blame"
   | "Branches";
 
-/** One setting declared by the MIT extension manifest. */
+/** One setting declared by the VS Code extension's manifest. */
 export interface CoreSettingDefinition {
   readonly key: `${typeof PREFIX}${string}`;
   readonly kind: SettingKind;

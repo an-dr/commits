@@ -103,7 +103,7 @@ function bootPastUpdateCheck(core: CommitsCore, host: StubHost): void {
   host.updateRequests.length = 0;
 }
 
-describe("CommitsCore MIT webview host", () => {
+describe("CommitsCore shared webview host", () => {
   it("applies handoff paths and ignores older sequences", () => {
     const host = new StubHost();
     const core = new CommitsCore(host);
@@ -1014,7 +1014,7 @@ describe("CommitsCore MIT webview host", () => {
     expect(host.osRequests).toEqual([{ requestId: 50_000, action: "pick-folder", value: undefined }]);
   });
 
-  it("maps the MIT commit query to bounded correlated native Git reads", () => {
+  it("maps the shared view's commit query to bounded correlated native Git reads", () => {
     const host = new StubHost();
     host.paths = ["C:/repo"];
     const core = new CommitsCore(host);
@@ -1395,7 +1395,7 @@ describe("CommitsCore MIT webview host", () => {
 
     expect(host.logs).toContainEqual([
       "debug",
-      "ignored unsupported MIT view command: notARealCommand",
+      "ignored unsupported view command: notARealCommand",
     ]);
   });
 

@@ -16,7 +16,7 @@ type SettingControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
 /** Display order for CoreSettingDefinition.section groups; the app-only Appearance fields render before all of these. */
 const SECTION_ORDER: readonly SettingSection[] = ["General", "Toolbar", "Commits Table", "Graph", "Status Bar", "Blame", "Branches"];
 
-/** Modal editor generated from the MIT extension compatibility catalog. */
+/** Modal editor generated from the VS Code extension compatibility catalog. */
 export class SettingsEditor {
   private readonly dialog = document.createElement("dialog");
   private readonly controls = new Map<string, SettingControl>();

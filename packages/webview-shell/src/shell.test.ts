@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildGraphShell } from "./shell";
 
-describe("shared MIT webview shell", () => {
+describe("shared webview shell", () => {
   it("contains every mount point required by the unchanged graph view", () => {
     const html = buildGraphShell((message) => message);
     for (const id of [
