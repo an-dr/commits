@@ -76,7 +76,6 @@ fn validate_payload(source: &Path, platform: &str) -> Result {
         "LICENSE",
         "THIRD_PARTY_NOTICES.md",
         "components/commits.wasm",
-        "components/hello.wasm",
     ] {
         if !source.join(file).is_file() {
             return Err(format!("missing {file}; run cargo xtask dist first").into());

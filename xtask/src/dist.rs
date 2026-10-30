@@ -39,12 +39,15 @@ pub fn run(args: &[String]) -> Result {
             "Build components",
             &mut process::npm(&app.root, &["run", "build:wasm"]),
         )?;
-        for name in ["commits", "hello"] {
-            copy(
-                &app.root.join(format!("dist/extensions/{name}.wasm")),
-                &version_dir.join(format!("components/{name}.wasm")),
-            )?;
-        }
+        // The host loads every component in this folder, so one left by an
+        // earlier build would still start alongside the fresh one.
+        let components = version_dir.join("components");
+        fs::remove_dir_all(&components)?;
+        fs::create_dir_all(&components)?;
+        copy(
+            &app.root.join("dist/extensions/commits.wasm"),
+            &components.join("commits.wasm"),
+        )?;
     }
     if part == "all" || part == "host" {
         let cross_windows = windows && !cfg!(windows);
