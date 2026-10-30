@@ -784,10 +784,9 @@ function parseWorkingTreeChanges(
       continue;
     }
     if (entry.startsWith("u ")) {
-      // The shared view has no separate conflict status (BUG-007), but an
-      // unmerged path must remain inspectable in the working-tree file list.
+      // Unstaged, so the file list shows it where its markers can be edited.
       const path = entry.split(" ").slice(10).join(" ");
-      if (path) changes.push({ path, status: "M", staged: false, ...(unstaged.get(path) ?? NO_COUNTS), submodule: null });
+      if (path) changes.push({ path, status: "C", staged: false, ...(unstaged.get(path) ?? NO_COUNTS), submodule: null });
       continue;
     }
     if (entry[0] !== "1" && entry[0] !== "2") continue;

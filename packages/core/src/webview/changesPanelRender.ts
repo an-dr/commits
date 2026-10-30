@@ -71,6 +71,8 @@ function statusTitle(status: GitWorkingTreeChange["status"]): string {
       return l10n.changesStatusRenamed;
     case "U":
       return l10n.changesStatusUntracked;
+    case "C":
+      return l10n.changesStatusConflicted;
     default:
       return l10n.changesStatusModified;
   }

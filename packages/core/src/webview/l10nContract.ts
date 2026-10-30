@@ -62,6 +62,7 @@ export interface LocalizedStrings {
   readonly changesStatusModified: string;
   readonly changesStatusRenamed: string;
   readonly changesStatusUntracked: string;
+  readonly changesStatusConflicted: string;
   readonly branchPanelNoBranches: string;
   readonly branchPanelNoMatchingBranches: string;
   readonly fullDiffUnableToLoad: string;

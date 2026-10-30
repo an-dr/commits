@@ -70,6 +70,7 @@ export function createLocalizedStrings(t: Translate): LocalizedStrings {
     changesStatusModified: t("Modified"),
     changesStatusRenamed: t("Renamed"),
     changesStatusUntracked: t("Untracked"),
+    changesStatusConflicted: t("Conflicted"),
     branchPanelNoBranches: t("No branches"),
     branchPanelNoMatchingBranches: t("No matching branches"),
     fullDiffUnableToLoad: t("Unable to load the file contents"),

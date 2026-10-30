@@ -2593,8 +2593,8 @@ class GitGraphView {
         oldFilePath: change?.oldPath ?? path,
         newFilePath: path,
         // An untracked file has no old side at all, which is what "added" means
-        // to the query.
-        type: change?.status === "U" ? "A" : (change?.status ?? "M"),
+        // to the query; a conflicted one diffs as a modification.
+        type: change?.status === "U" ? "A" : change?.status === "C" ? "M" : (change?.status ?? "M"),
         staged
       });
     });

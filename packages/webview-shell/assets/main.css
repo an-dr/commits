@@ -1039,6 +1039,9 @@ svg.fileIcon {
 .changesFileName.R {
   color: var(--vscode-gitDecoration-modifiedResourceForeground);
 }
+.changesFileName.C {
+  color: var(--vscode-gitDecoration-conflictingResourceForeground, var(--vscode-gitDecoration-modifiedResourceForeground));
+}
 .changesFileName.U {
   color: var(--vscode-gitDecoration-untrackedResourceForeground, var(--vscode-gitDecoration-addedResourceForeground));
 }

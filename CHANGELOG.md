@@ -4,6 +4,10 @@ All notable changes to Commits are recorded here. The format follows [Keep a Cha
 
 ## [Unreleased]
 
+### Changed
+
+- A file with an unresolved merge conflict is marked C (Conflicted) in the working-tree list instead of passing for a modified file.
+
 ## [1.10.0] - 2026-10-30
 
 ### Changed

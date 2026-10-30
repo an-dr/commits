@@ -54,6 +54,13 @@ describe("renderChangesPanel", () => {
     expect(html).toContain('data-status="D"');
   });
 
+  it("marks a conflicted file apart from a modified one", () => {
+    const html = renderChangesPanel([change("merge.ts", { status: "C" })], null);
+
+    expect(html).toContain('changesFileName C"');
+    expect(html).toContain('title="changesStatusConflicted"');
+  });
+
   it("renders each row as a list item, since the tree owns the list", () => {
     const html = renderChangesPanel([change("a.ts")], null);
 

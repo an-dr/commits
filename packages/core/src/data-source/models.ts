@@ -11,7 +11,8 @@ export interface HeadInfo {
 export interface GitWorkingTreeChange {
   readonly path: string;
   readonly oldPath?: string;
-  readonly status: "A" | "M" | "D" | "R" | "U";
+  /** `C`: unmerged, still holding a conflict. */
+  readonly status: "A" | "M" | "D" | "R" | "U" | "C";
   readonly staged: boolean;
   readonly additions: number | null;
   readonly deletions: number | null;

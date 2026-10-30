@@ -1715,7 +1715,7 @@ describe("CommitsCore MIT webview host", () => {
     completeGitAt(host, core, 1, "");
     completeGitAt(host, core, 2, "1\t1\tconflict file.ts\0");
     const reply = host.sent.map(([, value]) => value as { command: string; changes?: unknown[] }).find((message) => message.command === "workingTreeChanges");
-    expect(reply?.changes).toEqual([{ path: "conflict file.ts", status: "M", staged: false, additions: 1, deletions: 1, submodule: null }]);
+    expect(reply?.changes).toEqual([{ path: "conflict file.ts", status: "C", staged: false, additions: 1, deletions: 1, submodule: null }]);
   });
 
   it("reports what each branch tracks and where each remote points", () => {

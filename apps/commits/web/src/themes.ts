@@ -148,6 +148,8 @@ function applyTheme(theme: ThemePreset): void {
     "--vscode-editorWarning-foreground": colours.warning,
     "--vscode-editorError-foreground": colours.negative,
     "--vscode-gitDecoration-untrackedResourceForeground": colours.positive,
+    // A conflict blocks the commit, so it reads as an error.
+    "--vscode-gitDecoration-conflictingResourceForeground": colours.negative,
     "--vscode-widget-shadow": colours.shadow,
     "--urgency-advisory": colours.urgencyAdvisory,
     "--urgency-caution": colours.urgencyCaution,
